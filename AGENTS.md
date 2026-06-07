@@ -43,6 +43,14 @@ This project follows XP practices with a strict TDD workflow. Every agent workin
 - Sidebar and API access must derive from the permission model.
 - FFR concept calculation must keep `X`, `null`, text fields, and weight `0` out of both obtained and possible totals.
 
+## Documentation / Roadmap Rules
+
+- Treat `/home/d00cky/Downloads/ARQUITETURA_FFR_PLANEJAMENTO.md` as roadmap architecture, not current implementation.
+- Documentation must clearly separate `implemented`, `demo-only`, and `future roadmap` behavior.
+- Render free-tier SQLite, `DEMO_AUTH_ENABLED`, seeded users, seeded OS, and `Example/demo-os.xlsx` are demo/test conveniences only.
+- Do not describe the app as production-ready for analytics/conformidade until persistent PostgreSQL (and any required analytics schema) is implemented and validated.
+- If a future feature from the architecture document is implemented, add tests first and then move it from roadmap wording into implemented wording.
+
 ## Implementation Order
 
 1. Add or update tests for the intended behavior.
@@ -50,4 +58,3 @@ This project follows XP practices with a strict TDD workflow. Every agent workin
 3. Implement the minimal production code.
 4. Run focused tests again.
 5. Run broader checks before handoff: unit tests, type check, and relevant integration or E2E tests.
-

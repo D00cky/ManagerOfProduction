@@ -4,6 +4,15 @@ Status as of 2026-06-07. All work below is committed; `npm run typecheck`, `npm 
 
 ## Done
 
+### Demo de amanhã (funciona hoje)
+Use esta seção para apresentar o estado atual sem confundir com o roadmap de arquitetura.
+- Deploy Render: app roda como Node Web Service com health check em `/api/health`.
+- Login demo: `supervisor@example.com`/`S0001`, `monitor@example.com`/`M0001`, `fiscal@example.com`/`F0001`; senha `senha123`.
+- Banco demo: SQLite efêmero em Render; `RESET_DEMO_DB_ON_START=true` limpa e recria a base quando o serviço reinicia.
+- Dados demo: 8 OS são semeadas no startup; `Example/demo-os.xlsx` pode ser importado na tela **Importar Excel** para simular importação.
+- Fluxos demonstráveis: fila de OS, atribuição fiscal, transições de status, tabulação FFR, finalização com tabulação salva, dashboard básico, relatório CSV, sync/backup manual e escopo por perfil.
+- Enquanto a instância Render está online, alterações feitas no app ficam gravadas no SQLite; ao reiniciar com reset habilitado, a base volta aos exemplos limpos.
+
 ### Backend (service / repository / route per AGENTS.md)
 Every capability in `src/lib/permissions.ts` has a service + scoped API route, plus polo CRUD:
 - OS: list, status transitions (`PATCH /api/ordens/[id]`), fiscal assignment (`POST /api/ordens/[id]/atribuir`, os:write + polo scope), FFR tabulation (`PUT /api/ordens/[id]/tabulacao`, with `getTabulacaoEdicao` read).
@@ -22,6 +31,14 @@ Playwright is configured with an isolated seeded SQLite database (`file:./e2e.db
 
 ### Render.com
 Render Blueprint support is configured in `render.yaml` for a Node Web Service with `/api/health` health checks, generated `NEXTAUTH_SECRET`, required `NEXTAUTH_URL`, and free-tier ephemeral SQLite defaults. `README.md` documents the setup and persistent storage options.
+
+### Roadmap baseado em `ARQUITETURA_FFR_PLANEJAMENTO.md`
+O arquivo de arquitetura descreve a direção futura da plataforma, não o que deve ser apresentado como completo hoje.
+- Bloco B / Central de Conformidade: dashboard analítico de conformidade, KPIs por período/polo/município/tipo/fiscal, tabela de não conformidades e tendências.
+- Mapa geográfico: D3 + GeoJSON/TopoJSON de SP, começando preferencialmente por polos/zonas antes de evoluir para todos os municípios.
+- Produção analítica: migrar de SQLite demo para PostgreSQL, com possibilidade futura de PostGIS, views materializadas e Redis/cache.
+- Exportação profissional: ExcelJS para relatórios diário/semanal/mensal formatados e Puppeteer para PDF do dashboard.
+- Infra corporativa: Docker Compose com app + PostgreSQL + Redis + volume/caminho de rede para backups e exports.
 
 ### Conventions for new pages (follow these)
 - Page = Server Component: `getCurrentUser()` → `redirect("/login")` if null; guard with `hasPermission(perfil, ...)` → `redirect(defaultRedirect(perfil))`; then call the **service + Prisma repo directly** (no HTTP hop).

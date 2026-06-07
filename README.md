@@ -9,6 +9,24 @@ npm run build
 npm run test:e2e
 ```
 
+## Demo credentials
+
+Use either email or matricula with password `senha123`.
+
+| Perfil | Email | Matricula |
+|---|---|---|
+| Supervisor | `supervisor@example.com` | `S0001` |
+| Monitor | `monitor@example.com` | `M0001` |
+| Fiscal | `fiscal@example.com` | `F0001` |
+
+## Demo OS and import/export simulation
+
+- `Example/demo-os.xlsx` can be uploaded on **Importar Excel** to simulate an OS import.
+- `Example/demo-os.csv` is the readable reference copy of the same demo records.
+- `prisma/seed.ts` seeds 8 demo OS on startup for Render/free-tier demos.
+- With `RESET_DEMO_DB_ON_START=true`, Render restarts clean the SQLite database and seed those examples again.
+- Changes made in the app persist only while the Render instance remains online.
+
 ## Operational scripts
 
 ```bash
@@ -40,3 +58,7 @@ Required Render setup:
 Demo OS rows are documented in `Example/demo-os.csv`.
 
 For persistent production data, move `DATABASE_URL` to a persistent disk path such as `file:/var/data/prod.db` on a paid Render service, or migrate Prisma to PostgreSQL and use `prisma migrate deploy`.
+
+## Architecture roadmap
+
+`ARQUITETURA_FFR_PLANEJAMENTO.md` describes the target architecture for the full FFR platform. Today’s app covers the Gerenciador FFR core and basic reports. Future roadmap items include the Central de Conformidade, D3/GeoJSON map, PostgreSQL analytics, materialized views, Redis/cache, ExcelJS formatted exports, PDF export, and Docker Compose corporate deployment.
