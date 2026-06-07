@@ -86,6 +86,11 @@ export async function atribuirOrdem(
   const fiscal = await repository.findFiscalById(fiscalId);
   if (!fiscal || fiscal.perfil !== "fiscal") throw new Error("Fiscal invalido");
 
+  const polos = allowedPoloIds(user);
+  if (polos && (!fiscal.poloId || !polos.includes(fiscal.poloId))) {
+    throw new Error("Fiscal fora do escopo do usuario");
+  }
+
   const evento: EventoLog = ordem.fiscalId ? "reatribuicao" : "atribuicao";
   const updated = await repository.updateFiscal(ordemServicoId, fiscalId);
   await repository.log({

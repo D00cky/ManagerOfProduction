@@ -168,6 +168,28 @@ describe("atribuirOrdem", () => {
     ).rejects.toThrow("Fiscal invalido");
   });
 
+  it("blocks a monitor from assigning a fiscal outside their polos", async () => {
+    const repository = repo(os({ fiscalId: null }), false, { id: "f2", perfil: "fiscal", poloId: "p2" });
+
+    await expect(
+      atribuirOrdem(repository, { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] }, "os1", "f2")
+    ).rejects.toThrow("Fiscal fora do escopo do usuario");
+    expect(repository.updateFiscal).not.toHaveBeenCalled();
+  });
+
+  it("lets a supervisor assign a fiscal from any polo", async () => {
+    const repository = repo(os({ fiscalId: null }), false, { id: "f2", perfil: "fiscal", poloId: "p9" });
+
+    const updated = await atribuirOrdem(
+      repository,
+      { id: "sup", perfil: "supervisor", poloId: "p1" },
+      "os1",
+      "f2"
+    );
+
+    expect(updated.fiscalId).toBe("f2");
+  });
+
   it("assigns a fiscal and logs an atribuicao when previously unassigned", async () => {
     const repository = repo(os({ fiscalId: null }));
 
