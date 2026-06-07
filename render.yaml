@@ -29,11 +29,11 @@ services:
     name: manager-of-production
     runtime: node
     plan: free
-    # Free tier has no disk and no preDeploy, so prepare the ephemeral SQLite DB
-    # during build: build the app (also runs prisma generate), create the schema,
-    # then seed test accounts.
-    buildCommand: npm ci && npm run build && npx prisma db push --skip-generate && npx prisma db seed
-    startCommand: npm start
+    # Free tier has no disk, so build the app first and prepare the ephemeral
+    # SQLite DB at runtime before starting the server. Demo deployments reset
+    # the SQLite file on each start so Render restarts return to clean examples.
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:render
     healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
@@ -44,3 +44,9 @@ services:
         generateValue: true # Render generates a strong secret on first deploy
       - key: NEXTAUTH_URL
         sync: false # set to the service URL, e.g. https://manager-of-production.onrender.com
+      - key: DEMO_AUTH_ENABLED
+        value: "true"
+      - key: DEMO_AUTH_PASSWORD
+        value: senha123
+      - key: RESET_DEMO_DB_ON_START
+        value: "true"

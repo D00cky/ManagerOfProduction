@@ -8,7 +8,9 @@ describe("render.yaml", () => {
     expect(blueprint).toContain("type: web");
     expect(blueprint).toContain("runtime: node");
     expect(blueprint).toContain("buildCommand: npm ci && npm run build");
-    expect(blueprint).toContain("startCommand: npm start");
+    expect(blueprint).toContain("startCommand: npm run start:render");
+    expect(blueprint).toContain("RESET_DEMO_DB_ON_START");
+    expect(blueprint).toContain("DEMO_AUTH_ENABLED");
   });
 
   it("uses an unauthenticated API health check", () => {

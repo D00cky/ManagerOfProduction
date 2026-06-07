@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { demoOrdensServico } from "../src/data/demo-os";
 
 const prisma = new PrismaClient();
 
@@ -61,39 +62,31 @@ async function main() {
     create: { userId: monitor.id, poloId: polo.id }
   });
 
-  // A couple of sample OS: one unassigned (ready to atribuir), one already with the fiscal.
-  await prisma.ordemServico.upsert({
-    where: { numero: "OS-1001" },
-    update: {},
-    create: {
-      numero: "OS-1001",
-      enderecoCompleto: "Rua das Flores, 100",
-      bairro: "Centro",
-      cidade: "Cidade Teste",
-      tipoServico: "LigacaoAgua",
-      poloId: polo.id
-    }
-  });
-
-  await prisma.ordemServico.upsert({
-    where: { numero: "OS-1002" },
-    update: {},
-    create: {
-      numero: "OS-1002",
-      enderecoCompleto: "Av. Brasil, 200",
-      bairro: "Jardim",
-      cidade: "Cidade Teste",
-      tipoServico: "Vistoria",
-      poloId: polo.id,
-      fiscalId: fiscal.id
-    }
-  });
+  const fiscais = new Map([[fiscal.matricula, fiscal.id]]);
+  for (const ordem of demoOrdensServico) {
+    await prisma.ordemServico.upsert({
+      where: { numero: ordem.numero },
+      update: {},
+      create: {
+        numero: ordem.numero,
+        enderecoCompleto: ordem.enderecoCompleto,
+        bairro: ordem.bairro,
+        cidade: ordem.cidade,
+        tipoServico: ordem.tipoServico,
+        status: ordem.status,
+        poloId: polo.id,
+        fiscalId: ordem.fiscalMatricula ? fiscais.get(ordem.fiscalMatricula) ?? null : null,
+        observacao: ordem.observacao ?? null
+      }
+    });
+  }
 
   console.log("Seed concluido. Usuarios:");
   console.log(`  supervisor@example.com / ${supervisor.matricula}`);
   console.log(`  monitor@example.com    / ${monitor.matricula}`);
   console.log(`  fiscal@example.com     / ${fiscal.matricula}`);
   console.log(`  senha: ${password}`);
+  console.log(`  OS demo: ${demoOrdensServico.length}`);
 }
 
 main()

@@ -1,7 +1,92 @@
 import bcrypt from "bcryptjs";
 import CredentialsProvider from "next-auth/providers/credentials";
 import type { NextAuthOptions } from "next-auth";
+import type { Perfil } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+
+type Credentials = {
+  login?: string | null;
+  password?: string | null;
+};
+
+type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  perfil: Perfil;
+  matricula: string;
+  poloId: string | null;
+  polosPermitidos: string[];
+};
+
+const demoPassword = process.env.DEMO_AUTH_PASSWORD ?? "senha123";
+const demoPoloId = "demo-polo";
+
+const demoUsers: AuthUser[] = [
+  {
+    id: "demo-supervisor",
+    name: "Supervisor Teste",
+    email: "supervisor@example.com",
+    matricula: "S0001",
+    perfil: "supervisor",
+    poloId: null,
+    polosPermitidos: []
+  },
+  {
+    id: "demo-monitor",
+    name: "Monitor Teste",
+    email: "monitor@example.com",
+    matricula: "M0001",
+    perfil: "monitor",
+    poloId: demoPoloId,
+    polosPermitidos: [demoPoloId]
+  },
+  {
+    id: "demo-fiscal",
+    name: "Fiscal Teste",
+    email: "fiscal@example.com",
+    matricula: "F0001",
+    perfil: "fiscal",
+    poloId: demoPoloId,
+    polosPermitidos: []
+  }
+];
+
+export async function authorizeCredentials(credentials: Credentials | undefined): Promise<AuthUser | null> {
+  const login = credentials?.login?.trim();
+  const password = credentials?.password ?? "";
+  if (!login || !password) return null;
+
+  const user = await prisma.user.findFirst({
+    where: {
+      status: "ativo",
+      OR: [{ email: login.toLowerCase() }, { matricula: login }]
+    },
+    include: { acessosPolo: true }
+  });
+  if (user) {
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) return null;
+    await prisma.user.update({ where: { id: user.id }, data: { lastSeenAt: new Date() } });
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      perfil: user.perfil,
+      matricula: user.matricula,
+      poloId: user.poloId,
+      polosPermitidos: user.acessosPolo.map((access) => access.poloId)
+    };
+  }
+
+  if (process.env.DEMO_AUTH_ENABLED !== "true" || password !== demoPassword) return null;
+  const normalizedLogin = login.toLowerCase();
+  return (
+    demoUsers.find(
+      (demoUser) => demoUser.email.toLowerCase() === normalizedLogin || demoUser.matricula === login
+    ) ?? null
+  );
+}
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
@@ -13,32 +98,7 @@ export const authOptions: NextAuthOptions = {
         login: { label: "Matricula ou e-mail", type: "text" },
         password: { label: "Senha", type: "password" }
       },
-      async authorize(credentials) {
-        const login = credentials?.login?.trim();
-        const password = credentials?.password ?? "";
-        if (!login || !password) return null;
-
-        const user = await prisma.user.findFirst({
-          where: {
-            status: "ativo",
-            OR: [{ email: login.toLowerCase() }, { matricula: login }]
-          },
-          include: { acessosPolo: true }
-        });
-        if (!user) return null;
-        const valid = await bcrypt.compare(password, user.passwordHash);
-        if (!valid) return null;
-        await prisma.user.update({ where: { id: user.id }, data: { lastSeenAt: new Date() } });
-        return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          perfil: user.perfil,
-          matricula: user.matricula,
-          poloId: user.poloId,
-          polosPermitidos: user.acessosPolo.map((access) => access.poloId)
-        };
-      }
+      authorize: authorizeCredentials
     })
   ],
   callbacks: {
