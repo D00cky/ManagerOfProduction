@@ -20,6 +20,15 @@ export const prismaOrdemRepository: OrdemRepository = {
   updateStatus(id: string, data: OrdemStatusUpdate) {
     return prisma.ordemServico.update({ where: { id }, data });
   },
+  findFiscalById(id: string) {
+    return prisma.user.findUnique({
+      where: { id },
+      select: { id: true, perfil: true, poloId: true }
+    });
+  },
+  updateFiscal(id: string, fiscalId: string) {
+    return prisma.ordemServico.update({ where: { id }, data: { fiscalId } });
+  },
   async log(input: LogInput) {
     await prisma.logAtividade.create({
       data: {

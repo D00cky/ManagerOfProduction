@@ -1,5 +1,5 @@
-import type { EventoLog, OrdemServico, Prisma, StatusOS } from "@prisma/client";
-import { canTransitionStatus } from "@/lib/permissions";
+import type { EventoLog, OrdemServico, Perfil, Prisma, StatusOS } from "@prisma/client";
+import { canTransitionStatus, hasPermission } from "@/lib/permissions";
 import { allowedPoloIds, buildOsScope, type SessionUserScope } from "@/lib/scope";
 
 export type OrdemStatusUpdate = Partial<
@@ -14,11 +14,19 @@ export type LogInput = {
   ordemServicoId?: string;
 };
 
+export type FiscalRef = {
+  id: string;
+  perfil: Perfil;
+  poloId: string | null;
+};
+
 export type OrdemRepository = {
   findMany(where: Prisma.OrdemServicoWhereInput): Promise<OrdemServico[]>;
   findById(id: string): Promise<OrdemServico | null>;
   hasTabulacao(ordemServicoId: string): Promise<boolean>;
   updateStatus(id: string, data: OrdemStatusUpdate): Promise<OrdemServico>;
+  findFiscalById(id: string): Promise<FiscalRef | null>;
+  updateFiscal(id: string, fiscalId: string): Promise<OrdemServico>;
   log(input: LogInput): Promise<void>;
 };
 
@@ -57,6 +65,35 @@ export async function updateOrdemStatus(
     userId: user.id,
     ordemServicoId,
     metadata: { from: ordem.status, to: status }
+  });
+  return updated;
+}
+
+export async function atribuirOrdem(
+  repository: OrdemRepository,
+  user: SessionUserScope,
+  ordemServicoId: string,
+  fiscalId: string
+) {
+  if (!hasPermission(user.perfil, "os:write")) {
+    throw new Error("Sem permissao para atribuir OS");
+  }
+
+  const ordem = await repository.findById(ordemServicoId);
+  if (!ordem) throw new Error("OS nao encontrada");
+  if (!isOrdemInUserScope(ordem, user)) throw new Error("OS fora do escopo do usuario");
+
+  const fiscal = await repository.findFiscalById(fiscalId);
+  if (!fiscal || fiscal.perfil !== "fiscal") throw new Error("Fiscal invalido");
+
+  const evento: EventoLog = ordem.fiscalId ? "reatribuicao" : "atribuicao";
+  const updated = await repository.updateFiscal(ordemServicoId, fiscalId);
+  await repository.log({
+    evento,
+    descricao: `OS ${ordem.numero} atribuida ao fiscal ${fiscalId}`,
+    userId: user.id,
+    ordemServicoId,
+    metadata: { from: ordem.fiscalId, to: fiscalId }
   });
   return updated;
 }
