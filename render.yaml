@@ -1,0 +1,35 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Deploys ManagerOfProduction as a single long-lived Node web service.
+# The custom Socket.IO server (server.ts) needs a persistent process, which a
+# Render Web Service provides (serverless platforms cannot host it).
+#
+# SQLite lives on a persistent disk because Render's normal filesystem is wiped
+# on every deploy/restart. The disk is mounted on the running instance only, so
+# the schema is applied in preDeployCommand (which runs with the disk mounted),
+# not during build.
+services:
+  - type: web
+    name: manager-of-production
+    runtime: node
+    plan: starter # persistent disks require a paid instance type
+    buildCommand: npm ci && npm run build
+    # No migrations exist yet, so push the schema directly. Switch to
+    # `npx prisma migrate deploy` once you start committing migrations.
+    preDeployCommand: npx prisma db push --skip-generate
+    startCommand: npm start
+    healthCheckPath: /
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        value: file:/var/data/prod.db
+      - key: BACKUP_LOCAL_DIR
+        value: /var/data/backups
+      - key: NODE_VERSION
+        value: "22"
+      - key: NEXTAUTH_SECRET
+        generateValue: true # Render generates a strong secret on first deploy
+      - key: NEXTAUTH_URL
+        sync: false # set manually to the service URL, e.g. https://manager-of-production.onrender.com
