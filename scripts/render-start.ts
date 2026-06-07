@@ -20,7 +20,14 @@ function resetSqliteDatabase() {
   }
 }
 
-resetSqliteDatabase();
-execFileSync("npx", ["prisma", "db", "push", "--skip-generate"], { stdio: "inherit", env: process.env });
-execFileSync("npx", ["prisma", "db", "seed"], { stdio: "inherit", env: process.env });
-await import("../server");
+async function main() {
+  resetSqliteDatabase();
+  execFileSync("npx", ["prisma", "db", "push", "--skip-generate"], { stdio: "inherit", env: process.env });
+  execFileSync("npx", ["prisma", "db", "seed"], { stdio: "inherit", env: process.env });
+  await import("../server");
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
