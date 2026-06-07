@@ -1,6 +1,6 @@
 # Progress / Handoff
 
-Status as of 2026-06-07. All work below is committed; `npm run typecheck` is clean, `npm test` is green (123 tests), and the initial Playwright E2E spec is green.
+Status as of 2026-06-07. All work below is committed; `npm run typecheck`, `npm test`, `npm run build`, and `npm run test:e2e` are green.
 
 ## Done
 
@@ -18,7 +18,10 @@ All navigation pages + login built and verified end-to-end against a live server
 
 ### E2E
 Playwright is configured with an isolated seeded SQLite database (`file:./e2e.db`) and a Chromium project.
-- Covered: supervisor login -> dashboard -> fila -> assign `OS-1001` to `Fiscal Teste`.
+- Covered: supervisor login -> dashboard -> fila assignment, tabulation save -> status finalization, XLSX browser import -> confirm -> fila visibility, and fiscal/monitor role-scoped navigation.
+
+### Render.com
+Render Blueprint support is configured in `render.yaml` for a Node Web Service with `/api/health` health checks, generated `NEXTAUTH_SECRET`, required `NEXTAUTH_URL`, and free-tier ephemeral SQLite defaults. `README.md` documents the setup and persistent storage options.
 
 ### Conventions for new pages (follow these)
 - Page = Server Component: `getCurrentUser()` → `redirect("/login")` if null; guard with `hasPermission(perfil, ...)` → `redirect(defaultRedirect(perfil))`; then call the **service + Prisma repo directly** (no HTTP hop).
@@ -26,9 +29,7 @@ Playwright is configured with an isolated seeded SQLite database (`file:./e2e.db
 - `listOrdens` is typed as scalar `OrdemServico[]` (relations are included at runtime but not in the type).
 
 ## Remaining work
-1. **More automated E2E coverage needed** — the first Playwright spec covers supervisor login and fila assignment. Tabulation, import, status transitions, and role-scoped navigation still need browser coverage before those user-critical flows are complete.
-2. The `/importar` in-browser XLSX parse is the one path no test drives (it reuses the unit-tested `src/lib/importacao` functions; the confirm endpoint is tested).
-3. **Deferred (need product decisions):** `Avaliacao` review (model exists, no permission defined), backup worker (`scripts/backup-worker.ts` referenced in package.json but missing; `BackupRegistro` + `ConfigSync.autoBackup` exist), and empty placeholder API dirs `api/configuracoes/sync` + `api/relatorios/exportar`.
+1. **Deferred (need product decisions):** `Avaliacao` review (model exists, no permission defined), backup worker (`scripts/backup-worker.ts` referenced in package.json but missing; `BackupRegistro` + `ConfigSync.autoBackup` exist), and empty placeholder API dirs `api/configuracoes/sync` + `api/relatorios/exportar`.
 
 ## Run / verify locally
 ```
@@ -37,6 +38,7 @@ npx prisma db push              # create schema
 npm run db:seed                 # seed test users (supervisor/monitor/fiscal @example.com, senha123)
 npm run dev                     # custom server.ts (Next + Socket.IO) on PORT (default 3000)
 npm run typecheck && npm test
+npm run build
 npm run test:e2e                # uses seeded prisma/e2e.db unless DATABASE_URL is provided
 ```
 Deployment: `render.yaml` is set up for a free-tier ephemeral-SQLite test deploy; storage is driven by `DATABASE_URL` (swap to a persistent disk or Postgres later). See comments in `render.yaml`.

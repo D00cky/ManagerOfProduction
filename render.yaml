@@ -34,7 +34,7 @@ services:
     # then seed test accounts.
     buildCommand: npm ci && npm run build && npx prisma db push --skip-generate && npx prisma db seed
     startCommand: npm start
-    healthCheckPath: /
+    healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
         value: file:./prod.db # ephemeral; lives next to prisma/schema.prisma
