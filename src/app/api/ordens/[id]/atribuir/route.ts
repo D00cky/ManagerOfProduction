@@ -22,6 +22,7 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ data: ordem });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro ao atribuir OS";
-    return NextResponse.json({ error: message }, { status: 400 });
+    const status = message.startsWith("Sem permissao") ? 403 : 400;
+    return NextResponse.json({ error: message }, { status });
   }
 }

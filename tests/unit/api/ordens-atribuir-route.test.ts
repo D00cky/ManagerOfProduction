@@ -58,7 +58,7 @@ describe("POST /api/ordens/[id]/atribuir", () => {
     await expect(response.json()).resolves.toEqual({ data: updated });
   });
 
-  it("returns 400 when the service rejects the assignment", async () => {
+  it("returns 403 when the service denies the assignment", async () => {
     getCurrentUser.mockResolvedValue({ id: "f1", perfil: "fiscal", poloId: "p1" });
     atribuirOrdem.mockRejectedValue(new Error("Sem permissao para atribuir OS"));
     const { POST } = await import("@/app/api/ordens/[id]/atribuir/route");
@@ -67,7 +67,20 @@ describe("POST /api/ordens/[id]/atribuir", () => {
       params: Promise.resolve({ id: "os1" })
     });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({ error: "Sem permissao para atribuir OS" });
+  });
+
+  it("returns 400 for other assignment errors", async () => {
+    getCurrentUser.mockResolvedValue({ id: "m1", perfil: "monitor", poloId: "p1" });
+    atribuirOrdem.mockRejectedValue(new Error("Fiscal invalido"));
+    const { POST } = await import("@/app/api/ordens/[id]/atribuir/route");
+
+    const response = await POST(request({ fiscalId: "f2" }), {
+      params: Promise.resolve({ id: "os1" })
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "Fiscal invalido" });
   });
 });
