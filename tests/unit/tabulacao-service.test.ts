@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { OrdemServico, Tabulacao } from "@prisma/client";
-import { saveTabulacao, type TabulacaoRepository } from "@/server/tabulacao-service";
+import { getTabulacaoEdicao, saveTabulacao, type TabulacaoRepository } from "@/server/tabulacao-service";
 
 function os(overrides: Partial<OrdemServico> = {}): OrdemServico {
   const now = new Date("2026-06-07T10:00:00.000Z");
@@ -44,9 +44,10 @@ function tabulacao(overrides: Partial<Tabulacao> = {}): Tabulacao {
   };
 }
 
-function repo(record: OrdemServico): TabulacaoRepository {
+function repo(record: OrdemServico, existing: Tabulacao | null = null): TabulacaoRepository {
   return {
     findOrdemById: vi.fn(async () => record),
+    findTabulacaoByOrdem: vi.fn(async () => existing),
     upsertTabulacao: vi.fn(async (_input) => tabulacao(_input)),
     log: vi.fn(async () => undefined)
   };
@@ -112,5 +113,40 @@ describe("saveTabulacao", () => {
       ordemServicoId: "os1",
       metadata: expect.objectContaining({ conceito: expect.any(String) })
     });
+  });
+});
+
+describe("getTabulacaoEdicao", () => {
+  it("throws when the OS does not exist", async () => {
+    const repository: TabulacaoRepository = {
+      findOrdemById: vi.fn(async () => null),
+      findTabulacaoByOrdem: vi.fn(async () => null),
+      upsertTabulacao: vi.fn(),
+      log: vi.fn()
+    };
+
+    await expect(
+      getTabulacaoEdicao(repository, { id: "f1", perfil: "fiscal", poloId: "p1" }, "os1")
+    ).rejects.toThrow("OS nao encontrada");
+  });
+
+  it("blocks access to an OS outside the requester scope", async () => {
+    const repository = repo(os({ fiscalId: "other" }));
+
+    await expect(
+      getTabulacaoEdicao(repository, { id: "f1", perfil: "fiscal", poloId: "p1" }, "os1")
+    ).rejects.toThrow("OS fora do escopo do usuario");
+    expect(repository.findTabulacaoByOrdem).not.toHaveBeenCalled();
+  });
+
+  it("returns the OS and any existing tabulation in scope", async () => {
+    const existing = tabulacao({ observacoes: "anterior" });
+    const repository = repo(os(), existing);
+
+    const result = await getTabulacaoEdicao(repository, { id: "f1", perfil: "fiscal", poloId: "p1" }, "os1");
+
+    expect(result.ordem.id).toBe("os1");
+    expect(result.tabulacao?.observacoes).toBe("anterior");
+    expect(repository.findTabulacaoByOrdem).toHaveBeenCalledWith("os1");
   });
 });

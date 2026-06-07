@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { defaultRedirect, hasPermission } from "@/lib/permissions";
@@ -29,12 +31,13 @@ export default async function FilaPage() {
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Fiscal</th>
               <th className="px-4 py-3">Programada</th>
+              <th className="px-4 py-3 text-right">Acoes</th>
             </tr>
           </thead>
           <tbody>
             {ordens.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-[hsl(var(--muted-foreground))]">
+                <td colSpan={7} className="px-4 py-8 text-center text-[hsl(var(--muted-foreground))]">
                   Nenhuma OS na fila.
                 </td>
               </tr>
@@ -55,6 +58,11 @@ export default async function FilaPage() {
                   </td>
                   <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
                     {ordem.dataProgramada ? ordem.dataProgramada.toLocaleDateString("pt-BR") : "-"}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/tabulacao/${ordem.id}`}>Tabular</Link>
+                    </Button>
                   </td>
                 </tr>
               ))

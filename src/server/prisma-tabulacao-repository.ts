@@ -6,6 +6,9 @@ export const prismaTabulacaoRepository: TabulacaoRepository = {
   findOrdemById(id: string) {
     return prisma.ordemServico.findUnique({ where: { id } });
   },
+  findTabulacaoByOrdem(ordemServicoId: string) {
+    return prisma.tabulacao.findUnique({ where: { ordemServicoId } });
+  },
   upsertTabulacao(input: UpsertTabulacaoInput) {
     return prisma.tabulacao.upsert({
       where: { ordemServicoId: input.ordemServicoId },

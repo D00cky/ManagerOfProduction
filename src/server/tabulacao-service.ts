@@ -30,9 +30,23 @@ export type TabulacaoLogInput = {
 
 export type TabulacaoRepository = {
   findOrdemById(id: string): Promise<OrdemServico | null>;
+  findTabulacaoByOrdem(ordemServicoId: string): Promise<Tabulacao | null>;
   upsertTabulacao(input: UpsertTabulacaoInput): Promise<Tabulacao>;
   log(input: TabulacaoLogInput): Promise<void>;
 };
+
+export async function getTabulacaoEdicao(
+  repository: TabulacaoRepository,
+  user: SessionUserScope,
+  ordemServicoId: string
+) {
+  const ordem = await repository.findOrdemById(ordemServicoId);
+  if (!ordem) throw new Error("OS nao encontrada");
+  if (!isOrdemInUserScope(ordem, user)) throw new Error("OS fora do escopo do usuario");
+
+  const tabulacao = await repository.findTabulacaoByOrdem(ordemServicoId);
+  return { ordem, tabulacao };
+}
 
 export async function saveTabulacao(
   repository: TabulacaoRepository,
