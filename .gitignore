@@ -1,0 +1,10 @@
+node_modules
+.next
+dist
+.env
+*.db
+backups
+coverage
+playwright-report
+
+tsconfig.tsbuildinfo
