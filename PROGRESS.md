@@ -7,7 +7,7 @@ Status as of 2026-06-07. All work below is committed; `npm run typecheck`, `npm 
 ### Backend (service / repository / route per AGENTS.md)
 Every capability in `src/lib/permissions.ts` has a service + scoped API route, plus polo CRUD:
 - OS: list, status transitions (`PATCH /api/ordens/[id]`), fiscal assignment (`POST /api/ordens/[id]/atribuir`, os:write + polo scope), FFR tabulation (`PUT /api/ordens/[id]/tabulacao`, with `getTabulacaoEdicao` read).
-- Excel import preview/confirm, dashboard, equipe roster, user management (usuarios:write), FFR reports (relatorios:read), sync/backup settings (ConfigSync), polo management.
+- Excel import preview/confirm, dashboard, equipe roster, user management (usuarios:write), FFR reports (relatorios:read + CSV export), supervisor tabulation reviews (avaliacoes:write), sync/backup settings and manual backup trigger, polo management.
 - All permission-gated routes return **403** for "Sem permissao" denials, 400 for other errors.
 
 ### Frontend (Next 15 App Router, NextAuth credentials)
@@ -29,7 +29,7 @@ Render Blueprint support is configured in `render.yaml` for a Node Web Service w
 - `listOrdens` is typed as scalar `OrdemServico[]` (relations are included at runtime but not in the type).
 
 ## Remaining work
-1. **Deferred (need product decisions):** `Avaliacao` review (model exists, no permission defined), backup worker (`scripts/backup-worker.ts` referenced in package.json but missing; `BackupRegistro` + `ConfigSync.autoBackup` exist), and empty placeholder API dirs `api/configuracoes/sync` + `api/relatorios/exportar`.
+No known local implementation items remain. Future product work should start from new requirements.
 
 ## Run / verify locally
 ```
@@ -40,5 +40,6 @@ npm run dev                     # custom server.ts (Next + Socket.IO) on PORT (d
 npm run typecheck && npm test
 npm run build
 npm run test:e2e                # uses seeded prisma/e2e.db unless DATABASE_URL is provided
+npm run backup                  # copies sqlite DATABASE_URL to BACKUP_LOCAL_DIR or ConfigSync.caminhoRede
 ```
 Deployment: `render.yaml` is set up for a free-tier ephemeral-SQLite test deploy; storage is driven by `DATABASE_URL` (swap to a persistent disk or Postgres later). See comments in `render.yaml`.

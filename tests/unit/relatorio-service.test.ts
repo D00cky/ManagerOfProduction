@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Conceito } from "@prisma/client";
 import {
+  exportRelatorioCsv,
   getRelatorio,
   type RelatorioRepository,
   type RelatorioTabulacao
@@ -65,5 +66,16 @@ describe("getRelatorio", () => {
       { fiscalId: "f1", total: 2, mediaPercentual: 0.75 },
       { fiscalId: "f2", total: 2, mediaPercentual: 0.4 }
     ]);
+  });
+
+  it("exports scoped report rows as CSV", async () => {
+    const repository = repo([
+      tab({ conceito: "A", percentual: 1, fiscalId: "f1" }),
+      tab({ conceito: "C", percentual: 0.5, fiscalId: "f1" })
+    ]);
+
+    const csv = await exportRelatorioCsv(repository, { id: "sup", perfil: "supervisor", poloId: null });
+
+    expect(csv).toBe("Fiscal,Tabulacoes,Media FFR\nf1,2,75.00%");
   });
 });

@@ -9,6 +9,7 @@ export type Permission =
   | "equipe:read"
   | "equipe:write"
   | "usuarios:write"
+  | "avaliacoes:write"
   | "relatorios:read"
   | "configuracoes:write";
 
@@ -32,6 +33,7 @@ export const rolePermissions: Record<Perfil, Permission[]> = {
     "equipe:read",
     "equipe:write",
     "usuarios:write",
+    "avaliacoes:write",
     "relatorios:read",
     "configuracoes:write"
   ]

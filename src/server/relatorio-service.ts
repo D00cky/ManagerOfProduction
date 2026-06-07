@@ -67,3 +67,22 @@ function media(valores: number[]) {
   if (valores.length === 0) return 0;
   return valores.reduce((sum, value) => sum + value, 0) / valores.length;
 }
+
+export async function exportRelatorioCsv(repository: RelatorioRepository, user: SessionUserScope) {
+  const relatorio = await getRelatorio(repository, user);
+  const rows = [
+    ["Fiscal", "Tabulacoes", "Media FFR"],
+    ...relatorio.porFiscal.map((item) => [
+      item.fiscalId,
+      String(item.total),
+      `${(item.mediaPercentual * 100).toFixed(2)}%`
+    ])
+  ];
+
+  return rows.map((row) => row.map(csvCell).join(",")).join("\n");
+}
+
+function csvCell(value: string) {
+  if (!/[",\n]/.test(value)) return value;
+  return `"${value.replace(/"/g, '""')}"`;
+}

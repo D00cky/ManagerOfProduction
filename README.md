@@ -9,6 +9,21 @@ npm run build
 npm run test:e2e
 ```
 
+## Operational scripts
+
+```bash
+npm run backup
+```
+
+The backup worker copies the SQLite database from `DATABASE_URL` to `ConfigSync.caminhoRede`, or to `BACKUP_LOCAL_DIR`/`./backups` when no configured path exists. Automatic runs respect `ConfigSync.autoBackup`; manual sync through `POST /api/configuracoes/sync` is supervisor-only.
+
+## API additions
+
+- `POST /api/tabulacoes/[id]/avaliacoes`: supervisor-only tabulation review with `nota` from 1 to 5 and optional `comentario`.
+- `GET /api/relatorios/exportar`: CSV export of the scoped FFR report.
+- `POST /api/configuracoes/sync`: supervisor-only manual backup trigger.
+- `GET /api/health`: unauthenticated Render health check.
+
 ## Render.com deployment
 
 This repository includes a Render Blueprint in `render.yaml` for a Node Web Service. The service runs the custom `server.ts` process, uses `/api/health` for health checks, and seeds an ephemeral SQLite database for free-tier test deploys.
