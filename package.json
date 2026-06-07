@@ -15,7 +15,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
-    "backup": "tsx scripts/backup-worker.ts"
+    "backup": "tsx scripts/backup-worker.ts",
+    "start:vps": "npx prisma db push --skip-generate && npm start"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.4",

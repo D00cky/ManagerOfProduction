@@ -1,0 +1,11 @@
+.git
+.next
+node_modules
+coverage
+playwright-report
+test-results
+backups
+*.db
+.env
+.env.*
+!.env.vps.example

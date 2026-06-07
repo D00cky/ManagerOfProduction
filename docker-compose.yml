@@ -1,0 +1,36 @@
+services:
+  app:
+    container_name: manager-of-production-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.vps
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+    volumes:
+      - mop_sqlite_data:/data
+      - mop_backups:/backups
+    expose:
+      - "3000"
+
+  caddy:
+    container_name: manager-of-production-caddy
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  mop_sqlite_data:
+  mop_backups:
+  caddy_data:
+  caddy_config:

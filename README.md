@@ -62,3 +62,48 @@ For persistent production data, move `DATABASE_URL` to a persistent disk path su
 ## Architecture roadmap
 
 `ARQUITETURA_FFR_PLANEJAMENTO.md` describes the target architecture for the full FFR platform. Today’s app covers the Gerenciador FFR core and basic reports. Future roadmap items include the Central de Conformidade, D3/GeoJSON map, PostgreSQL analytics, materialized views, Redis/cache, ExcelJS formatted exports, PDF export, and Docker Compose corporate deployment.
+
+## VPS deployment (Contabo)
+
+Current target VPS IP: `13.140.148.134`.
+
+This setup uses Docker Compose with:
+
+- `manager-of-production-app`: Next.js custom server on internal port 3000
+- `manager-of-production-caddy`: reverse proxy on public port 80
+- persistent SQLite volume mounted at `/data`
+- backup volume mounted at `/backups`
+
+### First deploy on the VPS
+
+```bash
+sudo apt update
+sudo apt install -y git docker.io docker-compose-plugin
+sudo systemctl enable --now docker
+
+git clone <repo-url> ManagerOfProduction
+cd ManagerOfProduction
+cp .env.vps.example .env.vps
+nano .env.vps   # set NEXTAUTH_SECRET to a long random value
+
+docker compose up -d --build
+```
+
+Create demo users and OS once on the persistent VPS database:
+
+```bash
+docker compose exec app npm run db:seed
+```
+
+Open:
+
+```txt
+http://13.140.148.134
+```
+
+### VPS notes
+
+- The VPS config does **not** reset the database on startup by default.
+- `DATABASE_URL=file:/data/prod.db` persists in Docker volume `mop_sqlite_data`.
+- Use `DEMO_AUTH_ENABLED=true` only if you want demo login fallback without database users.
+- When a domain is available, point it to `13.140.148.134`, update `NEXTAUTH_URL`, and replace the Caddy host from `:80` to the domain for automatic HTTPS.
