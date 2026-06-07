@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { FilaTable, type FilaRow, type FiscalOption } from "@/components/fila/fila-table";
 import { defaultRedirect, hasPermission } from "@/lib/permissions";
+import { listEquipe } from "@/server/equipe-service";
+import { prismaEquipeRepository } from "@/server/prisma-equipe-repository";
 import { listOrdens } from "@/server/os-service";
 import { prismaOrdemRepository } from "@/server/prisma-os-repository";
 import { getCurrentUser } from "@/server/session";
@@ -15,61 +14,33 @@ export default async function FilaPage() {
   if (!user) redirect("/login");
   if (!hasPermission(user.perfil, "fila:read")) redirect(defaultRedirect(user.perfil));
 
-  const ordens = await listOrdens(prismaOrdemRepository, user);
+  const canAssign = hasPermission(user.perfil, "os:write");
+
+  const [ordens, equipe] = await Promise.all([
+    listOrdens(prismaOrdemRepository, user),
+    canAssign ? listEquipe(prismaEquipeRepository, user) : Promise.resolve([])
+  ]);
+
+  const fiscais: FiscalOption[] = equipe
+    .filter((membro) => membro.perfil === "fiscal")
+    .map((membro) => ({ id: membro.id, name: membro.name }));
+  const fiscalNome = new Map(fiscais.map((fiscal) => [fiscal.id, fiscal.name]));
+
+  const rows: FilaRow[] = ordens.map((ordem) => ({
+    id: ordem.id,
+    numero: ordem.numero,
+    endereco: ordem.bairro ? `${ordem.enderecoCompleto}, ${ordem.bairro}` : ordem.enderecoCompleto,
+    tipoServico: ordem.tipoServico,
+    status: ordem.status,
+    fiscalId: ordem.fiscalId,
+    fiscalNome: ordem.fiscalId ? fiscalNome.get(ordem.fiscalId) ?? null : null,
+    dataProgramada: ordem.dataProgramada ? ordem.dataProgramada.toLocaleDateString("pt-BR") : null
+  }));
 
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">Fila de OS</h1>
-
-      <Card className="overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-[hsl(var(--border))] text-xs uppercase text-[hsl(var(--muted-foreground))]">
-            <tr>
-              <th className="px-4 py-3">Numero</th>
-              <th className="px-4 py-3">Endereco</th>
-              <th className="px-4 py-3">Tipo</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Fiscal</th>
-              <th className="px-4 py-3">Programada</th>
-              <th className="px-4 py-3 text-right">Acoes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ordens.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-[hsl(var(--muted-foreground))]">
-                  Nenhuma OS na fila.
-                </td>
-              </tr>
-            ) : (
-              ordens.map((ordem) => (
-                <tr key={ordem.id} className="border-b border-[hsl(var(--border))] last:border-0">
-                  <td className="px-4 py-3 font-medium">{ordem.numero}</td>
-                  <td className="px-4 py-3">
-                    {ordem.enderecoCompleto}
-                    {ordem.bairro ? `, ${ordem.bairro}` : ""}
-                  </td>
-                  <td className="px-4 py-3">{ordem.tipoServico}</td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={ordem.status} />
-                  </td>
-                  <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
-                    {ordem.fiscalId ? "Atribuida" : "Sem fiscal"}
-                  </td>
-                  <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
-                    {ordem.dataProgramada ? ordem.dataProgramada.toLocaleDateString("pt-BR") : "-"}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Button asChild variant="outline" size="sm">
-                      <Link href={`/tabulacao/${ordem.id}`}>Tabular</Link>
-                    </Button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </Card>
+      <FilaTable ordens={rows} fiscais={fiscais} canAssign={canAssign} />
     </div>
   );
 }
