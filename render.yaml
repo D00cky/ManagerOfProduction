@@ -1,35 +1,46 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
-# Deploys ManagerOfProduction as a single long-lived Node web service.
-# The custom Socket.IO server (server.ts) needs a persistent process, which a
+#
+# FREE-TIER TEST DEPLOY (current config)
+# --------------------------------------
+# Deploys ManagerOfProduction as a single Node web service on the free plan.
+# The custom Socket.IO server (server.ts) needs a long-lived process, which a
 # Render Web Service provides (serverless platforms cannot host it).
 #
-# SQLite lives on a persistent disk because Render's normal filesystem is wiped
-# on every deploy/restart. The disk is mounted on the running instance only, so
-# the schema is applied in preDeployCommand (which runs with the disk mounted),
-# not during build.
+# The free plan has NO persistent disk and spins the instance down after idle,
+# so the SQLite file is EPHEMERAL — it resets to a fresh, seeded state on every
+# build and cold start. That is fine for testing: the build pushes the schema
+# and seeds test accounts, so each fresh instance is immediately usable.
+# Runtime data does NOT survive restarts.
+#
+# UPGRADING TO PERSISTENT STORAGE (paid Render or a VPS)
+# ------------------------------------------------------
+# Storage is selected entirely via the DATABASE_URL env var, so moving off the
+# throwaway DB is a config change, not a code change:
+#   * Paid Render + persistent SQLite: set `plan: starter`, add a `disk:` block
+#     (e.g. mountPath /var/data, 1 GB), set DATABASE_URL=file:/var/data/prod.db,
+#     and move schema setup out of build into `preDeployCommand`
+#     (`npx prisma db push --skip-generate`) so it runs with the disk mounted.
+#     Drop the build-time seed once data should persist.
+#   * Postgres (Render managed DB or VPS): change schema.prisma datasource
+#     provider to "postgresql", point DATABASE_URL at the connection string,
+#     and use `npx prisma migrate deploy`.
 services:
   - type: web
     name: manager-of-production
     runtime: node
-    plan: starter # persistent disks require a paid instance type
-    buildCommand: npm ci && npm run build
-    # No migrations exist yet, so push the schema directly. Switch to
-    # `npx prisma migrate deploy` once you start committing migrations.
-    preDeployCommand: npx prisma db push --skip-generate
+    plan: free
+    # Free tier has no disk and no preDeploy, so prepare the ephemeral SQLite DB
+    # during build: build the app (also runs prisma generate), create the schema,
+    # then seed test accounts.
+    buildCommand: npm ci && npm run build && npx prisma db push --skip-generate && npx prisma db seed
     startCommand: npm start
     healthCheckPath: /
-    disk:
-      name: data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: DATABASE_URL
-        value: file:/var/data/prod.db
-      - key: BACKUP_LOCAL_DIR
-        value: /var/data/backups
+        value: file:./prod.db # ephemeral; lives next to prisma/schema.prisma
       - key: NODE_VERSION
         value: "22"
       - key: NEXTAUTH_SECRET
         generateValue: true # Render generates a strong secret on first deploy
       - key: NEXTAUTH_URL
-        sync: false # set manually to the service URL, e.g. https://manager-of-production.onrender.com
+        sync: false # set to the service URL, e.g. https://manager-of-production.onrender.com
