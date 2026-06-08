@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
 import { demoOrdensServico } from "@/data/demo-os";
@@ -8,7 +8,9 @@ describe("Example/demo-os.xlsx", () => {
     const path = "Example/demo-os.xlsx";
 
     expect(existsSync(path)).toBe(true);
-    const workbook = XLSX.readFile(path);
+    // Read via node fs + XLSX.read(buffer) to match how the app parses uploads;
+    // the SheetJS ESM build does not wire fs for XLSX.readFile by default.
+    const workbook = XLSX.read(readFileSync(path), { type: "buffer" });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: "" });
 
