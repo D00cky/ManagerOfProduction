@@ -93,17 +93,4 @@ Create demo users and OS once on the persistent VPS database:
 
 ```bash
 docker compose exec app npm run db:seed
-```
-
-Open:
-
-```txt
-http://13.140.148.134
-```
-
-### VPS notes
-
-- The VPS config does **not** reset the database on startup by default.
-- `DATABASE_URL=file:/data/prod.db` persists in Docker volume `mop_sqlite_data`.
-- Use `DEMO_AUTH_ENABLED=true` only if you want demo login fallback without database users.
-- When a domain is available, point it to `13.140.148.134`, update `NEXTAUTH_URL`, and replace the Caddy host from `:80` to the domain for automatic HTTPS.
+``
