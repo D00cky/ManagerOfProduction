@@ -58,39 +58,3 @@ Required Render setup:
 Demo OS rows are documented in `Example/demo-os.csv`.
 
 For persistent production data, move `DATABASE_URL` to a persistent disk path such as `file:/var/data/prod.db` on a paid Render service, or migrate Prisma to PostgreSQL and use `prisma migrate deploy`.
-
-## Architecture roadmap
-
-`ARQUITETURA_FFR_PLANEJAMENTO.md` describes the target architecture for the full FFR platform. Today’s app covers the Gerenciador FFR core and basic reports. Future roadmap items include the Central de Conformidade, D3/GeoJSON map, PostgreSQL analytics, materialized views, Redis/cache, ExcelJS formatted exports, PDF export, and Docker Compose corporate deployment.
-
-## VPS deployment (Contabo)
-
-Current target VPS IP: `13.140.148.134`.
-
-This setup uses Docker Compose with:
-
-- `manager-of-production-app`: Next.js custom server on internal port 3000
-- `manager-of-production-caddy`: reverse proxy on public port 80
-- persistent SQLite volume mounted at `/data`
-- backup volume mounted at `/backups`
-
-### First deploy on the VPS
-
-```bash
-sudo apt update
-sudo apt install -y git docker.io docker-compose-plugin
-sudo systemctl enable --now docker
-
-git clone <repo-url> ManagerOfProduction
-cd ManagerOfProduction
-cp .env.vps.example .env.vps
-nano .env.vps   # set NEXTAUTH_SECRET to a long random value
-
-docker compose up -d --build
-```
-
-Create demo users and OS once on the persistent VPS database:
-
-```bash
-docker compose exec app npm run db:seed
-``
