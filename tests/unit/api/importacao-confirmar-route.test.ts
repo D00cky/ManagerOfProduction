@@ -40,6 +40,20 @@ describe("POST /api/importacao/confirmar", () => {
     await expect(response.json()).resolves.toEqual({ data: resumo });
   });
 
+  it("returns 403 when the service rejects for missing permission", async () => {
+    getCurrentUser.mockResolvedValue({ id: "f1", perfil: "fiscal", poloId: "p1" });
+    confirmarImportacao.mockRejectedValue(new Error("Sem permissao para importar OS"));
+    const { POST } = await import("@/app/api/importacao/confirmar/route");
+
+    const response = await POST(new Request("http://localhost/api/importacao/confirmar", {
+      method: "POST",
+      body: JSON.stringify({ rows: [{ numero: "1" }], duplicateMode: "ignorar" })
+    }));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: "Sem permissao para importar OS" });
+  });
+
   it("returns 400 for invalid payload", async () => {
     getCurrentUser.mockResolvedValue({ id: "m1", perfil: "monitor", poloId: "p1" });
     const { POST } = await import("@/app/api/importacao/confirmar/route");

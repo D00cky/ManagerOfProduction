@@ -5,6 +5,10 @@ import { getCurrentUser } from "@/server/session";
 
 const duplicateModes: DuplicateMode[] = ["ignorar", "atualizar"];
 
+function statusForError(message: string) {
+  return message.startsWith("Sem permissao") ? 403 : 400;
+}
+
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Nao autenticado" }, { status: 401 });
@@ -19,6 +23,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ data: resumo });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro ao confirmar importacao";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message }, { status: statusForError(message) });
   }
 }

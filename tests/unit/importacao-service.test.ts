@@ -50,6 +50,18 @@ function repository(existingNumbers: string[] = []): ImportacaoRepository {
 }
 
 describe("confirmarImportacao", () => {
+  it("rejects users without the importacao:write capability", async () => {
+    const repo = repository();
+
+    await expect(
+      confirmarImportacao(repo, { id: "f1", perfil: "fiscal", poloId: "p1" }, rows, "ignorar")
+    ).rejects.toThrow("Sem permissao para importar OS");
+
+    expect(repo.createOrdem).not.toHaveBeenCalled();
+    expect(repo.updateOrdem).not.toHaveBeenCalled();
+    expect(repo.log).not.toHaveBeenCalled();
+  });
+
   it("creates valid OS and reports invalid rows", async () => {
     const repo = repository();
 

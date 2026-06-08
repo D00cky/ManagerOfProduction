@@ -10,6 +10,12 @@ describe("VPS deployment files", () => {
     expect(dockerfile).toContain('"npm", "run", "start:vps"');
   });
 
+  it("runs the container as a non-root user", () => {
+    const dockerfile = readFileSync("Dockerfile", "utf8");
+
+    expect(dockerfile).toContain("USER node");
+  });
+
   it("runs the app behind Caddy with persistent volumes", () => {
     const compose = readFileSync("docker-compose.yml", "utf8");
     const caddyfile = readFileSync("Caddyfile", "utf8");
@@ -22,12 +28,14 @@ describe("VPS deployment files", () => {
     expect(caddyfile).toContain("reverse_proxy manager-of-production-app:3000");
   });
 
-  it("documents required VPS environment variables", () => {
+  it("documents required VPS environment variables without leaking host details", () => {
     const env = readFileSync(".env.vps.example", "utf8");
 
     expect(env).toContain("DATABASE_URL=file:/data/prod.db");
-    expect(env).toContain("NEXTAUTH_URL=http://13.140.148.134");
+    expect(env).toContain("NEXTAUTH_URL=");
     expect(env).toContain("NEXTAUTH_SECRET=");
     expect(env).toContain("DEMO_AUTH_ENABLED=false");
+    // No concrete public host/IP should be committed to the repo.
+    expect(env).not.toMatch(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/);
   });
 });

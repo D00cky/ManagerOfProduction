@@ -1,4 +1,5 @@
 import type { EventoLog, Prisma, StatusOS, TipoServico } from "@prisma/client";
+import { hasPermission } from "@/lib/permissions";
 import type { NormalizedImportRow } from "@/lib/importacao";
 import type { SessionUserScope } from "@/lib/scope";
 
@@ -57,6 +58,10 @@ export async function confirmarImportacao(
   rows: NormalizedImportRow[],
   duplicateMode: DuplicateMode
 ): Promise<ImportacaoResumo> {
+  if (!hasPermission(user.perfil, "importacao:write")) {
+    throw new Error("Sem permissao para importar OS");
+  }
+
   const resumo: ImportacaoResumo = {
     total: rows.length,
     criadas: 0,

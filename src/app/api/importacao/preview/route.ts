@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { detectMapping, normalizeImportRow, type RawImportRow } from "@/lib/importacao";
+import { hasPermission } from "@/lib/permissions";
+import { getCurrentUser } from "@/server/session";
 
 export async function POST(request: Request) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Nao autenticado" }, { status: 401 });
+  if (!hasPermission(user.perfil, "importacao:write")) {
+    return NextResponse.json({ error: "Sem permissao para importar OS" }, { status: 403 });
+  }
+
   const form = await request.formData();
   const file = form.get("file");
   if (!(file instanceof File)) {

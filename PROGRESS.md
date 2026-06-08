@@ -32,8 +32,8 @@ Playwright is configured with an isolated seeded SQLite database (`file:./e2e.db
 ### Render.com
 Render Blueprint support is configured in `render.yaml` for a Node Web Service with `/api/health` health checks, generated `NEXTAUTH_SECRET`, required `NEXTAUTH_URL`, and free-tier ephemeral SQLite defaults. `README.md` documents the setup and persistent storage options.
 
-### VPS Contabo
-A Docker Compose deployment is available for the Contabo VPS at `13.140.148.134`: app container, Caddy reverse proxy on port 80, persistent SQLite volume at `/data`, and backup volume at `/backups`. This VPS path does not reset the DB by default; seed demo users/OS once with `docker compose exec app npm run db:seed`.
+### VPS
+A Docker Compose deployment is available for a generic VPS: app container, Caddy reverse proxy, persistent SQLite volume at `/data`, and backup volume at `/backups`. The concrete host/IP and secrets live only in `.env.vps` on the server, not in the repo. This VPS path does not reset the DB by default; seed demo users/OS once with `docker compose exec app npm run db:seed`. Serve over HTTPS (Caddy + domain) before exposing it publicly — the default `:80` config sends credentials in cleartext.
 
 ### Roadmap baseado em `ARQUITETURA_FFR_PLANEJAMENTO.md`
 O arquivo de arquitetura descreve a direção futura da plataforma, não o que deve ser apresentado como completo hoje.
