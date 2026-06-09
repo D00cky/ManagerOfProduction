@@ -74,11 +74,9 @@ describe("saveTabulacao", () => {
     const result = await saveTabulacao(repository, { id: "f1", perfil: "fiscal", poloId: "p1" }, {
       ordemServicoId: "os1",
       respostas: {
-        gerais_identificacao: "1",
-        gerais_epi: "1",
-        ligacao_ramal: "0",
-        ligacao_cavalete: "1",
-        qualidade_prazo: "1"
+        gerais_q1: "1", // peso 3
+        gerais_q2: "0", // peso 2
+        ramal_agua_q1: "1" // peso 3
       },
       observacoes: "ok"
     });
@@ -86,12 +84,12 @@ describe("saveTabulacao", () => {
     expect(repository.upsertTabulacao).toHaveBeenCalledWith(expect.objectContaining({
       ordemServicoId: "os1",
       fiscalId: "f1",
-      somaObtida: 5,
-      somaPossivel: 7,
-      conceito: "C",
+      somaObtida: 6,
+      somaPossivel: 8,
+      conceito: "B",
       observacoes: "ok"
     }));
-    expect(result.percentual).toBeCloseTo(5 / 7);
+    expect(result.percentual).toBeCloseTo(6 / 8);
   });
 
   it("blocks tabulation for OS outside the requester scope", async () => {
