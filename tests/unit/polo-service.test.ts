@@ -8,7 +8,7 @@ import {
 } from "@/server/polo-service";
 
 function polo(overrides: Partial<PoloResumo> = {}): PoloResumo {
-  return { id: "p1", nome: "Polo Central", codigo: "POLO-01", ativo: true, ...overrides };
+  return { id: "p1", nome: "Polo Central", codigo: "POLO-01", regiao: null, ativo: true, ...overrides };
 }
 
 function repo(options: { existing?: PoloResumo | null; byId?: PoloResumo | null } = {}): PoloRepository {
@@ -68,8 +68,19 @@ describe("criarPolo", () => {
 
     const created = await criarPolo(repository, supervisor, { nome: "  Polo Sul ", codigo: " polo-02 " });
 
-    expect(repository.create).toHaveBeenCalledWith({ nome: "Polo Sul", codigo: "POLO-02" });
+    expect(repository.create).toHaveBeenCalledWith({ nome: "Polo Sul", codigo: "POLO-02", regiao: null });
     expect(created.id).toBe("new");
+  });
+
+  it("stores a valid região and rejects an unknown one", async () => {
+    const repository = repo({ existing: null });
+
+    await criarPolo(repository, supervisor, { nome: "Polo SP", codigo: "P-SP", regiao: "Campinas" });
+    expect(repository.create).toHaveBeenCalledWith({ nome: "Polo SP", codigo: "P-SP", regiao: "Campinas" });
+
+    await expect(
+      criarPolo(repository, supervisor, { nome: "Polo X", codigo: "P-X", regiao: "Inexistente" })
+    ).rejects.toThrow("Regiao invalida");
   });
 });
 

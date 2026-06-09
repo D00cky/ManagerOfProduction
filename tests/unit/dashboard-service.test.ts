@@ -42,7 +42,11 @@ function matchesWhere(ordem: OrdemServico, where: Record<string, unknown>): bool
   const polo = where.poloId as { in?: string[] } | undefined;
   if (polo?.in && !polo.in.includes(ordem.poloId)) return false;
   if (where.fiscalId && ordem.fiscalId !== where.fiscalId) return false;
-  if (where.regiaoAdministrativa && ordem.regiaoAdministrativa !== where.regiaoAdministrativa) return false;
+  const regiao = where.regiaoAdministrativa as string | { in?: string[] } | undefined;
+  if (typeof regiao === "string" && ordem.regiaoAdministrativa !== regiao) return false;
+  if (regiao && typeof regiao === "object" && regiao.in && !regiao.in.includes(ordem.regiaoAdministrativa as string)) {
+    return false;
+  }
   if (where.cidade && ordem.cidade !== where.cidade) return false;
   return true;
 }
@@ -71,12 +75,12 @@ function repository(ordens: OrdemServico[]): DashboardRepository {
 }
 
 describe("getDashboardResumo", () => {
-  it("loads OS using the requester scope", async () => {
+  it("loads OS using the requester scope (monitor → whole região)", async () => {
     const repo = repository([]);
 
-    await getDashboardResumo(repo, { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p2"] });
+    await getDashboardResumo(repo, { id: "m1", perfil: "monitor", regiao: "Registro" });
 
-    expect(repo.findOrdens).toHaveBeenCalledWith({ poloId: { in: ["p2"] } });
+    expect(repo.findOrdens).toHaveBeenCalledWith({ regiaoAdministrativa: { in: ["Registro"] } });
   });
 
   it("calculates status metrics and completion percentage", async () => {
@@ -141,22 +145,25 @@ describe("getDashboardResumo", () => {
     ]);
   });
 
-  it("narrows by municipality and keeps the access scope (monitor cannot read other polos)", async () => {
+  it("narrows by municipality and keeps the access scope (monitor cannot read other regiões)", async () => {
     const repo = repository([
-      os({ id: "1", poloId: "p1", cidade: "MIRACATU", regiaoAdministrativa: "Registro" }),
-      os({ id: "2", poloId: "p1", cidade: "REGISTRO", regiaoAdministrativa: "Registro" }),
-      os({ id: "3", poloId: "p2", cidade: "MIRACATU", regiaoAdministrativa: "Registro" })
+      os({ id: "1", cidade: "MIRACATU", regiaoAdministrativa: "Registro" }),
+      os({ id: "2", cidade: "REGISTRO", regiaoAdministrativa: "Registro" }),
+      os({ id: "3", cidade: "MIRACATU", regiaoAdministrativa: "São Paulo" })
     ]);
 
     const resumo = await getDashboardResumo(
       repo,
-      { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] },
+      { id: "m1", perfil: "monitor", regiao: "Registro" },
       new Date("2026-06-07T10:00:00.000Z"),
       { municipio: "MIRACATU" }
     );
 
-    expect(repo.findOrdens).toHaveBeenCalledWith({ poloId: { in: ["p1"] }, cidade: "MIRACATU" });
-    // Only the in-scope MIRACATU OS (p1), not the p2 one.
+    expect(repo.findOrdens).toHaveBeenCalledWith({
+      regiaoAdministrativa: { in: ["Registro"] },
+      cidade: "MIRACATU"
+    });
+    // Only the in-scope (Registro) MIRACATU OS, not the São Paulo one.
     expect(resumo.metricas.total).toBe(1);
   });
 

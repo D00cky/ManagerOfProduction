@@ -12,6 +12,7 @@ declare module "next-auth" {
       matricula: string;
       poloId?: string | null;
       polosPermitidos?: string[];
+      regiao?: string | null;
     };
   }
 
@@ -20,6 +21,7 @@ declare module "next-auth" {
     matricula: string;
     poloId?: string | null;
     polosPermitidos?: string[];
+    regiao?: string | null;
   }
 }
 
@@ -29,5 +31,6 @@ declare module "next-auth/jwt" {
     matricula: string;
     poloId?: string | null;
     polosPermitidos?: string[];
+    regiao?: string | null;
   }
 }

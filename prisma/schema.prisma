@@ -64,6 +64,7 @@ model User {
   status       StatusUsuario    @default(ativo)
   poloId       String?
   polo         Polo?            @relation(fields: [poloId], references: [id])
+  regiao       String?
   lastSeenAt   DateTime?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
@@ -78,12 +79,15 @@ model Polo {
   id        String           @id @default(cuid())
   nome      String           @unique
   codigo    String           @unique
+  regiao    String?
   ativo     Boolean          @default(true)
   users     User[]
   acessos   UserPoloAccess[]
   ordens    OrdemServico[]
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
+
+  @@index([regiao])
 }
 
 model UserPoloAccess {
@@ -136,6 +140,12 @@ model OrdemServico {
   @@index([fiscalId, status])
   @@index([poloId, status, fiscalId, dataProgramada, createdAt])
   @@index([createdAt])
+  @@index([regiaoAdministrativa, cidade])
+  @@index([regiaoAdministrativa, status, createdAt])
+  @@index([concluidaEm])
+  @@index([status, updatedAt])
+  @@index([fiscalId, status, concluidaEm])
+  @@index([poloId, tipoServico])
 }
 
 model Tabulacao {
@@ -154,6 +164,9 @@ model Tabulacao {
   ordemServico   OrdemServico @relation(fields: [ordemServicoId], references: [id])
   fiscal         User         @relation(fields: [fiscalId], references: [id])
   avaliacoes     Avaliacao[]
+
+  @@index([fiscalId])
+  @@index([createdAt])
 }
 
 model Avaliacao {
@@ -177,6 +190,10 @@ model LogAtividade {
   createdAt      DateTime      @default(now())
   user           User?         @relation(fields: [userId], references: [id])
   ordemServico   OrdemServico? @relation(fields: [ordemServicoId], references: [id])
+
+  @@index([ordemServicoId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model ConfigSync {

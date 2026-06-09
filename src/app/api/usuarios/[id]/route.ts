@@ -16,6 +16,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (typeof body.name === "string") data.name = body.name;
   if (body.perfil !== undefined) data.perfil = body.perfil;
   if (body.poloId !== undefined) data.poloId = body.poloId;
+  if (body.regiao !== undefined) data.regiao = body.regiao;
   if (body.status !== undefined) data.status = body.status;
 
   const { id } = await context.params;

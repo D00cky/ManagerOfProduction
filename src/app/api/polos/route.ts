@@ -24,6 +24,7 @@ export async function POST(request: Request) {
     nome: String(body.nome ?? ""),
     codigo: String(body.codigo ?? "")
   };
+  if (body.regiao !== undefined) input.regiao = body.regiao;
 
   try {
     const polo = await criarPolo(prismaPoloRepository, user, input);

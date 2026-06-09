@@ -11,10 +11,12 @@ const password = process.env.SEED_PASSWORD ?? "senha123";
 async function main() {
   const passwordHash = bcrypt.hashSync(password, 10);
 
+  const regiao = "São Paulo";
+
   const polo = await prisma.polo.upsert({
     where: { codigo: "POLO-01" },
-    update: {},
-    create: { nome: "Polo Central", codigo: "POLO-01" }
+    update: { regiao },
+    create: { nome: "Polo Central", codigo: "POLO-01", regiao }
   });
 
   const supervisor = await prisma.user.upsert({
@@ -31,14 +33,15 @@ async function main() {
 
   const monitor = await prisma.user.upsert({
     where: { email: "monitor@example.com" },
-    update: { passwordHash, perfil: "monitor", status: "ativo", poloId: polo.id },
+    update: { passwordHash, perfil: "monitor", status: "ativo", poloId: polo.id, regiao },
     create: {
       name: "Monitor Teste",
       email: "monitor@example.com",
       matricula: "M0001",
       passwordHash,
       perfil: "monitor",
-      poloId: polo.id
+      poloId: polo.id,
+      regiao
     }
   });
 
@@ -72,6 +75,8 @@ async function main() {
         enderecoCompleto: ordem.enderecoCompleto,
         bairro: ordem.bairro,
         cidade: ordem.cidade,
+        // Região is denormalized from the polo so monitor (whole-região) scope sees it.
+        regiaoAdministrativa: polo.regiao,
         tipoServico: ordem.tipoServico,
         status: ordem.status,
         poloId: polo.id,

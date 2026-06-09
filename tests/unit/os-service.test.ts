@@ -108,17 +108,16 @@ describe("listOrdens", () => {
     expect(repository.claimNextAvailable).not.toHaveBeenCalled();
   });
 
-  it("scopes monitor users to authorized polos", async () => {
+  it("scopes monitor users to their whole região", async () => {
     const repository = repo(os());
 
     await listOrdens(repository, {
       id: "m1",
       perfil: "monitor",
-      poloId: "p1",
-      polosPermitidos: ["p2", "p3"]
+      regiao: "Campinas"
     });
 
-    expect(repository.findMany).toHaveBeenCalledWith({ poloId: { in: ["p2", "p3"] } });
+    expect(repository.findMany).toHaveBeenCalledWith({ regiaoAdministrativa: { in: ["Campinas"] } });
     expect(repository.claimNextAvailable).not.toHaveBeenCalled();
   });
 });

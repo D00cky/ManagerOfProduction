@@ -10,6 +10,7 @@ export type UsuarioResumo = {
   perfil: Perfil;
   status: StatusUsuario;
   poloId: string | null;
+  regiao: string | null;
 };
 
 export type CriarUsuarioInput = {
@@ -19,12 +20,14 @@ export type CriarUsuarioInput = {
   password: string;
   perfil: Perfil;
   poloId?: string | null;
+  regiao?: string | null;
 };
 
 export type AtualizarUsuarioInput = Partial<{
   name: string;
   perfil: Perfil;
   poloId: string | null;
+  regiao: string | null;
   status: StatusUsuario;
 }>;
 
@@ -81,7 +84,9 @@ export async function criarUsuario(
     matricula,
     password,
     perfil: input.perfil,
-    poloId: input.poloId ?? null
+    poloId: input.poloId ?? null,
+    // Only monitors oversee a região; ignore it for other roles.
+    regiao: input.perfil === "monitor" ? input.regiao?.trim() || null : null
   });
   await repository.log({
     evento: "usuario",
@@ -103,7 +108,9 @@ export async function atualizarUsuario(
   const target = await repository.findById(id);
   if (!target) throw new Error("Usuario nao encontrado");
 
-  const updated = await repository.update(id, data);
+  const sanitized: AtualizarUsuarioInput = { ...data };
+  if (sanitized.regiao !== undefined) sanitized.regiao = sanitized.regiao?.trim() || null;
+  const updated = await repository.update(id, sanitized);
   await repository.log({
     evento: "usuario",
     descricao: `Usuario ${target.email} atualizado`,

@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { perfilLabel } from "@/lib/perfil";
 import { cn } from "@/lib/utils";
+import { REGIOES_SP } from "@/data/regioes-sp";
 import type { UsuarioResumo } from "@/server/usuario-service";
 
 type PoloOption = { id: string; nome: string };
@@ -23,7 +24,8 @@ const emptyForm = {
   matricula: "",
   password: "",
   perfil: "fiscal" as Perfil,
-  poloId: ""
+  poloId: "",
+  regiao: ""
 };
 
 export function UsuariosManager({
@@ -49,7 +51,11 @@ export function UsuariosManager({
     const response = await fetch("/api/usuarios", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...form, poloId: form.poloId || undefined })
+      body: JSON.stringify({
+        ...form,
+        poloId: form.poloId || undefined,
+        regiao: form.perfil === "monitor" ? form.regiao || undefined : undefined
+      })
     });
 
     setSaving(false);
@@ -151,6 +157,23 @@ export function UsuariosManager({
                 ))}
               </Select>
             </div>
+            {form.perfil === "monitor" ? (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="regiao">Regiao (monitor)</Label>
+                <Select
+                  id="regiao"
+                  value={form.regiao}
+                  onChange={(event) => setForm({ ...form, regiao: event.target.value })}
+                >
+                  <option value="">Sem regiao</option>
+                  {REGIOES_SP.map((regiao) => (
+                    <option key={regiao} value={regiao}>
+                      {regiao}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ) : null}
 
             {error ? <p className="text-sm text-red-600 md:col-span-2">{error}</p> : null}
 
@@ -172,6 +195,7 @@ export function UsuariosManager({
               <th className="px-4 py-3">Matricula</th>
               <th className="px-4 py-3">Perfil</th>
               <th className="px-4 py-3">Polo</th>
+              <th className="px-4 py-3">Regiao</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3 text-right">Acoes</th>
             </tr>
@@ -179,7 +203,7 @@ export function UsuariosManager({
           <tbody>
             {usuarios.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-[hsl(var(--muted-foreground))]">
+                <td colSpan={8} className="px-4 py-8 text-center text-[hsl(var(--muted-foreground))]">
                   Nenhum usuario cadastrado.
                 </td>
               </tr>
@@ -192,6 +216,9 @@ export function UsuariosManager({
                   <td className="px-4 py-3">{perfilLabel(usuario.perfil)}</td>
                   <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
                     {usuario.poloId ? poloNome.get(usuario.poloId) ?? "-" : "-"}
+                  </td>
+                  <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
+                    {usuario.regiao ?? "-"}
                   </td>
                   <td className="px-4 py-3">
                     <Badge

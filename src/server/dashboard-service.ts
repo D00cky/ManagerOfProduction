@@ -73,7 +73,7 @@ export async function getDashboardResumo(
   filtros: DashboardFiltros = {}
 ): Promise<DashboardResumo> {
   const scope = buildOsScope(user);
-  const ordensWhere: Prisma.OrdemServicoWhereInput = { ...scope, ...geoWhere(filtros) };
+  const ordensWhere = mergeScopeAndGeo(scope, filtros);
   const [ordens, atividades, facets] = await Promise.all([
     repository.findOrdens(ordensWhere),
     // Recent activity stays on the access scope (not narrowed by the geo filter).
@@ -101,10 +101,23 @@ export async function getDashboardResumo(
   };
 }
 
-function geoWhere(filtros: DashboardFiltros): Prisma.OrdemServicoWhereInput {
-  const where: Prisma.OrdemServicoWhereInput = {};
-  if (filtros.regiao) where.regiaoAdministrativa = filtros.regiao;
+/**
+ * Combine the role access scope with the dashboard geo filter so the scope always
+ * wins. A monitor is restricted to a single região (`{ regiaoAdministrativa: { in } }`);
+ * a região filter may only narrow *within* that scope — never escape it — and an
+ * out-of-scope região collapses to "nothing".
+ */
+function mergeScopeAndGeo(
+  scope: Prisma.OrdemServicoWhereInput,
+  filtros: DashboardFiltros
+): Prisma.OrdemServicoWhereInput {
+  const where: Prisma.OrdemServicoWhereInput = { ...scope };
   if (filtros.municipio) where.cidade = filtros.municipio;
+  if (filtros.regiao) {
+    const scoped = scope.regiaoAdministrativa as { in?: string[] } | undefined;
+    const allowed = !scoped || (Array.isArray(scoped.in) ? scoped.in.includes(filtros.regiao) : true);
+    where.regiaoAdministrativa = allowed ? filtros.regiao : { in: [] };
+  }
   return where;
 }
 

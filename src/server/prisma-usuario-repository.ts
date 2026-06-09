@@ -16,7 +16,8 @@ const resumoSelect = {
   matricula: true,
   perfil: true,
   status: true,
-  poloId: true
+  poloId: true,
+  regiao: true
 } satisfies Prisma.UserSelect;
 
 export const prismaUsuarioRepository: UsuarioRepository = {
@@ -40,7 +41,8 @@ export const prismaUsuarioRepository: UsuarioRepository = {
         matricula: input.matricula,
         passwordHash: bcrypt.hashSync(input.password, 10),
         perfil: input.perfil,
-        poloId: input.poloId ?? null
+        poloId: input.poloId ?? null,
+        regiao: input.regiao ?? null
       },
       select: resumoSelect
     });

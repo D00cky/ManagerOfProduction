@@ -5,6 +5,8 @@ export type SessionUserScope = {
   perfil: Perfil;
   poloId?: string | null;
   polosPermitidos?: string[];
+  /** For monitors: the administrative região they oversee (whole-região scope). */
+  regiao?: string | null;
 };
 
 export function allowedPoloIds(user: SessionUserScope) {
@@ -19,5 +21,9 @@ export function allowedPoloIds(user: SessionUserScope) {
 export function buildOsScope(user: SessionUserScope) {
   if (user.perfil === "supervisor") return {};
   if (user.perfil === "fiscal") return { fiscalId: user.id };
-  return { poloId: { in: allowedPoloIds(user) ?? [] } };
+  // Monitors oversee a whole administrative região. OS rows carry their polo's
+  // região in `regiaoAdministrativa` (denormalized on import), so scoping by that
+  // single indexed column is both correct and cheap. An empty `in` list (monitor
+  // without a região) matches nothing, mirroring the old empty-polo-list behaviour.
+  return { regiaoAdministrativa: { in: user.regiao ? [user.regiao] : [] } };
 }
