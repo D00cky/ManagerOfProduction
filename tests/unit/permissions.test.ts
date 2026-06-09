@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { canTransitionStatus, defaultRedirect, hasPermission } from "@/lib/permissions";
 
 describe("permissions", () => {
-  it("routes fiscal users to fila and monitor/supervisor users to dashboard", () => {
-    expect(defaultRedirect("fiscal")).toBe("/fila");
+  it("routes fiscal users to the tabulação flow and monitor/supervisor users to dashboard", () => {
+    expect(defaultRedirect("fiscal")).toBe("/tabulacao");
     expect(defaultRedirect("monitor")).toBe("/dashboard");
     expect(defaultRedirect("supervisor")).toBe("/dashboard");
   });

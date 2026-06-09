@@ -46,6 +46,7 @@ export function TabulacaoForm({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [concluindo, setConcluindo] = useState(false);
 
   const bloqueada = status === "Concluida" || status === "Cancelada";
   const resultado = useMemo(() => calcularConceito(tipoServico, respostas), [tipoServico, respostas]);
@@ -55,25 +56,57 @@ export function TabulacaoForm({
     setRespostas((current) => ({ ...current, [itemId]: value }));
   }
 
-  async function handleSave() {
-    setError(null);
-    setSaved(false);
-    setSaving(true);
-
+  async function salvar(): Promise<boolean> {
     const response = await fetch(`/api/ordens/${ordemId}/tabulacao`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ respostas, observacoes: observacoes.trim() || undefined })
     });
-
-    setSaving(false);
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       setError(body.error ?? "Erro ao salvar tabulacao.");
+      return false;
+    }
+    return true;
+  }
+
+  async function handleSave() {
+    setError(null);
+    setSaved(false);
+    setSaving(true);
+    const ok = await salvar();
+    setSaving(false);
+    if (!ok) return;
+    setSaved(true);
+    router.refresh();
+  }
+
+  async function handleConcluir() {
+    setError(null);
+    setSaved(false);
+    if (!window.confirm("Concluir esta OS? A tabulacao sera finalizada e nao podera mais ser editada.")) {
       return;
     }
-
-    setSaved(true);
+    setConcluindo(true);
+    // Conclusão exige tabulação salva (canTransitionStatus): salva antes de concluir.
+    const ok = await salvar();
+    if (!ok) {
+      setConcluindo(false);
+      return;
+    }
+    const response = await fetch(`/api/ordens/${ordemId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "Concluida" })
+    });
+    setConcluindo(false);
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      setError(body.error ?? "Erro ao concluir OS.");
+      return;
+    }
+    // Volta para a fila / próxima OS do fiscal.
+    router.push("/fila");
     router.refresh();
   }
 
@@ -157,9 +190,18 @@ export function TabulacaoForm({
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           {saved ? <p className="text-sm text-green-600">Tabulacao salva.</p> : null}
 
-          <div>
-            <Button type="button" onClick={handleSave} disabled={saving || bloqueada}>
+          <div className="flex flex-wrap gap-3">
+            <Button type="button" onClick={handleSave} disabled={saving || concluindo || bloqueada}>
               {saving ? "Salvando..." : "Salvar tabulacao"}
+            </Button>
+            <Button
+              type="button"
+              variant="default"
+              className="bg-green-600 hover:bg-green-700"
+              onClick={handleConcluir}
+              disabled={saving || concluindo || bloqueada}
+            >
+              {concluindo ? "Concluindo..." : "Salvar e concluir OS"}
             </Button>
           </div>
         </CardContent>

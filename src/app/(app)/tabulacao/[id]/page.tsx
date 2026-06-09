@@ -1,9 +1,12 @@
 import { redirect } from "next/navigation";
 import { TabulacaoForm } from "@/components/tabulacao/tabulacao-form";
+import { FiscalResumoCards } from "@/components/tabulacao/fiscal-resumo";
 import type { RespostasFfr } from "@/lib/ffr";
 import { defaultRedirect, hasPermission } from "@/lib/permissions";
 import { getTabulacaoEdicao } from "@/server/tabulacao-service";
 import { prismaTabulacaoRepository } from "@/server/prisma-tabulacao-repository";
+import { getFiscalHome } from "@/server/fiscal-service";
+import { prismaFiscalRepository } from "@/server/prisma-fiscal-repository";
 import { getCurrentUser } from "@/server/session";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +22,8 @@ export default async function TabulacaoPage({ params }: { params: Promise<{ id: 
 
   const { ordem, tabulacao } = edicao;
   const respostas = (tabulacao?.respostas ?? {}) as unknown as RespostasFfr;
+  // Embed the fiscal's own dashboard (imported / concluded / remaining).
+  const home = user.perfil === "fiscal" ? await getFiscalHome(prismaFiscalRepository, user) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -26,6 +31,7 @@ export default async function TabulacaoPage({ params }: { params: Promise<{ id: 
         <h1 className="text-2xl font-semibold">Tabulacao — OS {ordem.numero}</h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))]">{ordem.tipoServico}</p>
       </div>
+      {home ? <FiscalResumoCards resumo={home.resumo} /> : null}
       <TabulacaoForm
         ordemId={ordem.id}
         tipoServico={ordem.tipoServico}

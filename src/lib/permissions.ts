@@ -58,7 +58,8 @@ export function hasPermission(perfil: Perfil, permission: Permission) {
 }
 
 export function defaultRedirect(perfil: Perfil) {
-  return perfil === "fiscal" ? "/fila" : "/dashboard";
+  // Fiscais land straight in the tabulação flow (which jumps to their next OS).
+  return perfil === "fiscal" ? "/tabulacao" : "/dashboard";
 }
 
 export function canTransitionStatus(from: StatusOS, to: StatusOS, hasTabulacao: boolean) {
