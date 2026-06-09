@@ -16,7 +16,7 @@ describe("GET /api/dashboard", () => {
     getCurrentUser.mockResolvedValue(null);
     const { GET } = await import("@/app/api/dashboard/route");
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/dashboard"));
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({ error: "Nao autenticado" });
@@ -29,10 +29,15 @@ describe("GET /api/dashboard", () => {
     getDashboardResumo.mockResolvedValue(resumo);
     const { GET } = await import("@/app/api/dashboard/route");
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/dashboard?regiao=Campinas"));
 
     expect(response.status).toBe(200);
-    expect(getDashboardResumo).toHaveBeenCalledWith({ name: "dash-repo" }, user);
+    expect(getDashboardResumo).toHaveBeenCalledWith(
+      { name: "dash-repo" },
+      user,
+      expect.any(Date),
+      expect.objectContaining({ regiao: "Campinas" })
+    );
     await expect(response.json()).resolves.toEqual({ data: resumo });
   });
 });

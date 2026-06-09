@@ -74,8 +74,12 @@ export function createPrismaOrdemRepository(
       return client.ordemServico.findUnique({ where: { id } });
     },
     async hasTabulacao(ordemServicoId: string) {
-      const count = await client.tabulacao.count({ where: { ordemServicoId } });
-      return count > 0;
+      // ordemServicoId is @unique; an existence lookup avoids counting.
+      const found = await client.tabulacao.findUnique({
+        where: { ordemServicoId },
+        select: { id: true }
+      });
+      return found !== null;
     },
     updateStatus(id: string, data: OrdemStatusUpdate) {
       return client.ordemServico.update({ where: { id }, data });
@@ -87,14 +91,16 @@ export function createPrismaOrdemRepository(
       });
     },
     async hasOpenWork(fiscalId: string, excludeOrdemId?: string) {
-      const count = await client.ordemServico.count({
+      // Existence check stops at the first matching row instead of counting all.
+      const found = await client.ordemServico.findFirst({
         where: {
           fiscalId,
           status: { in: ["NaFila", "EmExecucao", "Pendente"] },
           ...(excludeOrdemId ? { id: { not: excludeOrdemId } } : {})
-        }
+        },
+        select: { id: true }
       });
-      return count > 0;
+      return found !== null;
     },
     async updateFiscal(id: string, fiscalId: string) {
       try {

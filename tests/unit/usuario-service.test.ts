@@ -18,6 +18,7 @@ function usuario(overrides: Partial<UsuarioResumo> = {}): UsuarioResumo {
     perfil: "fiscal" as Perfil,
     status: "ativo" as StatusUsuario,
     poloId: "p1",
+    regiao: null,
     ...overrides
   };
 }
@@ -103,11 +104,38 @@ describe("criarUsuario", () => {
       matricula: "N0001",
       password: "senha123",
       perfil: "fiscal",
-      poloId: "p1"
+      poloId: "p1",
+      regiao: null
     });
     expect(created.email).toBe("novo@example.com");
     expect(repository.log).toHaveBeenCalledWith(
       expect.objectContaining({ evento: "usuario", userId: "sup" })
+    );
+  });
+
+  it("stores a região for monitors and ignores it for other roles", async () => {
+    const repository = repo({ existing: null });
+
+    await criarUsuario(repository, supervisor, {
+      ...validInput,
+      perfil: "monitor",
+      matricula: "M0009",
+      email: "mon@example.com",
+      regiao: "Campinas"
+    });
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ perfil: "monitor", regiao: "Campinas" })
+    );
+
+    await criarUsuario(repository, supervisor, {
+      ...validInput,
+      perfil: "fiscal",
+      matricula: "F0009",
+      email: "fis@example.com",
+      regiao: "Campinas"
+    });
+    expect(repository.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ perfil: "fiscal", regiao: null })
     );
   });
 });

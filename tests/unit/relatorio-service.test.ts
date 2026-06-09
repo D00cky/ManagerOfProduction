@@ -25,17 +25,18 @@ describe("getRelatorio", () => {
     expect(repository.findTabulacoes).not.toHaveBeenCalled();
   });
 
-  it("scopes a monitor to their authorized polos", async () => {
+  it("scopes a monitor to their whole região", async () => {
     const repository = repo([]);
 
     await getRelatorio(repository, {
       id: "m1",
       perfil: "monitor",
-      poloId: "p1",
-      polosPermitidos: ["p1", "p2"]
+      regiao: "Campinas"
     });
 
-    expect(repository.findTabulacoes).toHaveBeenCalledWith({ poloId: { in: ["p1", "p2"] } });
+    expect(repository.findTabulacoes).toHaveBeenCalledWith({
+      regiaoAdministrativa: { in: ["Campinas"] }
+    });
   });
 
   it("returns zeros when there are no tabulations", async () => {

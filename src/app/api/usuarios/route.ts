@@ -33,6 +33,7 @@ export async function POST(request: Request) {
     perfil: body.perfil as CriarUsuarioInput["perfil"]
   };
   if (body.poloId !== undefined) input.poloId = body.poloId;
+  if (body.regiao !== undefined) input.regiao = body.regiao;
 
   try {
     const usuario = await criarUsuario(prismaUsuarioRepository, user, input);

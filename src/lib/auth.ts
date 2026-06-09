@@ -17,6 +17,7 @@ type AuthUser = {
   matricula: string;
   poloId: string | null;
   polosPermitidos: string[];
+  regiao: string | null;
 };
 
 const demoPassword = process.env.DEMO_AUTH_PASSWORD ?? "senha123";
@@ -30,7 +31,8 @@ const demoUsers: AuthUser[] = [
     matricula: "S0001",
     perfil: "supervisor",
     poloId: null,
-    polosPermitidos: []
+    polosPermitidos: [],
+    regiao: null
   },
   {
     id: "demo-monitor",
@@ -39,7 +41,8 @@ const demoUsers: AuthUser[] = [
     matricula: "M0001",
     perfil: "monitor",
     poloId: demoPoloId,
-    polosPermitidos: [demoPoloId]
+    polosPermitidos: [demoPoloId],
+    regiao: "São Paulo"
   },
   {
     id: "demo-fiscal",
@@ -48,7 +51,8 @@ const demoUsers: AuthUser[] = [
     matricula: "F0001",
     perfil: "fiscal",
     poloId: demoPoloId,
-    polosPermitidos: []
+    polosPermitidos: [],
+    regiao: null
   }
 ];
 
@@ -68,6 +72,17 @@ export async function authorizeCredentials(credentials: Credentials | undefined)
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return null;
     await prisma.user.update({ where: { id: user.id }, data: { lastSeenAt: new Date() } });
+    // A monitor oversees a whole região; their manageable polos are all polos in
+    // that região (used by team/polo management scoping), independent of any
+    // explicit UserPoloAccess rows.
+    let polosPermitidos = user.acessosPolo.map((access) => access.poloId);
+    if (user.perfil === "monitor" && user.regiao) {
+      const polosDaRegiao = await prisma.polo.findMany({
+        where: { regiao: user.regiao },
+        select: { id: true }
+      });
+      polosPermitidos = polosDaRegiao.map((polo) => polo.id);
+    }
     return {
       id: user.id,
       name: user.name,
@@ -75,7 +90,8 @@ export async function authorizeCredentials(credentials: Credentials | undefined)
       perfil: user.perfil,
       matricula: user.matricula,
       poloId: user.poloId,
-      polosPermitidos: user.acessosPolo.map((access) => access.poloId)
+      polosPermitidos,
+      regiao: user.regiao
     };
   }
 
@@ -114,7 +130,8 @@ export const authOptions: NextAuthOptions = {
         perfil: token.perfil,
         matricula: token.matricula,
         poloId: token.poloId,
-        polosPermitidos: token.polosPermitidos
+        polosPermitidos: token.polosPermitidos,
+        regiao: token.regiao
       };
       return session;
     }

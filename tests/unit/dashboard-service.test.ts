@@ -42,21 +42,80 @@ function matchesWhere(ordem: OrdemServico, where: Record<string, unknown>): bool
   const polo = where.poloId as { in?: string[] } | undefined;
   if (polo?.in && !polo.in.includes(ordem.poloId)) return false;
   if (where.fiscalId && ordem.fiscalId !== where.fiscalId) return false;
-  if (where.regiaoAdministrativa && ordem.regiaoAdministrativa !== where.regiaoAdministrativa) return false;
+  const regiao = where.regiaoAdministrativa as string | { in?: string[] } | undefined;
+  if (typeof regiao === "string" && ordem.regiaoAdministrativa !== regiao) return false;
+  if (regiao && typeof regiao === "object" && regiao.in && !regiao.in.includes(ordem.regiaoAdministrativa as string)) {
+    return false;
+  }
   if (where.cidade && ordem.cidade !== where.cidade) return false;
   return true;
 }
 
-function repository(ordens: OrdemServico[]): DashboardRepository {
+type Periodo = { from: Date; to: Date };
+function inWindow(date: Date | null, periodo: Periodo) {
+  return date !== null && date >= periodo.from && date <= periodo.to;
+}
+
+/** Tabulação fixture for the "analisadas" funnel: createdAt + the OS it scores. */
+type TabFixture = { createdAt: Date; ordem: OrdemServico };
+
+function repository(ordens: OrdemServico[], tabulacoes: TabFixture[] = []): DashboardRepository {
+  const scoped = (where: Record<string, unknown>) => ordens.filter((ordem) => matchesWhere(ordem, where));
   return {
-    findOrdens: vi.fn(async (where: Record<string, unknown>) => ordens.filter((ordem) => matchesWhere(ordem, where))),
+    countByStatus: vi.fn(async (where: Record<string, unknown>) => {
+      const counts = new Map<OrdemServico["status"], number>();
+      for (const ordem of scoped(where)) counts.set(ordem.status, (counts.get(ordem.status) ?? 0) + 1);
+      return [...counts.entries()].map(([status, count]) => ({ status, count }));
+    }),
+    progressoPorFiscal: vi.fn(async (where: Record<string, unknown>) => {
+      const byFiscal = new Map<string, { fiscalId: string; total: number; concluidas: number; pendentes: number; emExecucao: number }>();
+      for (const ordem of scoped(where)) {
+        if (!ordem.fiscalId) continue;
+        const cur = byFiscal.get(ordem.fiscalId) ?? { fiscalId: ordem.fiscalId, total: 0, concluidas: 0, pendentes: 0, emExecucao: 0 };
+        cur.total += 1;
+        if (ordem.status === "Concluida") cur.concluidas += 1;
+        if (ordem.status === "Pendente") cur.pendentes += 1;
+        if (ordem.status === "EmExecucao") cur.emExecucao += 1;
+        byFiscal.set(ordem.fiscalId, cur);
+      }
+      return [...byFiscal.values()];
+    }),
+    findOsParadas: vi.fn(async (where: Record<string, unknown>, updatedBefore: Date, limit: number) =>
+      scoped(where)
+        .filter((o) => o.status !== "Concluida" && o.status !== "Cancelada" && o.updatedAt < updatedBefore)
+        .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime())
+        .slice(0, limit)
+        .map((o) => ({ id: o.id, numero: o.numero, status: o.status, updatedAt: o.updatedAt, fiscalId: o.fiscalId, poloId: o.poloId }))
+    ),
+    contarEntradas: vi.fn(async (where: Record<string, unknown>, periodo: Periodo) =>
+      scoped(where).filter((o) => inWindow(o.createdAt, periodo)).length
+    ),
+    contarConcluidas: vi.fn(async (where: Record<string, unknown>, periodo: Periodo) =>
+      scoped(where).filter((o) => inWindow(o.concluidaEm, periodo)).length
+    ),
+    contarAnalisadas: vi.fn(async (where: Record<string, unknown>, periodo: Periodo) =>
+      tabulacoes.filter((t) => matchesWhere(t.ordem, where) && inWindow(t.createdAt, periodo)).length
+    ),
+    agruparPorRegiao: vi.fn(async (where: Record<string, unknown>, periodo: Periodo) => {
+      const byRegiao = new Map<string | null, { chave: string | null; entradas: number; concluidas: number }>();
+      for (const ordem of scoped(where)) {
+        const entrou = inWindow(ordem.createdAt, periodo);
+        const concluiu = inWindow(ordem.concluidaEm, periodo);
+        if (!entrou && !concluiu) continue;
+        const cur = byRegiao.get(ordem.regiaoAdministrativa) ?? { chave: ordem.regiaoAdministrativa, entradas: 0, concluidas: 0 };
+        if (entrou) cur.entradas += 1;
+        if (concluiu) cur.concluidas += 1;
+        byRegiao.set(ordem.regiaoAdministrativa, cur);
+      }
+      return [...byRegiao.values()];
+    }),
     findRecentLogs: vi.fn(async () => [
       { id: "log1", evento: "status" as const, descricao: "OS atualizada", createdAt: new Date("2026-06-07T11:00:00.000Z") }
     ]),
     findGeoFacets: vi.fn(async (where: Record<string, unknown>) => {
       const seen = new Set<string>();
       const facets: Array<{ regiaoAdministrativa: string | null; cidade: string | null }> = [];
-      for (const ordem of ordens.filter((o) => matchesWhere(o, where))) {
+      for (const ordem of scoped(where)) {
         const key = `${ordem.regiaoAdministrativa}__${ordem.cidade}`;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -71,12 +130,12 @@ function repository(ordens: OrdemServico[]): DashboardRepository {
 }
 
 describe("getDashboardResumo", () => {
-  it("loads OS using the requester scope", async () => {
+  it("loads OS using the requester scope (monitor → whole região)", async () => {
     const repo = repository([]);
 
-    await getDashboardResumo(repo, { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p2"] });
+    await getDashboardResumo(repo, { id: "m1", perfil: "monitor", regiao: "Registro" });
 
-    expect(repo.findOrdens).toHaveBeenCalledWith({ poloId: { in: ["p2"] } });
+    expect(repo.countByStatus).toHaveBeenCalledWith({ regiaoAdministrativa: { in: ["Registro"] } });
   });
 
   it("calculates status metrics and completion percentage", async () => {
@@ -131,7 +190,7 @@ describe("getDashboardResumo", () => {
       { regiao: "Registro" }
     );
 
-    expect(repo.findOrdens).toHaveBeenCalledWith({ regiaoAdministrativa: "Registro" });
+    expect(repo.countByStatus).toHaveBeenCalledWith({ regiaoAdministrativa: "Registro" });
     expect(resumo.metricas.total).toBe(2);
     expect(resumo.filtros).toEqual({ regiao: "Registro" });
     // Options are built from the full scope, not the narrowed filter.
@@ -141,23 +200,58 @@ describe("getDashboardResumo", () => {
     ]);
   });
 
-  it("narrows by municipality and keeps the access scope (monitor cannot read other polos)", async () => {
+  it("narrows by municipality and keeps the access scope (monitor cannot read other regiões)", async () => {
     const repo = repository([
-      os({ id: "1", poloId: "p1", cidade: "MIRACATU", regiaoAdministrativa: "Registro" }),
-      os({ id: "2", poloId: "p1", cidade: "REGISTRO", regiaoAdministrativa: "Registro" }),
-      os({ id: "3", poloId: "p2", cidade: "MIRACATU", regiaoAdministrativa: "Registro" })
+      os({ id: "1", cidade: "MIRACATU", regiaoAdministrativa: "Registro" }),
+      os({ id: "2", cidade: "REGISTRO", regiaoAdministrativa: "Registro" }),
+      os({ id: "3", cidade: "MIRACATU", regiaoAdministrativa: "São Paulo" })
     ]);
 
     const resumo = await getDashboardResumo(
       repo,
-      { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] },
+      { id: "m1", perfil: "monitor", regiao: "Registro" },
       new Date("2026-06-07T10:00:00.000Z"),
       { municipio: "MIRACATU" }
     );
 
-    expect(repo.findOrdens).toHaveBeenCalledWith({ poloId: { in: ["p1"] }, cidade: "MIRACATU" });
-    // Only the in-scope MIRACATU OS (p1), not the p2 one.
+    expect(repo.countByStatus).toHaveBeenCalledWith({
+      regiaoAdministrativa: { in: ["Registro"] },
+      cidade: "MIRACATU"
+    });
+    // Only the in-scope (Registro) MIRACATU OS, not the São Paulo one.
     expect(resumo.metricas.total).toBe(1);
+  });
+
+  it("builds the entered × analyzed × concluída funnel and per-região roll-up for the window", async () => {
+    const dia = new Date("2026-06-08T12:00:00.000Z");
+    const ordens = [
+      // entered today, concluded today, Registro
+      os({ id: "1", regiaoAdministrativa: "Registro", createdAt: dia, concluidaEm: dia, status: "Concluida" }),
+      // entered today, not concluded, Registro
+      os({ id: "2", regiaoAdministrativa: "Registro", createdAt: dia, status: "NaFila" }),
+      // entered today, São Paulo
+      os({ id: "3", regiaoAdministrativa: "São Paulo", createdAt: dia, status: "NaFila" }),
+      // entered yesterday — outside the window
+      os({ id: "4", regiaoAdministrativa: "Registro", createdAt: new Date("2026-06-07T12:00:00.000Z"), status: "NaFila" })
+    ];
+    const tabulacoes = [
+      { createdAt: dia, ordem: ordens[0] },
+      { createdAt: new Date("2026-06-07T09:00:00.000Z"), ordem: ordens[3] } // outside window
+    ];
+    const repo = repository(ordens, tabulacoes);
+
+    const resumo = await getDashboardResumo(
+      repo,
+      { id: "s1", perfil: "supervisor" },
+      new Date("2026-06-08T20:00:00.000Z")
+    );
+
+    expect(resumo.funnel).toEqual({ entradas: 3, analisadas: 1, concluidas: 1, percentualConclusao: 1 / 3 });
+    expect(resumo.porRegiao).toEqual([
+      { regiao: "Registro", entradas: 2, concluidas: 1 },
+      { regiao: "São Paulo", entradas: 1, concluidas: 0 }
+    ]);
+    expect(resumo.periodo.to).toEqual(new Date("2026-06-08T20:00:00.000Z"));
   });
 
   it("returns stalled OS older than the threshold and not terminal", async () => {

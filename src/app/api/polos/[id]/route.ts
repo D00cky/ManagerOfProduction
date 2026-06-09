@@ -15,6 +15,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const data: AtualizarPoloInput = {};
   if (typeof body.nome === "string") data.nome = body.nome;
   if (typeof body.codigo === "string") data.codigo = body.codigo;
+  if (body.regiao !== undefined) data.regiao = body.regiao;
   if (typeof body.ativo === "boolean") data.ativo = body.ativo;
 
   const { id } = await context.params;
