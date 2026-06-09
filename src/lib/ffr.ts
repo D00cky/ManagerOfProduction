@@ -1,5 +1,5 @@
-import type { Conceito, TipoServico } from "@prisma/client";
-import { gruposParaTipo, type ValorResposta } from "@/data/grupos-ffr";
+import type { Conceito } from "@prisma/client";
+import { gruposParaOrdem, type OrdemFfrContext, type ValorResposta } from "@/data/grupos-ffr";
 
 export type RespostasFfr = Record<string, ValorResposta>;
 
@@ -10,11 +10,11 @@ export type ResultadoFfr = {
   conceito: Conceito;
 };
 
-export function calcularConceito(tipoServico: TipoServico, respostas: RespostasFfr): ResultadoFfr {
+export function calcularConceito(ctx: OrdemFfrContext, respostas: RespostasFfr): ResultadoFfr {
   let somaObtida = 0;
   let somaPossivel = 0;
 
-  for (const grupo of gruposParaTipo(tipoServico)) {
+  for (const grupo of gruposParaOrdem(ctx)) {
     for (const item of grupo.itens) {
       const resposta = respostas[item.id];
       if (item.peso <= 0 || item.tipo === "texto" || resposta === "X" || resposta === null || resposta === undefined) {
