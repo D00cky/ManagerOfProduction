@@ -1,8 +1,8 @@
-import { executarBackup, nodeBackupStorage } from "@/server/backup-service";
+import { executarBackup, nodeBackupProcess, nodeBackupStorage } from "@/server/backup-service";
 import { prismaBackupRepository } from "@/server/prisma-backup-repository";
 
 async function main() {
-  const backup = await executarBackup(prismaBackupRepository, nodeBackupStorage, {
+  const backup = await executarBackup(prismaBackupRepository, nodeBackupStorage, nodeBackupProcess, {
     mode: "automatico",
     databaseUrl: process.env.DATABASE_URL,
     destinoFallback: process.env.BACKUP_LOCAL_DIR

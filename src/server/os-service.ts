@@ -29,6 +29,7 @@ export type OrdemRepository = {
   hasTabulacao(ordemServicoId: string): Promise<boolean>;
   updateStatus(id: string, data: OrdemStatusUpdate): Promise<OrdemServico>;
   findFiscalById(id: string): Promise<FiscalRef | null>;
+  hasOpenWork(fiscalId: string, excludeOrdemId?: string): Promise<boolean>;
   updateFiscal(id: string, fiscalId: string): Promise<OrdemServico>;
   log(input: LogInput): Promise<void>;
 };
@@ -108,6 +109,9 @@ export async function atribuirOrdem(
   const polos = allowedPoloIds(user);
   if (polos && (!fiscal.poloId || !polos.includes(fiscal.poloId))) {
     throw new Error("Fiscal fora do escopo do usuario");
+  }
+  if (await repository.hasOpenWork(fiscalId, ordemServicoId)) {
+    throw new Error("Fiscal ja possui OS aberta");
   }
 
   const evento: EventoLog = ordem.fiscalId ? "reatribuicao" : "atribuicao";

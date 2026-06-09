@@ -49,7 +49,8 @@ function repo(
   record: OrdemServico,
   hasTabulacao = false,
   fiscal: FiscalRef | null = { id: "f2", perfil: "fiscal", poloId: "p1" },
-  claimed: OrdemServico | null = null
+  claimed: OrdemServico | null = null,
+  hasOpenWork = false
 ): OrdemRepository {
   return {
     findMany: vi.fn(async () => [record]),
@@ -58,6 +59,7 @@ function repo(
     hasTabulacao: vi.fn(async () => hasTabulacao),
     updateStatus: vi.fn(async (_id, data) => ({ ...record, ...data })),
     findFiscalById: vi.fn(async () => fiscal),
+    hasOpenWork: vi.fn(async () => hasOpenWork),
     updateFiscal: vi.fn(async (_id, fiscalId) => ({ ...record, fiscalId })),
     log: vi.fn(async () => undefined)
   };
@@ -225,6 +227,27 @@ describe("atribuirOrdem", () => {
     await expect(
       atribuirOrdem(repository, { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] }, "os1", "f2")
     ).rejects.toThrow("Fiscal fora do escopo do usuario");
+    expect(repository.updateFiscal).not.toHaveBeenCalled();
+  });
+
+  it("blocks assigning a second open OS to the same fiscal", async () => {
+    const repository = repo(
+      os({ fiscalId: null }),
+      false,
+      { id: "f2", perfil: "fiscal", poloId: "p1" },
+      null,
+      true
+    );
+
+    await expect(
+      atribuirOrdem(
+        repository,
+        { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] },
+        "os1",
+        "f2"
+      )
+    ).rejects.toThrow("Fiscal ja possui OS aberta");
+    expect(repository.hasOpenWork).toHaveBeenCalledWith("f2", "os1");
     expect(repository.updateFiscal).not.toHaveBeenCalled();
   });
 

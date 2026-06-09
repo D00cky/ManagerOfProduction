@@ -1,16 +1,9 @@
-import { rmSync } from "node:fs";
 import { PrismaClient, type StatusOS } from "@prisma/client";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createPrismaOrdemRepository } from "@/server/prisma-os-repository";
 
-const databasePath = "/tmp/manager-of-production-claim.test.db";
-const databaseUrl = `file:${databasePath}`;
-rmSync(databasePath, { force: true });
-rmSync(`${databasePath}-journal`, { force: true });
-const prismaA = new PrismaClient({ datasourceUrl: databaseUrl });
-const prismaB = new PrismaClient({ datasourceUrl: databaseUrl });
-const repositoryA = createPrismaOrdemRepository(prismaA, async () => undefined);
-const repositoryB = createPrismaOrdemRepository(prismaB, async () => undefined);
+const databaseUrl = process.env.TEST_DATABASE_URL;
+const describePostgres = databaseUrl ? describe : describe.skip;
 
 type OrdemInput = {
   id: string;
@@ -18,62 +11,116 @@ type OrdemInput = {
   poloId?: string;
   fiscalId?: string | null;
   status?: StatusOS;
-  dataProgramada?: string | null;
-  createdAt?: string;
+  dataProgramada?: Date | null;
+  createdAt?: Date;
 };
 
-async function insertOrdem({
-  id,
-  numero,
-  poloId = "p1",
-  fiscalId = null,
-  status = "NaFila",
-  dataProgramada = null,
-  createdAt = "2026-06-01T10:00:00.000Z"
-}: OrdemInput) {
-  await prismaA.$executeRaw`
-    INSERT INTO OrdemServico (id, numero, poloId, fiscalId, status, dataProgramada, createdAt)
-    VALUES (${id}, ${numero}, ${poloId}, ${fiscalId}, ${status}, ${dataProgramada}, ${createdAt})
-  `;
-}
+describePostgres("claimNextAvailable on PostgreSQL", () => {
+  const prismaA = new PrismaClient({ datasourceUrl: databaseUrl });
+  const prismaB = new PrismaClient({ datasourceUrl: databaseUrl });
+  const repositoryA = createPrismaOrdemRepository(prismaA, async () => undefined);
+  const repositoryB = createPrismaOrdemRepository(prismaB, async () => undefined);
 
-beforeAll(async () => {
-  await prismaA.$executeRawUnsafe(`
-    CREATE TABLE OrdemServico (
-      id TEXT PRIMARY KEY,
-      numero TEXT NOT NULL UNIQUE,
-      poloId TEXT NOT NULL,
-      fiscalId TEXT,
-      status TEXT NOT NULL,
-      dataProgramada TEXT,
-      createdAt TEXT NOT NULL
-    )
-  `);
-  await prismaA.$queryRawUnsafe("PRAGMA busy_timeout = 5000");
-  await prismaB.$queryRawUnsafe("PRAGMA busy_timeout = 5000");
-});
+  async function insertOrdem({
+    id,
+    numero,
+    poloId = "p1",
+    fiscalId = null,
+    status = "NaFila",
+    dataProgramada = null,
+    createdAt = new Date("2026-06-01T10:00:00.000Z")
+  }: OrdemInput) {
+    return prismaA.ordemServico.create({
+      data: {
+        id,
+        numero,
+        enderecoCompleto: `Rua ${numero}`,
+        tipoServico: "Vistoria",
+        poloId,
+        fiscalId,
+        status,
+        dataProgramada,
+        createdAt
+      }
+    });
+  }
 
-beforeEach(async () => {
-  await prismaA.$executeRawUnsafe("DELETE FROM OrdemServico");
-});
+  beforeEach(async () => {
+    await prismaA.logAtividade.deleteMany();
+    await prismaA.tabulacao.deleteMany();
+    await prismaA.ordemServico.deleteMany();
+    await prismaA.userPoloAccess.deleteMany();
+    await prismaA.user.deleteMany();
+    await prismaA.polo.deleteMany();
+    await prismaA.polo.createMany({
+      data: [
+        { id: "p1", nome: "Polo 1", codigo: "P1" },
+        { id: "p2", nome: "Polo 2", codigo: "P2" },
+        { id: "old-polo", nome: "Polo Antigo", codigo: "OLD" },
+        { id: "new-polo", nome: "Polo Novo", codigo: "NEW" }
+      ]
+    });
+    await prismaA.user.createMany({
+      data: [
+        {
+          id: "f1",
+          name: "Fiscal 1",
+          email: "f1@example.com",
+          matricula: "F1",
+          passwordHash: "hash",
+          perfil: "fiscal",
+          poloId: "p1"
+        },
+        {
+          id: "f2",
+          name: "Fiscal 2",
+          email: "f2@example.com",
+          matricula: "F2",
+          passwordHash: "hash",
+          perfil: "fiscal",
+          poloId: "p1"
+        }
+      ]
+    });
+  });
 
-afterAll(async () => {
-  await Promise.all([prismaA.$disconnect(), prismaB.$disconnect()]);
-  rmSync(databasePath, { force: true });
-  rmSync(`${databasePath}-journal`, { force: true });
-});
+  afterAll(async () => {
+    await Promise.all([prismaA.$disconnect(), prismaB.$disconnect()]);
+  });
 
-describe("claimNextAvailable", () => {
   it("claims the oldest scheduled unassigned OS from the requested polo, with unscheduled OS last", async () => {
-    await insertOrdem({ id: "unscheduled", numero: "1000", dataProgramada: null, createdAt: "2026-05-01" });
-    await insertOrdem({ id: "newer", numero: "1002", dataProgramada: "2026-06-03", createdAt: "2026-05-01" });
-    await insertOrdem({ id: "oldest", numero: "1001", dataProgramada: "2026-06-02", createdAt: "2026-06-01" });
-    await insertOrdem({ id: "other-polo", numero: "2001", poloId: "p2", dataProgramada: "2026-01-01" });
-    await insertOrdem({ id: "assigned", numero: "1003", fiscalId: "f2", dataProgramada: "2026-01-01" });
+    await insertOrdem({
+      id: "unscheduled",
+      numero: "1000",
+      dataProgramada: null,
+      createdAt: new Date("2026-05-01")
+    });
+    await insertOrdem({
+      id: "newer",
+      numero: "1002",
+      dataProgramada: new Date("2026-06-03"),
+      createdAt: new Date("2026-05-01")
+    });
+    await insertOrdem({
+      id: "oldest",
+      numero: "1001",
+      dataProgramada: new Date("2026-06-02"),
+      createdAt: new Date("2026-06-01")
+    });
+    await insertOrdem({
+      id: "other-polo",
+      numero: "2001",
+      poloId: "p2",
+      dataProgramada: new Date("2026-01-01")
+    });
+    await insertOrdem({
+      id: "assigned",
+      numero: "1003",
+      fiscalId: "f2",
+      dataProgramada: new Date("2026-01-01")
+    });
 
-    const claimed = await repositoryA.claimNextAvailable("p1", "f1");
-
-    expect(claimed).toEqual({
+    await expect(repositoryA.claimNextAvailable("p1", "f1")).resolves.toEqual({
       id: "oldest",
       numero: "1001",
       poloId: "p1",
@@ -113,9 +160,30 @@ describe("claimNextAvailable", () => {
     ]);
 
     expect(results.filter(Boolean)).toHaveLength(1);
-    const stored = await prismaA.$queryRaw<Array<{ fiscalId: string | null }>>`
-      SELECT fiscalId FROM OrdemServico WHERE id = 'available'
-    `;
-    expect(["f1", "f2"]).toContain(stored[0]?.fiscalId);
+    const stored = await prismaA.ordemServico.findUnique({
+      where: { id: "available" },
+      select: { fiscalId: true }
+    });
+    expect(["f1", "f2"]).toContain(stored?.fiscalId);
+  });
+
+  it("assigns only one open OS when the same fiscal refreshes concurrently", async () => {
+    await insertOrdem({ id: "available-1", numero: "1001" });
+    await insertOrdem({ id: "available-2", numero: "1002" });
+
+    const results = await Promise.all([
+      repositoryA.claimNextAvailable("p1", "f1"),
+      repositoryB.claimNextAvailable("p1", "f1")
+    ]);
+
+    expect(results.filter(Boolean)).toHaveLength(1);
+    await expect(
+      prismaA.ordemServico.count({
+        where: {
+          fiscalId: "f1",
+          status: { in: ["NaFila", "EmExecucao", "Pendente"] }
+        }
+      })
+    ).resolves.toBe(1);
   });
 });

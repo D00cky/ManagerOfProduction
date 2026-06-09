@@ -47,6 +47,7 @@ export type ImportacaoRepository = {
   findPoloByNameOrCode(value: string): Promise<ImportacaoPolo | null>;
   ensurePolo(value: string): Promise<ImportacaoPolo>;
   findFiscalByNameOrMatricula(value: string): Promise<ImportacaoFiscal | null>;
+  hasOpenWork(fiscalId: string, excludeOrdemId?: string): Promise<boolean>;
   findOrdemByNumero(numero: string): Promise<ImportacaoOrdemExistente | null>;
   createOrdem(input: ImportacaoOrdemInput): Promise<unknown>;
   updateOrdem(id: string, input: ImportacaoOrdemInput): Promise<unknown>;
@@ -106,7 +107,11 @@ export async function confirmarImportacao(
       continue;
     }
     const resolvedPolo = polo;
+    const existente = await repository.findOrdemByNumero(row.numero);
     const fiscal = row.fiscal ? await repository.findFiscalByNameOrMatricula(row.fiscal) : null;
+    const fiscalHasOpenWork = fiscal
+      ? await repository.hasOpenWork(fiscal.id, existente?.id)
+      : false;
     const input: ImportacaoOrdemInput = {
       numero: row.numero,
       enderecoCompleto: row.enderecoCompleto,
@@ -118,7 +123,7 @@ export async function confirmarImportacao(
       tipoServico: row.tipoServico,
       status: "NaFila",
       poloId: resolvedPolo.id,
-      fiscalId: fiscal?.id ?? null,
+      fiscalId: fiscal && !fiscalHasOpenWork ? fiscal.id : null,
       unidadeExecutante: row.unidadeExecutante ?? null,
       codigoContrato: row.codigoContrato ?? null,
       descricaoContrato: row.descricaoContrato ?? null,
@@ -134,7 +139,6 @@ export async function confirmarImportacao(
       dataFimExecucao: row.dataFimExecucao ?? null
     };
 
-    const existente = await repository.findOrdemByNumero(row.numero);
     if (existente && duplicateMode === "ignorar") {
       resumo.ignoradas += 1;
       continue;

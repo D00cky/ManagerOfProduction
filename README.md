@@ -1,6 +1,35 @@
 # ManagerOfProduction
 
-## Local verification
+## Implemented architecture
+
+- PostgreSQL 17 is the only application database and the source of truth.
+- Redis is used by the Socket.IO adapter for cross-instance event fan-out. OS state is never stored only in Redis.
+- Prisma migrations are committed under `prisma/migrations` and production uses `prisma migrate deploy`.
+- Automatic OS claiming uses PostgreSQL row locking with `FOR UPDATE SKIP LOCKED`.
+- Queue and open-work access paths have dedicated indexes, including PostgreSQL partial indexes.
+- PostgreSQL backups use `pg_dump` custom format.
+
+This architecture supports the planned volume of approximately 150,000 OS/month, but production sizing still requires load tests using realistic import, dashboard, and concurrency patterns.
+
+## Local development
+
+Start PostgreSQL and Redis:
+
+```bash
+cp .env.vps.example .env.vps
+# Replace all secrets in .env.vps.
+docker compose --env-file .env.vps up -d postgres redis
+```
+
+Configure `.env` from `.env.example`, then:
+
+```bash
+npx prisma migrate deploy
+npm run db:seed
+npm run dev
+```
+
+## Verification
 
 ```bash
 npm run typecheck
@@ -9,52 +38,65 @@ npm run build
 npm run test:e2e
 ```
 
-## Demo credentials
+`npm run test:e2e` manages an isolated PostgreSQL container on port `55432`, resets only that test database, applies migrations, and seeds demo data.
 
-Use either email or matricula with password `senha123`.
+## Deployment
 
-| Perfil | Email | Matricula |
-|---|---|---|
-| Supervisor | `supervisor@example.com` | `S0001` |
-| Monitor | `monitor@example.com` | `M0001` |
-| Fiscal | `fiscal@example.com` | `F0001` |
+### Docker Compose / VPS
 
-## Demo OS and import/export simulation
+The main `docker-compose.yml` includes:
 
-- `Example/demo-os.xlsx` can be uploaded on **Importar Excel** to simulate an OS import.
-- `Example/demo-os.csv` is the readable reference copy of the same demo records.
-- `prisma/seed.ts` seeds 8 demo OS on startup for Render/free-tier demos.
-- With `RESET_DEMO_DB_ON_START=true`, Render restarts clean the SQLite database and seed those examples again.
-- Changes made in the app persist only while the Render instance remains online.
+- `app`: Next.js and Socket.IO server.
+- `postgres`: persistent PostgreSQL 17 database.
+- `redis`: persistent Redis 7 service.
+- `caddy`: reverse proxy.
 
-## Operational scripts
+Deploy with:
+
+```bash
+cp .env.vps.example .env.vps
+# Replace all placeholder secrets.
+docker compose --env-file .env.vps up -d --build
+```
+
+The app waits for PostgreSQL and Redis health checks. `npm run start:vps` applies pending Prisma migrations before starting the server.
+
+### Render
+
+`render.yaml` provisions a persistent PostgreSQL database, a private Render Key Value service, and a paid web service. The pre-deploy command applies Prisma migrations.
+
+Set `NEXTAUTH_URL` and `DEMO_AUTH_PASSWORD` in Render. Keep `DEMO_AUTH_ENABLED=false` for non-demo environments.
+
+## Backups
 
 ```bash
 npm run backup
 ```
 
-The backup worker copies the SQLite database from `DATABASE_URL` to `ConfigSync.caminhoRede`, or to `BACKUP_LOCAL_DIR`/`./backups` when no configured path exists. Automatic runs respect `ConfigSync.autoBackup`; manual sync through `POST /api/configuracoes/sync` is supervisor-only.
+The backup worker runs `pg_dump --format=custom` and writes a `.dump` file to `ConfigSync.caminhoRede`, or `BACKUP_LOCAL_DIR` when no configured path exists. The runtime image includes `postgresql-client`.
 
-## API additions
+Restore with PostgreSQL tooling, for example:
 
-- `POST /api/tabulacoes/[id]/avaliacoes`: supervisor-only tabulation review with `nota` from 1 to 5 and optional `comentario`.
-- `GET /api/relatorios/exportar`: CSV export of the scoped FFR report.
-- `POST /api/configuracoes/sync`: supervisor-only manual backup trigger.
-- `GET /api/health`: unauthenticated Render health check.
+```bash
+pg_restore --clean --if-exists --dbname "$DATABASE_URL" /backups/manager-of-production-*.dump
+```
 
-## Render.com deployment
+## Existing SQLite data
 
-This repository includes a Render Blueprint in `render.yaml` for a Node Web Service. The service runs the custom `server.ts` process, uses `/api/health` for health checks, and seeds an ephemeral SQLite database at runtime for free-tier test deploys.
+The PostgreSQL baseline migration creates a new PostgreSQL schema; it does not copy an existing SQLite file. The previous repository setup was demo-only. If an environment contains data that must be retained, keep an immutable copy of the SQLite database and perform a reviewed ETL/import before switching traffic.
 
-Required Render setup:
+## Demo conveniences
 
-1. Create a Blueprint deploy from this repository.
-2. Set `NEXTAUTH_URL` to the public service URL, for example `https://manager-of-production.onrender.com`.
-3. Let Render generate `NEXTAUTH_SECRET`.
-4. Keep the default `DATABASE_URL=file:./prod.db` only for throwaway/free-tier testing. `npm run start:render` will reset the demo SQLite DB, create the schema, and seed the test users and example OS on startup.
-5. For demo-only login without relying on database users, keep `DEMO_AUTH_ENABLED=true` and use `DEMO_AUTH_PASSWORD=senha123`.
-6. `RESET_DEMO_DB_ON_START=true` keeps the free-tier deployment clean after Render restarts. Changes made in the app persist only while that instance is running.
+- `prisma/seed.ts` creates demo users and eight demo OS.
+- `Example/demo-os.xlsx` simulates an OS import.
+- Demo credentials use password `senha123` unless overridden.
 
-Demo OS rows are documented in `Example/demo-os.csv`.
+These are test/demo conveniences and are not production analytics or compliance guarantees.
 
-For persistent production data, move `DATABASE_URL` to a persistent disk path such as `file:/var/data/prod.db` on a paid Render service, or migrate Prisma to PostgreSQL and use `prisma migrate deploy`.
+## Future roadmap
+
+- Load tests and capacity tuning using realistic municipality and fiscal concurrency.
+- PostgreSQL read replicas or analytical projections if dashboard traffic requires them.
+- PostGIS for geographic analysis.
+- Materialized views and Redis response caching for measured reporting bottlenecks.
+- Production observability, retention policy, restore drills, and high-availability validation.

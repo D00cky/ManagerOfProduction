@@ -4,7 +4,9 @@ import bcrypt from "bcryptjs";
 import { login } from "./helpers";
 
 const prisma = new PrismaClient({
-  datasourceUrl: process.env.DATABASE_URL ?? "file:./e2e.db"
+  datasourceUrl:
+    process.env.DATABASE_URL ??
+    "postgresql://manager:manager@127.0.0.1:55432/manager_of_production_e2e?schema=public"
 });
 
 test.afterAll(async () => {

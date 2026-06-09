@@ -1,52 +1,45 @@
-# Render Blueprint — https://render.com/docs/blueprint-spec
-#
-# FREE-TIER TEST DEPLOY (current config)
-# --------------------------------------
-# Deploys ManagerOfProduction as a single Node web service on the free plan.
-# The custom Socket.IO server (server.ts) needs a long-lived process, which a
-# Render Web Service provides (serverless platforms cannot host it).
-#
-# The free plan has NO persistent disk and spins the instance down after idle,
-# so the SQLite file is EPHEMERAL — it resets to a fresh, seeded state on every
-# build and cold start. That is fine for testing: the build pushes the schema
-# and seeds test accounts, so each fresh instance is immediately usable.
-# Runtime data does NOT survive restarts.
-#
-# UPGRADING TO PERSISTENT STORAGE (paid Render or a VPS)
-# ------------------------------------------------------
-# Storage is selected entirely via the DATABASE_URL env var, so moving off the
-# throwaway DB is a config change, not a code change:
-#   * Paid Render + persistent SQLite: set `plan: starter`, add a `disk:` block
-#     (e.g. mountPath /var/data, 1 GB), set DATABASE_URL=file:/var/data/prod.db,
-#     and move schema setup out of build into `preDeployCommand`
-#     (`npx prisma db push --skip-generate`) so it runs with the disk mounted.
-#     Drop the build-time seed once data should persist.
-#   * Postgres (Render managed DB or VPS): change schema.prisma datasource
-#     provider to "postgresql", point DATABASE_URL at the connection string,
-#     and use `npx prisma migrate deploy`.
+# Persistent production-oriented Render stack.
+# PostgreSQL is the source of truth; Render Key Value (Valkey/Redis-compatible)
+# carries Socket.IO fan-out between web instances.
 services:
   - type: web
     name: manager-of-production
-    runtime: node
-    plan: free
-    # Free tier has no disk, so build the app first and prepare the ephemeral
-    # SQLite DB at runtime before starting the server. Demo deployments reset
-    # the SQLite file on each start so Render restarts return to clean examples.
-    buildCommand: npm ci && npm run build
-    startCommand: npm run start:render
+    runtime: docker
+    plan: starter
+    preDeployCommand: npx prisma migrate deploy
+    dockerCommand: npm start
     healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
-        value: file:./prod.db # ephemeral; lives next to prisma/schema.prisma
+        fromDatabase:
+          name: manager-of-production-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: manager-of-production-cache
+          property: connectionString
       - key: NODE_VERSION
         value: "22"
       - key: NEXTAUTH_SECRET
-        generateValue: true # Render generates a strong secret on first deploy
+        generateValue: true
       - key: NEXTAUTH_URL
-        sync: false # set to the service URL, e.g. https://manager-of-production.onrender.com
+        sync: false
       - key: DEMO_AUTH_ENABLED
-        value: "true"
+        value: "false"
       - key: DEMO_AUTH_PASSWORD
-        value: senha123
-      - key: RESET_DEMO_DB_ON_START
-        value: "true"
+        sync: false
+
+  - type: keyvalue
+    name: manager-of-production-cache
+    plan: starter
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru
+
+databases:
+  - name: manager-of-production-db
+    databaseName: manager_of_production
+    user: manager
+    plan: basic-1gb
+    postgresMajorVersion: "17"
+    ipAllowList: []

@@ -16,14 +16,17 @@ describe("VPS deployment files", () => {
     expect(dockerfile).toContain("USER node");
   });
 
-  it("runs the app behind Caddy with persistent volumes", () => {
+  it("runs the app behind Caddy with PostgreSQL and Redis", () => {
     const compose = readFileSync("docker-compose.yml", "utf8");
     const caddyfile = readFileSync("Caddyfile", "utf8");
 
     expect(compose).toContain("manager-of-production-app");
     expect(compose).toContain("manager-of-production-caddy");
+    expect(compose).toContain("manager-of-production-postgres");
+    expect(compose).toContain("manager-of-production-redis");
     expect(compose).toContain('"80:80"');
-    expect(compose).toContain("mop_sqlite_data");
+    expect(compose).toContain("mop_postgres_data");
+    expect(compose).toContain("mop_redis_data");
     expect(compose).toContain("mop_backups");
     expect(caddyfile).toContain("reverse_proxy manager-of-production-app:3000");
   });
@@ -31,7 +34,9 @@ describe("VPS deployment files", () => {
   it("documents required VPS environment variables without leaking host details", () => {
     const env = readFileSync(".env.vps.example", "utf8");
 
-    expect(env).toContain("DATABASE_URL=file:/data/prod.db");
+    expect(env).toContain("POSTGRES_PASSWORD=");
+    expect(env).toContain("DATABASE_URL=postgresql://");
+    expect(env).toContain("REDIS_URL=redis://");
     expect(env).toContain("NEXTAUTH_URL=");
     expect(env).toContain("NEXTAUTH_SECRET=");
     expect(env).toContain("DEMO_AUTH_ENABLED=false");

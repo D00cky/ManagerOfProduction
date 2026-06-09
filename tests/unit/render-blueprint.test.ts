@@ -4,12 +4,11 @@ import { describe, expect, it } from "vitest";
 describe("render.yaml", () => {
   const blueprint = readFileSync("render.yaml", "utf8");
 
-  it("deploys the app as a Render Node web service", () => {
+  it("deploys the app from the production Docker image", () => {
     expect(blueprint).toContain("type: web");
-    expect(blueprint).toContain("runtime: node");
-    expect(blueprint).toContain("buildCommand: npm ci && npm run build");
-    expect(blueprint).toContain("startCommand: npm run start:render");
-    expect(blueprint).toContain("RESET_DEMO_DB_ON_START");
+    expect(blueprint).toContain("runtime: docker");
+    expect(blueprint).toContain("preDeployCommand: npx prisma migrate deploy");
+    expect(blueprint).toContain("dockerCommand: npm start");
     expect(blueprint).toContain("DEMO_AUTH_ENABLED");
   });
 
@@ -19,7 +18,17 @@ describe("render.yaml", () => {
 
   it("declares the required runtime environment variables", () => {
     expect(blueprint).toContain("key: DATABASE_URL");
+    expect(blueprint).toContain("fromDatabase:");
+    expect(blueprint).toContain("key: REDIS_URL");
+    expect(blueprint).toContain("type: keyvalue");
     expect(blueprint).toContain("key: NEXTAUTH_SECRET");
     expect(blueprint).toContain("key: NEXTAUTH_URL");
+  });
+
+  it("provisions private PostgreSQL and Redis-compatible services", () => {
+    expect(blueprint).toContain("databases:");
+    expect(blueprint).toContain("postgresMajorVersion:");
+    expect(blueprint).toContain("maxmemoryPolicy: allkeys-lru");
+    expect(blueprint).toContain("ipAllowList: []");
   });
 });

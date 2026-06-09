@@ -32,5 +32,5 @@ test("supervisor imports an XLSX file parsed in the browser", async ({ page }, t
   await expect(page.getByText(/1 criadas .* 0 atualizadas .* 0 ignoradas .* 0 invalidas/)).toBeVisible();
 
   await page.getByRole("link", { name: "Fila de OS" }).click();
-  await expect(page.getByRole("row").filter({ hasText: "OS-2001" })).toContainText("Fiscal Teste");
+  await expect(page.getByRole("row").filter({ hasText: "OS-2001" })).toContainText("Sem fiscal");
 });

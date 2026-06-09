@@ -18,40 +18,57 @@ export function createPrismaOrdemRepository(
       });
     },
     async claimNextAvailable(poloId, fiscalId) {
-      const claimed = await client.$queryRaw<
-        Array<{ id: string; numero: string; poloId: string; fiscalId: string }>
-      >(Prisma.sql`
-        UPDATE OrdemServico
-        SET fiscalId = ${fiscalId}
-        WHERE id = (
-          SELECT candidate.id
-          FROM OrdemServico AS candidate
-          WHERE candidate.poloId = ${poloId}
-            AND candidate.status = 'NaFila'
-            AND candidate.fiscalId IS NULL
+      return client.$transaction(async (transaction) => {
+        await transaction.$queryRaw(
+          Prisma.sql`
+            SELECT pg_advisory_xact_lock(hashtextextended(${fiscalId}, 0))::text AS "lockResult"
+          `
+        );
+        const claimed = await transaction.$queryRaw<
+          Array<{ id: string; numero: string; poloId: string; fiscalId: string }>
+        >(Prisma.sql`
+          WITH candidate AS (
+            SELECT "id"
+            FROM "OrdemServico"
+            WHERE "poloId" = ${poloId}
+              AND "status" = 'NaFila'::"StatusOS"
+              AND "fiscalId" IS NULL
+              AND NOT EXISTS (
+                SELECT 1
+                FROM "OrdemServico" AS open_work
+                WHERE open_work."fiscalId" = ${fiscalId}
+                  AND open_work."status" IN (
+                    'NaFila'::"StatusOS",
+                    'EmExecucao'::"StatusOS",
+                    'Pendente'::"StatusOS"
+                  )
+              )
+            ORDER BY
+              "dataProgramada" ASC NULLS LAST,
+              "createdAt" ASC
+            LIMIT 1
+            FOR UPDATE SKIP LOCKED
+          )
+          UPDATE "OrdemServico" AS ordem
+          SET "fiscalId" = ${fiscalId}
+          FROM candidate
+          WHERE ordem."id" = candidate."id"
+            AND ordem."fiscalId" IS NULL
+            AND ordem."status" = 'NaFila'::"StatusOS"
             AND NOT EXISTS (
               SELECT 1
-              FROM OrdemServico AS open_work
-              WHERE open_work.fiscalId = ${fiscalId}
-                AND open_work.status IN ('NaFila', 'EmExecucao', 'Pendente')
+              FROM "OrdemServico" AS open_work
+              WHERE open_work."fiscalId" = ${fiscalId}
+                AND open_work."status" IN (
+                  'NaFila'::"StatusOS",
+                  'EmExecucao'::"StatusOS",
+                  'Pendente'::"StatusOS"
+                )
             )
-          ORDER BY
-            candidate.dataProgramada IS NULL ASC,
-            candidate.dataProgramada ASC,
-            candidate.createdAt ASC
-          LIMIT 1
-        )
-          AND fiscalId IS NULL
-          AND status = 'NaFila'
-          AND NOT EXISTS (
-            SELECT 1
-            FROM OrdemServico AS open_work
-            WHERE open_work.fiscalId = ${fiscalId}
-              AND open_work.status IN ('NaFila', 'EmExecucao', 'Pendente')
-          )
-        RETURNING id, numero, poloId, fiscalId
-      `);
-      return claimed[0] ?? null;
+          RETURNING ordem."id", ordem."numero", ordem."poloId", ordem."fiscalId"
+        `);
+        return claimed[0] ?? null;
+      });
     },
     findById(id: string) {
       return client.ordemServico.findUnique({ where: { id } });
@@ -69,8 +86,25 @@ export function createPrismaOrdemRepository(
         select: { id: true, perfil: true, poloId: true }
       });
     },
-    updateFiscal(id: string, fiscalId: string) {
-      return client.ordemServico.update({ where: { id }, data: { fiscalId } });
+    async hasOpenWork(fiscalId: string, excludeOrdemId?: string) {
+      const count = await client.ordemServico.count({
+        where: {
+          fiscalId,
+          status: { in: ["NaFila", "EmExecucao", "Pendente"] },
+          ...(excludeOrdemId ? { id: { not: excludeOrdemId } } : {})
+        }
+      });
+      return count > 0;
+    },
+    async updateFiscal(id: string, fiscalId: string) {
+      try {
+        return await client.ordemServico.update({ where: { id }, data: { fiscalId } });
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          throw new Error("Fiscal ja possui OS aberta");
+        }
+        throw error;
+      }
     },
     async log(input: LogInput) {
       await logWriter(input);

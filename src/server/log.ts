@@ -12,9 +12,8 @@ export type LogAtividadeInput = {
 /**
  * Writes an activity log, tolerating a stale `userId`.
  *
- * Sessions are JWT-based, so a user id survives in the token even after the
- * underlying row is gone — notably on the demo/free-tier deploy, where
- * RESET_DEMO_DB_ON_START reseeds the database with fresh ids on every restart.
+ * Sessions are JWT-based, so a user id can survive in the token after the
+ * underlying row is removed.
  * Inserting that id would violate the LogAtividade → User foreign key and abort
  * the surrounding action, so we drop the user reference instead of failing.
  */

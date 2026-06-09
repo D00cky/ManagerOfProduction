@@ -50,8 +50,7 @@ export const demoOrdensServico: DemoOrdemServico[] = [
     cidade: "Cidade Teste",
     tipoServico: "TrocaHidrometro",
     status: "NaFila",
-    poloCodigo: "POLO-01",
-    fiscalMatricula: "F0001"
+    poloCodigo: "POLO-01"
   },
   {
     numero: "OS-1005",
@@ -69,8 +68,7 @@ export const demoOrdensServico: DemoOrdemServico[] = [
     cidade: "Cidade Teste",
     tipoServico: "CorteAgua",
     status: "NaFila",
-    poloCodigo: "POLO-01",
-    fiscalMatricula: "F0001"
+    poloCodigo: "POLO-01"
   },
   {
     numero: "OS-1007",
@@ -88,7 +86,6 @@ export const demoOrdensServico: DemoOrdemServico[] = [
     cidade: "Cidade Teste",
     tipoServico: "Vistoria",
     status: "NaFila",
-    poloCodigo: "POLO-01",
-    fiscalMatricula: "F0001"
+    poloCodigo: "POLO-01"
   }
 ];

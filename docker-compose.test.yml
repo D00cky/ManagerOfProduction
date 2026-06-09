@@ -1,0 +1,14 @@
+services:
+  postgres-test:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: manager_of_production_e2e
+      POSTGRES_USER: manager
+      POSTGRES_PASSWORD: manager
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U manager -d manager_of_production_e2e"]
+      interval: 2s
+      timeout: 3s
+      retries: 20

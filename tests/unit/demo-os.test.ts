@@ -14,4 +14,15 @@ describe("demoOrdensServico", () => {
     expect(demoOrdensServico.every((ordem) => ordem.poloCodigo === "POLO-01")).toBe(true);
     expect(demoOrdensServico.every((ordem) => ordem.status === "NaFila")).toBe(true);
   });
+
+  it("does not seed more than one open OS for the same fiscal", () => {
+    const assignedByFiscal = demoOrdensServico.reduce<Record<string, number>>((counts, ordem) => {
+      if (ordem.fiscalMatricula) {
+        counts[ordem.fiscalMatricula] = (counts[ordem.fiscalMatricula] ?? 0) + 1;
+      }
+      return counts;
+    }, {});
+
+    expect(Object.values(assignedByFiscal).every((count) => count <= 1)).toBe(true);
+  });
 });

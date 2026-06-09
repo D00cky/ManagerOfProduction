@@ -2,8 +2,8 @@ numero_os,endereco_completo,bairro,cidade,tipo_servico,polo,fiscal,observacao
 OS-1001,"Rua das Flores, 100",Centro,Cidade Teste,LigacaoAgua,POLO-01,,OS demo sem fiscal para testar atribuicao.
 OS-1002,"Av. Brasil, 200",Jardim,Cidade Teste,Vistoria,POLO-01,F0001,OS demo atribuida para testar tabulacao.
 OS-1003,"Rua Aguas Claras, 45",Vila Nova,Cidade Teste,ReparoRede,POLO-01,,
-OS-1004,"Rua das Palmeiras, 88",Centro,Cidade Teste,TrocaHidrometro,POLO-01,F0001,
+OS-1004,"Rua das Palmeiras, 88",Centro,Cidade Teste,TrocaHidrometro,POLO-01,,
 OS-1005,"Travessa Norte, 12",Jardim,Cidade Teste,ReligacaoAgua,POLO-01,,
-OS-1006,"Alameda Santos, 300",Industrial,Cidade Teste,CorteAgua,POLO-01,F0001,
+OS-1006,"Alameda Santos, 300",Industrial,Cidade Teste,CorteAgua,POLO-01,,
 OS-1007,"Rua Projetada, 7",Lagoa,Cidade Teste,Outros,POLO-01,,
-OS-1008,"Av. Central, 501",Centro,Cidade Teste,Vistoria,POLO-01,F0001,
+OS-1008,"Av. Central, 501",Centro,Cidade Teste,Vistoria,POLO-01,,

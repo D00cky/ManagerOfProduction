@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -55,23 +55,23 @@ enum EventoLog {
 }
 
 model User {
-  id              String           @id @default(cuid())
-  name            String
-  email           String           @unique
-  matricula       String           @unique
-  passwordHash    String
-  perfil          Perfil
-  status          StatusUsuario    @default(ativo)
-  poloId          String?
-  polo            Polo?            @relation(fields: [poloId], references: [id])
-  lastSeenAt      DateTime?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  acessosPolo     UserPoloAccess[]
-  ordensFiscal    OrdemServico[]   @relation("FiscalOS")
-  tabulacoes      Tabulacao[]
-  avaliacoes      Avaliacao[]
-  logs            LogAtividade[]
+  id           String           @id @default(cuid())
+  name         String
+  email        String           @unique
+  matricula    String           @unique
+  passwordHash String
+  perfil       Perfil
+  status       StatusUsuario    @default(ativo)
+  poloId       String?
+  polo         Polo?            @relation(fields: [poloId], references: [id])
+  lastSeenAt   DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  acessosPolo  UserPoloAccess[]
+  ordensFiscal OrdemServico[]   @relation("FiscalOS")
+  tabulacoes   Tabulacao[]
+  avaliacoes   Avaliacao[]
+  logs         LogAtividade[]
 }
 
 model Polo {
@@ -98,58 +98,62 @@ model UserPoloAccess {
 }
 
 model OrdemServico {
-  id                String        @id @default(cuid())
-  numero            String        @unique
-  enderecoCompleto  String
-  numeroImovel      String?
-  complemento       String?
-  bairro            String?
-  cidade            String?
+  id                   String         @id @default(cuid())
+  numero               String         @unique
+  enderecoCompleto     String
+  numeroImovel         String?
+  complemento          String?
+  bairro               String?
+  cidade               String?
   regiaoAdministrativa String?
-  tipoServico       TipoServico
-  status            StatusOS      @default(NaFila)
-  poloId            String
-  fiscalId          String?
-  unidadeExecutante String?
-  codigoContrato    String?
-  descricaoContrato String?
-  codigoTss         String?
-  descricaoTss      String?
-  codigoTse         String?
-  descricaoTse      String?
-  pde               String?
-  equipe            String?
-  observacao        String?
-  dataProgramada    DateTime?
-  dataInicioExecucao DateTime?
-  dataFimExecucao   DateTime?
-  iniciadaEm        DateTime?
-  concluidaEm       DateTime?
-  canceladaEm       DateTime?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  polo              Polo          @relation(fields: [poloId], references: [id])
-  fiscal            User?         @relation("FiscalOS", fields: [fiscalId], references: [id])
-  tabulacao         Tabulacao?
-  logs              LogAtividade[]
+  tipoServico          TipoServico
+  status               StatusOS       @default(NaFila)
+  poloId               String
+  fiscalId             String?
+  unidadeExecutante    String?
+  codigoContrato       String?
+  descricaoContrato    String?
+  codigoTss            String?
+  descricaoTss         String?
+  codigoTse            String?
+  descricaoTse         String?
+  pde                  String?
+  equipe               String?
+  observacao           String?
+  dataProgramada       DateTime?
+  dataInicioExecucao   DateTime?
+  dataFimExecucao      DateTime?
+  iniciadaEm           DateTime?
+  concluidaEm          DateTime?
+  canceladaEm          DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  polo                 Polo           @relation(fields: [poloId], references: [id])
+  fiscal               User?          @relation("FiscalOS", fields: [fiscalId], references: [id])
+  tabulacao            Tabulacao?
+  logs                 LogAtividade[]
+
+  @@index([fiscalId, status])
+  @@index([poloId, status, fiscalId, dataProgramada, createdAt])
+  @@index([createdAt])
 }
 
 model Tabulacao {
-  id               String         @id @default(cuid())
-  ordemServicoId   String         @unique
-  fiscalId         String
-  respostas        Json
-  somaObtida       Float
-  somaPossivel     Float
-  percentual       Float
-  conceito         Conceito
-  observacoes      String?
-  bloqueada        Boolean        @default(false)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  ordemServico     OrdemServico   @relation(fields: [ordemServicoId], references: [id])
-  fiscal           User           @relation(fields: [fiscalId], references: [id])
-  avaliacoes       Avaliacao[]
+  id             String       @id @default(cuid())
+  ordemServicoId String       @unique
+  fiscalId       String
+  respostas      Json
+  somaObtida     Float
+  somaPossivel   Float
+  percentual     Float
+  conceito       Conceito
+  observacoes    String?
+  bloqueada      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  ordemServico   OrdemServico @relation(fields: [ordemServicoId], references: [id])
+  fiscal         User         @relation(fields: [fiscalId], references: [id])
+  avaliacoes     Avaliacao[]
 }
 
 model Avaliacao {
@@ -164,34 +168,34 @@ model Avaliacao {
 }
 
 model LogAtividade {
-  id              String          @id @default(cuid())
-  evento          EventoLog
-  descricao       String
-  metadata        Json?
-  userId          String?
-  ordemServicoId  String?
-  createdAt       DateTime        @default(now())
-  user            User?           @relation(fields: [userId], references: [id])
-  ordemServico    OrdemServico?   @relation(fields: [ordemServicoId], references: [id])
+  id             String        @id @default(cuid())
+  evento         EventoLog
+  descricao      String
+  metadata       Json?
+  userId         String?
+  ordemServicoId String?
+  createdAt      DateTime      @default(now())
+  user           User?         @relation(fields: [userId], references: [id])
+  ordemServico   OrdemServico? @relation(fields: [ordemServicoId], references: [id])
 }
 
 model ConfigSync {
-  id              String   @id @default(cuid())
-  caminhoRede     String?
-  intervaloMin    Int      @default(60)
-  formato         String   @default("ambos")
-  autoBackup      Boolean  @default(true)
-  updatedById     String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id           String   @id @default(cuid())
+  caminhoRede  String?
+  intervaloMin Int      @default(60)
+  formato      String   @default("ambos")
+  autoBackup   Boolean  @default(true)
+  updatedById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model BackupRegistro {
-  id          String   @id @default(cuid())
-  destino     String
-  formato     String
-  caminho      String
-  sucesso      Boolean
-  mensagem     String?
-  createdAt    DateTime @default(now())
+  id        String   @id @default(cuid())
+  destino   String
+  formato   String
+  caminho   String
+  sucesso   Boolean
+  mensagem  String?
+  createdAt DateTime @default(now())
 }

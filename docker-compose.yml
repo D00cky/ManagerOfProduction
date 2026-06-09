@@ -1,18 +1,56 @@
 services:
+  postgres:
+    container_name: manager-of-production-postgres
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: manager_of_production
+      POSTGRES_USER: manager
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - mop_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U manager -d manager_of_production"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    container_name: manager-of-production-redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - mop_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   app:
     container_name: manager-of-production-app
     build:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file:
-      - .env.vps
     environment:
       HOST: 0.0.0.0
       PORT: 3000
+      DATABASE_URL: postgresql://manager:${POSTGRES_PASSWORD}@postgres:5432/manager_of_production?schema=public
+      REDIS_URL: redis://redis:6379
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      BACKUP_LOCAL_DIR: /backups
+      DEMO_AUTH_ENABLED: ${DEMO_AUTH_ENABLED:-false}
+      DEMO_AUTH_PASSWORD: ${DEMO_AUTH_PASSWORD:-}
     volumes:
-      - mop_sqlite_data:/data
       - mop_backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     expose:
       - "3000"
 
@@ -30,7 +68,8 @@ services:
       - caddy_config:/config
 
 volumes:
-  mop_sqlite_data:
+  mop_postgres_data:
+  mop_redis_data:
   mop_backups:
   caddy_data:
   caddy_config:

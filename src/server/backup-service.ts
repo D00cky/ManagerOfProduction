@@ -1,4 +1,5 @@
-import { copyFileSync, mkdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync } from "node:fs";
 import path from "node:path";
 import type { BackupRegistro } from "@prisma/client";
 import { hasPermission } from "@/lib/permissions";
@@ -25,7 +26,10 @@ export type BackupRepository = {
 
 export type BackupStorage = {
   ensureDir(path: string): void;
-  copyFile(source: string, destination: string): void;
+};
+
+export type BackupProcess = {
+  pgDump(input: { databaseUrl: string; destination: string }): void;
 };
 
 export type BackupOptions = {
@@ -38,29 +42,31 @@ export type BackupOptions = {
 export const nodeBackupStorage: BackupStorage = {
   ensureDir(directory) {
     mkdirSync(directory, { recursive: true });
-  },
-  copyFile(source, destination) {
-    copyFileSync(source, destination);
   }
 };
 
-export function resolveSqlitePath(databaseUrl: string) {
-  if (!databaseUrl.startsWith("file:")) {
-    throw new Error("Backup local exige DATABASE_URL sqlite");
+export const nodeBackupProcess: BackupProcess = {
+  pgDump({ databaseUrl, destination }) {
+    execFileSync("pg_dump", ["--format=custom", "--file", destination], {
+      stdio: "pipe",
+      env: { ...process.env, PGDATABASE: databaseUrl }
+    });
   }
+};
 
-  const filePath = databaseUrl.slice("file:".length);
-  if (path.isAbsolute(filePath)) return filePath;
-  return path.join(process.cwd(), "prisma", filePath);
+function isPostgresqlUrl(databaseUrl: string) {
+  return databaseUrl.startsWith("postgresql://") || databaseUrl.startsWith("postgres://");
 }
 
 export async function executarBackup(
   repository: BackupRepository,
   storage: BackupStorage,
+  processRunner: BackupProcess,
   options: BackupOptions = {}
 ) {
   const databaseUrl = options.databaseUrl ?? process.env.DATABASE_URL;
   if (!databaseUrl) throw new Error("DATABASE_URL nao configurado");
+  if (!isPostgresqlUrl(databaseUrl)) throw new Error("Backup exige DATABASE_URL PostgreSQL");
 
   const config = await repository.getConfig();
   const destino = config?.caminhoRede ?? options.destinoFallback ?? process.env.BACKUP_LOCAL_DIR ?? "./backups";
@@ -68,26 +74,25 @@ export async function executarBackup(
   if (options.mode === "automatico" && config?.autoBackup === false) {
     return repository.createBackupRegistro({
       destino,
-      formato: "sqlite",
+      formato: "postgresql-custom",
       caminho: "",
       sucesso: false,
       mensagem: "Backup automatico desativado"
     });
   }
 
-  const source = resolveSqlitePath(databaseUrl);
   const now = options.now ?? new Date();
-  const filename = `manager-of-production-${now.toISOString().replace(/[:.]/g, "-")}.db`;
+  const filename = `manager-of-production-${now.toISOString().replace(/[:.]/g, "-")}.dump`;
   const destination = path.join(destino, filename);
 
   try {
     storage.ensureDir(destino);
-    storage.copyFile(source, destination);
+    processRunner.pgDump({ databaseUrl, destination });
   } catch (error) {
     const mensagem = error instanceof Error ? error.message : "Erro ao executar backup";
     return repository.createBackupRegistro({
       destino,
-      formato: "sqlite",
+      formato: "postgresql-custom",
       caminho: destination,
       sucesso: false,
       mensagem
@@ -96,7 +101,7 @@ export async function executarBackup(
 
   return repository.createBackupRegistro({
     destino,
-    formato: "sqlite",
+    formato: "postgresql-custom",
     caminho: destination,
     sucesso: true,
     mensagem: "Backup concluido"
@@ -108,7 +113,7 @@ export async function executarBackupPadrao(user: SessionUserScope, options: Back
     throw new Error("Sem permissao para executar backup");
   }
 
-  return executarBackup(prismaBackupRepository, nodeBackupStorage, {
+  return executarBackup(prismaBackupRepository, nodeBackupStorage, nodeBackupProcess, {
     databaseUrl: process.env.DATABASE_URL,
     destinoFallback: process.env.BACKUP_LOCAL_DIR,
     ...options

@@ -47,6 +47,7 @@ function repository(existingNumbers: string[] = []): ImportacaoRepository {
       if (value === "Maria Fiscal") return { id: "f2", name: "Maria Fiscal", matricula: "2002" };
       return null;
     }),
+    hasOpenWork: vi.fn(async () => false),
     findOrdemByNumero: vi.fn(async (numero: string) => (existing.has(numero) ? { id: `os-${numero}`, numero } : null)),
     createOrdem: vi.fn(async (input) => ({ id: `new-${input.numero}`, ...input })),
     updateOrdem: vi.fn(async (id, input) => ({ id, ...input })),
@@ -140,6 +141,16 @@ describe("confirmarImportacao", () => {
       { numero: "1004", enderecoCompleto: "Rua D", tipoServico: "Outros", polo: "Norte", fiscal: "9999" }
     ], "ignorar");
 
+    expect(repo.createOrdem).toHaveBeenCalledWith(expect.objectContaining({ fiscalId: null }));
+  });
+
+  it("keeps an imported OS unassigned when the matched fiscal already has open work", async () => {
+    const repo = repository();
+    vi.mocked(repo.hasOpenWork).mockResolvedValue(true);
+
+    await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, [rows[0]], "ignorar");
+
+    expect(repo.hasOpenWork).toHaveBeenCalledWith("f1", undefined);
     expect(repo.createOrdem).toHaveBeenCalledWith(expect.objectContaining({ fiscalId: null }));
   });
 
