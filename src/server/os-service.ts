@@ -1,4 +1,4 @@
-import type { EventoLog, OrdemServico, Perfil, Prisma, StatusOS } from "@prisma/client";
+import type { EventoLog, OrdemServico, Perfil, Prisma, StatusOS, TipoServico } from "@prisma/client";
 import { canTransitionStatus, hasPermission } from "@/lib/permissions";
 import { allowedPoloIds, buildOsScope, type SessionUserScope } from "@/lib/scope";
 
@@ -22,8 +22,35 @@ export type FiscalRef = {
 
 export type ClaimedOrdem = Pick<OrdemServico, "id" | "numero" | "poloId" | "fiscalId">;
 
+/** `null` fiscalId means "sem fiscal" (unassigned); omit to not filter by fiscal. */
+export type OsListFilters = {
+  poloId?: string;
+  fiscalId?: string | null;
+  tipoServico?: TipoServico;
+  status?: StatusOS;
+  busca?: string;
+};
+
+export type OsListParams = {
+  filters?: OsListFilters;
+  page?: number;
+  pageSize?: number;
+};
+
+export type OsListPage = {
+  rows: OrdemServico[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export const OS_LIST_PAGE_SIZE = 20;
+
 export type OrdemRepository = {
-  findMany(where: Prisma.OrdemServicoWhereInput): Promise<OrdemServico[]>;
+  findPage(
+    where: Prisma.OrdemServicoWhereInput,
+    pagination: { skip: number; take: number }
+  ): Promise<{ rows: OrdemServico[]; total: number }>;
   claimNextAvailable(poloId: string, fiscalId: string): Promise<ClaimedOrdem | null>;
   findById(id: string): Promise<OrdemServico | null>;
   hasTabulacao(ordemServicoId: string): Promise<boolean>;
@@ -34,8 +61,36 @@ export type OrdemRepository = {
   log(input: LogInput): Promise<void>;
 };
 
-export async function listOrdens(repository: OrdemRepository, user: SessionUserScope) {
-  if (user.perfil === "fiscal" && user.poloId) {
+/** Pure: merge the role access scope with the queue filters (AND semantics). */
+export function buildListWhere(
+  scope: Prisma.OrdemServicoWhereInput,
+  filters: OsListFilters
+): Prisma.OrdemServicoWhereInput {
+  const where: Prisma.OrdemServicoWhereInput = { ...scope };
+  if (filters.poloId) where.poloId = filters.poloId;
+  if (filters.tipoServico) where.tipoServico = filters.tipoServico;
+  if (filters.status) where.status = filters.status;
+  if (filters.fiscalId === null) where.fiscalId = null;
+  else if (filters.fiscalId) where.fiscalId = filters.fiscalId;
+  if (filters.busca) {
+    where.OR = [
+      { numero: { contains: filters.busca, mode: "insensitive" } },
+      { enderecoCompleto: { contains: filters.busca, mode: "insensitive" } }
+    ];
+  }
+  return where;
+}
+
+export async function listOrdens(
+  repository: OrdemRepository,
+  user: SessionUserScope,
+  params: OsListParams = {}
+): Promise<OsListPage> {
+  const page = Math.max(1, params.page ?? 1);
+  const pageSize = params.pageSize ?? OS_LIST_PAGE_SIZE;
+
+  // Auto-claim only on the first page so paginating doesn't keep claiming work.
+  if (user.perfil === "fiscal" && user.poloId && page === 1) {
     const claimed = await repository.claimNextAvailable(user.poloId, user.id);
     if (claimed) {
       await repository.log({
@@ -51,7 +106,13 @@ export async function listOrdens(repository: OrdemRepository, user: SessionUserS
       });
     }
   }
-  return repository.findMany(buildOsScope(user));
+
+  const where = buildListWhere(buildOsScope(user), params.filters ?? {});
+  const { rows, total } = await repository.findPage(where, {
+    skip: (page - 1) * pageSize,
+    take: pageSize
+  });
+  return { rows, total, page, pageSize };
 }
 
 export async function updateOrdemStatus(

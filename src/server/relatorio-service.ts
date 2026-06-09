@@ -2,14 +2,14 @@ import type { Conceito, Prisma } from "@prisma/client";
 import { hasPermission } from "@/lib/permissions";
 import { buildOsScope, type SessionUserScope } from "@/lib/scope";
 
-export type RelatorioTabulacao = {
-  conceito: Conceito;
-  percentual: number;
-  fiscalId: string;
-};
+export type RelatorioOverall = { total: number; mediaPercentual: number };
+export type ConceitoCount = { conceito: Conceito; count: number };
+export type FiscalQualidade = { fiscalId: string; total: number; mediaPercentual: number };
 
 export type RelatorioRepository = {
-  findTabulacoes(scope: Prisma.OrdemServicoWhereInput): Promise<RelatorioTabulacao[]>;
+  overall(scope: Prisma.OrdemServicoWhereInput): Promise<RelatorioOverall>;
+  countByConceito(scope: Prisma.OrdemServicoWhereInput): Promise<ConceitoCount[]>;
+  mediaPorFiscal(scope: Prisma.OrdemServicoWhereInput): Promise<FiscalQualidade[]>;
 };
 
 export type RelatorioResumo = {
@@ -29,43 +29,27 @@ export async function getRelatorio(
     throw new Error("Sem permissao para ver relatorios");
   }
 
-  const tabulacoes = await repository.findTabulacoes(buildOsScope(user));
+  const scope = buildOsScope(user);
+  const [overall, conceitoCounts, porFiscalRows] = await Promise.all([
+    repository.overall(scope),
+    repository.countByConceito(scope),
+    repository.mediaPorFiscal(scope)
+  ]);
+
   return {
-    totalAvaliadas: tabulacoes.length,
-    mediaPercentual: media(tabulacoes.map((t) => t.percentual)),
-    conceitos: distribuicaoConceitos(tabulacoes),
-    porFiscal: porFiscal(tabulacoes)
+    totalAvaliadas: overall.total,
+    mediaPercentual: overall.mediaPercentual,
+    conceitos: zeroFillConceitos(conceitoCounts),
+    porFiscal: porFiscalRows
+      .map((row) => ({ fiscalId: row.fiscalId, total: row.total, mediaPercentual: row.mediaPercentual }))
+      .sort((a, b) => a.fiscalId.localeCompare(b.fiscalId))
   };
 }
 
-function distribuicaoConceitos(tabulacoes: RelatorioTabulacao[]): Record<Conceito, number> {
+function zeroFillConceitos(counts: ConceitoCount[]): Record<Conceito, number> {
   const base = Object.fromEntries(conceitos.map((c) => [c, 0])) as Record<Conceito, number>;
-  for (const tabulacao of tabulacoes) {
-    base[tabulacao.conceito] += 1;
-  }
+  for (const row of counts) base[row.conceito] = row.count;
   return base;
-}
-
-function porFiscal(tabulacoes: RelatorioTabulacao[]): RelatorioResumo["porFiscal"] {
-  const byFiscal = new Map<string, number[]>();
-  for (const tabulacao of tabulacoes) {
-    const list = byFiscal.get(tabulacao.fiscalId) ?? [];
-    list.push(tabulacao.percentual);
-    byFiscal.set(tabulacao.fiscalId, list);
-  }
-
-  return [...byFiscal.entries()]
-    .map(([fiscalId, percentuais]) => ({
-      fiscalId,
-      total: percentuais.length,
-      mediaPercentual: media(percentuais)
-    }))
-    .sort((a, b) => a.fiscalId.localeCompare(b.fiscalId));
-}
-
-function media(valores: number[]) {
-  if (valores.length === 0) return 0;
-  return valores.reduce((sum, value) => sum + value, 0) / valores.length;
 }
 
 export async function exportRelatorioCsv(repository: RelatorioRepository, user: SessionUserScope) {

@@ -90,6 +90,51 @@ export const prismaDashboardRepository: DashboardRepository = {
     }
     return [...byRegiao.values()];
   },
+  async desempenhoPorFiscal(where: Prisma.OrdemServicoWhereInput, periodo: DashboardPeriodo) {
+    const [concluidas, analisadas] = await Promise.all([
+      prisma.ordemServico.groupBy({
+        by: ["fiscalId"],
+        where: { ...where, fiscalId: { not: null }, concluidaEm: { gte: periodo.from, lte: periodo.to } },
+        _count: { _all: true }
+      }),
+      prisma.tabulacao.groupBy({
+        by: ["fiscalId"],
+        where: { ordemServico: where, createdAt: { gte: periodo.from, lte: periodo.to } },
+        _count: { _all: true }
+      })
+    ]);
+    const byFiscal = new Map<string, { fiscalId: string; concluidas: number; analisadas: number }>();
+    for (const row of concluidas) {
+      if (!row.fiscalId) continue;
+      const cur = byFiscal.get(row.fiscalId) ?? { fiscalId: row.fiscalId, concluidas: 0, analisadas: 0 };
+      cur.concluidas += row._count._all;
+      byFiscal.set(row.fiscalId, cur);
+    }
+    for (const row of analisadas) {
+      const cur = byFiscal.get(row.fiscalId) ?? { fiscalId: row.fiscalId, concluidas: 0, analisadas: 0 };
+      cur.analisadas += row._count._all;
+      byFiscal.set(row.fiscalId, cur);
+    }
+    return [...byFiscal.values()];
+  },
+  async contarFiscaisAtivos(where: Prisma.OrdemServicoWhereInput, periodo: DashboardPeriodo) {
+    const [concluiram, analisaram] = await Promise.all([
+      prisma.ordemServico.findMany({
+        where: { ...where, fiscalId: { not: null }, concluidaEm: { gte: periodo.from, lte: periodo.to } },
+        select: { fiscalId: true },
+        distinct: ["fiscalId"]
+      }),
+      prisma.tabulacao.findMany({
+        where: { ordemServico: where, createdAt: { gte: periodo.from, lte: periodo.to } },
+        select: { fiscalId: true },
+        distinct: ["fiscalId"]
+      })
+    ]);
+    const ativos = new Set<string>();
+    for (const row of concluiram) if (row.fiscalId) ativos.add(row.fiscalId);
+    for (const row of analisaram) ativos.add(row.fiscalId);
+    return ativos.size;
+  },
   findRecentLogs(where: Prisma.OrdemServicoWhereInput) {
     return prisma.logAtividade.findMany({
       where: {

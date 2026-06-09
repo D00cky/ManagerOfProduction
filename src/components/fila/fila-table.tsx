@@ -1,20 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { StatusOS } from "@prisma/client";
+import type { StatusOS, TipoServico } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
-import {
-  FILTROS_VAZIOS,
-  SEM_FISCAL,
-  filtrarOrdens,
-  paginar,
-  type FilaFiltros
-} from "@/lib/fila-filtros";
+import { FILTROS_VAZIOS, SEM_FISCAL, type FilaFiltros } from "@/lib/fila-filtros";
 import { statusLabel, tipoServicoLabel } from "@/lib/os-labels";
 
 export type FilaRow = {
@@ -31,8 +25,18 @@ export type FilaRow = {
 };
 
 export type FiscalOption = { id: string; name: string };
+export type PoloOption = { id: string; nome: string };
 
-const TAMANHO_PAGINA = 20;
+const TIPOS: TipoServico[] = [
+  "LigacaoAgua",
+  "ReligacaoAgua",
+  "CorteAgua",
+  "TrocaHidrometro",
+  "Vistoria",
+  "ReparoRede",
+  "Outros"
+];
+const STATUS: StatusOS[] = ["NaFila", "EmExecucao", "Pendente", "Concluida", "Cancelada"];
 
 const transitions: Record<StatusOS, { label: string; to: StatusOS }[]> = {
   NaFila: [
@@ -56,46 +60,42 @@ const transitions: Record<StatusOS, { label: string; to: StatusOS }[]> = {
 export function FilaTable({
   ordens,
   fiscais,
-  canAssign
+  polos,
+  canAssign,
+  filtros,
+  total,
+  page,
+  pageSize
 }: {
   ordens: FilaRow[];
   fiscais: FiscalOption[];
+  polos: PoloOption[];
   canAssign: boolean;
+  filtros: FilaFiltros;
+  total: number;
+  page: number;
+  pageSize: number;
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filtros, setFiltros] = useState<FilaFiltros>(FILTROS_VAZIOS);
-  const [pagina, setPagina] = useState(1);
 
-  // Distinct filter options derived from the loaded rows so each dropdown only
-  // offers values that actually appear in the user's scoped queue.
-  const opcoes = useMemo(() => {
-    const polos = new Map<string, string>();
-    const fiscaisRow = new Map<string, string>();
-    const tipos = new Set<string>();
-    const status = new Set<StatusOS>();
-    for (const row of ordens) {
-      if (row.poloId) polos.set(row.poloId, row.poloNome ?? row.poloId);
-      if (row.fiscalId) fiscaisRow.set(row.fiscalId, row.fiscalNome ?? row.fiscalId);
-      tipos.add(row.tipoServico);
-      status.add(row.status);
+  const totalPaginas = Math.max(1, Math.ceil(total / pageSize));
+  const algumFiltroAtivo = Boolean(
+    filtros.poloId || filtros.fiscalId || filtros.tipoServico || filtros.status || filtros.busca
+  );
+
+  // All filtering/pagination is server-side via the URL so the table never loads
+  // the whole (potentially huge) queue into the browser.
+  function navegar(next: Partial<FilaFiltros>, paginaDestino = 1) {
+    const merged = { ...filtros, ...next };
+    const search = new URLSearchParams();
+    for (const [key, value] of Object.entries(merged)) {
+      if (value) search.set(key, value);
     }
-    return {
-      polos: [...polos.entries()].sort((a, b) => a[1].localeCompare(b[1])),
-      fiscais: [...fiscaisRow.entries()].sort((a, b) => a[1].localeCompare(b[1])),
-      semFiscal: ordens.some((row) => !row.fiscalId),
-      tipos: [...tipos].sort((a, b) => tipoServicoLabel(a).localeCompare(tipoServicoLabel(b))),
-      status: [...status].sort((a, b) => statusLabel(a).localeCompare(statusLabel(b)))
-    };
-  }, [ordens]);
-
-  const filtradas = useMemo(() => filtrarOrdens(ordens, filtros), [ordens, filtros]);
-  const { itens, paginaAtual, totalPaginas, total } = paginar(filtradas, pagina, TAMANHO_PAGINA);
-
-  function atualizarFiltro(campo: keyof FilaFiltros, valor: string) {
-    setFiltros((atual) => ({ ...atual, [campo]: valor }));
-    setPagina(1);
+    if (paginaDestino > 1) search.set("page", String(paginaDestino));
+    const qs = search.toString();
+    router.push(qs ? `/fila?${qs}` : "/fila");
   }
 
   async function mutate(url: string, method: string, body: unknown, id: string) {
@@ -115,10 +115,6 @@ export function FilaTable({
     router.refresh();
   }
 
-  const algumFiltroAtivo = Boolean(
-    filtros.poloId || filtros.fiscalId || filtros.tipoServico || filtros.status
-  );
-
   return (
     <div className="flex flex-col gap-3">
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
@@ -129,12 +125,12 @@ export function FilaTable({
           <Select
             className="h-9 w-44"
             value={filtros.poloId}
-            onChange={(event) => atualizarFiltro("poloId", event.target.value)}
+            onChange={(event) => navegar({ poloId: event.target.value })}
           >
             <option value="">Todos</option>
-            {opcoes.polos.map(([id, nome]) => (
-              <option key={id} value={id}>
-                {nome}
+            {polos.map((polo) => (
+              <option key={polo.id} value={polo.id}>
+                {polo.nome}
               </option>
             ))}
           </Select>
@@ -145,13 +141,13 @@ export function FilaTable({
           <Select
             className="h-9 w-44"
             value={filtros.fiscalId}
-            onChange={(event) => atualizarFiltro("fiscalId", event.target.value)}
+            onChange={(event) => navegar({ fiscalId: event.target.value })}
           >
             <option value="">Todos</option>
-            {opcoes.semFiscal ? <option value={SEM_FISCAL}>Sem fiscal</option> : null}
-            {opcoes.fiscais.map(([id, nome]) => (
-              <option key={id} value={id}>
-                {nome}
+            <option value={SEM_FISCAL}>Sem fiscal</option>
+            {fiscais.map((fiscal) => (
+              <option key={fiscal.id} value={fiscal.id}>
+                {fiscal.name}
               </option>
             ))}
           </Select>
@@ -162,10 +158,10 @@ export function FilaTable({
           <Select
             className="h-9 w-48"
             value={filtros.tipoServico}
-            onChange={(event) => atualizarFiltro("tipoServico", event.target.value)}
+            onChange={(event) => navegar({ tipoServico: event.target.value })}
           >
             <option value="">Todos</option>
-            {opcoes.tipos.map((tipo) => (
+            {TIPOS.map((tipo) => (
               <option key={tipo} value={tipo}>
                 {tipoServicoLabel(tipo)}
               </option>
@@ -178,10 +174,10 @@ export function FilaTable({
           <Select
             className="h-9 w-44"
             value={filtros.status}
-            onChange={(event) => atualizarFiltro("status", event.target.value)}
+            onChange={(event) => navegar({ status: event.target.value })}
           >
             <option value="">Todos</option>
-            {opcoes.status.map((status) => (
+            {STATUS.map((status) => (
               <option key={status} value={status}>
                 {statusLabel(status)}
               </option>
@@ -190,14 +186,7 @@ export function FilaTable({
         </label>
 
         {algumFiltroAtivo ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setFiltros(FILTROS_VAZIOS);
-              setPagina(1);
-            }}
-          >
+          <Button variant="outline" size="sm" onClick={() => navegar(FILTROS_VAZIOS)}>
             Limpar filtros
           </Button>
         ) : null}
@@ -217,14 +206,14 @@ export function FilaTable({
             </tr>
           </thead>
           <tbody>
-            {itens.length === 0 ? (
+            {ordens.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-[hsl(var(--muted-foreground))]">
                   {algumFiltroAtivo ? "Nenhuma OS para os filtros selecionados." : "Nenhuma OS na fila."}
                 </td>
               </tr>
             ) : (
-              itens.map((ordem) => (
+              ordens.map((ordem) => (
                 <tr key={ordem.id} className="border-b border-[hsl(var(--border))] align-top last:border-0">
                   <td className="px-4 py-3 font-medium">{ordem.numero}</td>
                   <td className="px-4 py-3">{ordem.endereco}</td>
@@ -273,25 +262,21 @@ export function FilaTable({
       </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-[hsl(var(--muted-foreground))]">
-        <span>
-          {total === 0
-            ? "0 OS"
-            : `${total} OS · pagina ${paginaAtual} de ${totalPaginas}`}
-        </span>
+        <span>{total === 0 ? "0 OS" : `${total} OS · pagina ${page} de ${totalPaginas}`}</span>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
-            disabled={paginaAtual <= 1}
-            onClick={() => setPagina((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            onClick={() => navegar({}, page - 1)}
           >
             Anterior
           </Button>
           <Button
             variant="outline"
             size="sm"
-            disabled={paginaAtual >= totalPaginas}
-            onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+            disabled={page >= totalPaginas}
+            onClick={() => navegar({}, page + 1)}
           >
             Proxima
           </Button>

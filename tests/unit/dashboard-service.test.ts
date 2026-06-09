@@ -109,6 +109,36 @@ function repository(ordens: OrdemServico[], tabulacoes: TabFixture[] = []): Dash
       }
       return [...byRegiao.values()];
     }),
+    desempenhoPorFiscal: vi.fn(async (where: Record<string, unknown>, periodo: Periodo) => {
+      const byFiscal = new Map<string, { fiscalId: string; concluidas: number; analisadas: number }>();
+      for (const ordem of scoped(where)) {
+        if (ordem.fiscalId && inWindow(ordem.concluidaEm, periodo)) {
+          const cur = byFiscal.get(ordem.fiscalId) ?? { fiscalId: ordem.fiscalId, concluidas: 0, analisadas: 0 };
+          cur.concluidas += 1;
+          byFiscal.set(ordem.fiscalId, cur);
+        }
+      }
+      for (const tab of tabulacoes) {
+        if (tab.ordem.fiscalId && matchesWhere(tab.ordem, where) && inWindow(tab.createdAt, periodo)) {
+          const cur = byFiscal.get(tab.ordem.fiscalId) ?? { fiscalId: tab.ordem.fiscalId, concluidas: 0, analisadas: 0 };
+          cur.analisadas += 1;
+          byFiscal.set(tab.ordem.fiscalId, cur);
+        }
+      }
+      return [...byFiscal.values()];
+    }),
+    contarFiscaisAtivos: vi.fn(async (where: Record<string, unknown>, periodo: Periodo) => {
+      const ativos = new Set<string>();
+      for (const ordem of scoped(where)) {
+        if (ordem.fiscalId && inWindow(ordem.concluidaEm, periodo)) ativos.add(ordem.fiscalId);
+      }
+      for (const tab of tabulacoes) {
+        if (tab.ordem.fiscalId && matchesWhere(tab.ordem, where) && inWindow(tab.createdAt, periodo)) {
+          ativos.add(tab.ordem.fiscalId);
+        }
+      }
+      return ativos.size;
+    }),
     findRecentLogs: vi.fn(async () => [
       { id: "log1", evento: "status" as const, descricao: "OS atualizada", createdAt: new Date("2026-06-07T11:00:00.000Z") }
     ]),
@@ -252,6 +282,31 @@ describe("getDashboardResumo", () => {
       { regiao: "São Paulo", entradas: 1, concluidas: 0 }
     ]);
     expect(resumo.periodo.to).toEqual(new Date("2026-06-08T20:00:00.000Z"));
+  });
+
+  it("reports per-fiscal performance and the active-fiscais count for the window", async () => {
+    const dia = new Date("2026-06-08T12:00:00.000Z");
+    const ordens = [
+      os({ id: "1", fiscalId: "f1", status: "Concluida", concluidaEm: dia }),
+      os({ id: "2", fiscalId: "f1", status: "Concluida", concluidaEm: dia }),
+      os({ id: "3", fiscalId: "f2", status: "Concluida", concluidaEm: dia }),
+      // concluded outside the window — ignored
+      os({ id: "4", fiscalId: "f3", status: "Concluida", concluidaEm: new Date("2026-06-01T12:00:00.000Z") })
+    ];
+    const tabulacoes = [{ createdAt: dia, ordem: ordens[2] }]; // f2 analyzed one
+    const repo = repository(ordens, tabulacoes);
+
+    const resumo = await getDashboardResumo(
+      repo,
+      { id: "s1", perfil: "supervisor" },
+      new Date("2026-06-08T20:00:00.000Z")
+    );
+
+    expect(resumo.fiscaisAtivos).toBe(2); // f1 and f2 (f3 concluded outside window)
+    expect(resumo.desempenhoFiscais).toEqual([
+      { fiscalId: "f1", name: "Fiscal f1", matricula: "F1", concluidas: 2, analisadas: 0 },
+      { fiscalId: "f2", name: "Fiscal f2", matricula: "F2", concluidas: 1, analisadas: 1 }
+    ]);
   });
 
   it("returns stalled OS older than the threshold and not terminal", async () => {

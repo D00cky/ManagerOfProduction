@@ -10,12 +10,17 @@ export function createPrismaOrdemRepository(
   logWriter: LogWriter = createLogAtividade
 ): OrdemRepository {
   return {
-    findMany(where: Prisma.OrdemServicoWhereInput) {
-      return client.ordemServico.findMany({
-        where,
-        orderBy: [{ dataProgramada: "asc" }, { createdAt: "desc" }],
-        include: { polo: true, fiscal: true, tabulacao: true }
-      });
+    async findPage(where: Prisma.OrdemServicoWhereInput, pagination: { skip: number; take: number }) {
+      const [rows, total] = await client.$transaction([
+        client.ordemServico.findMany({
+          where,
+          orderBy: [{ dataProgramada: "asc" }, { createdAt: "desc" }],
+          skip: pagination.skip,
+          take: pagination.take
+        }),
+        client.ordemServico.count({ where })
+      ]);
+      return { rows, total };
     },
     async claimNextAvailable(poloId, fiscalId) {
       return client.$transaction(async (transaction) => {

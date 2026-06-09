@@ -17,24 +17,30 @@ describe("GET /api/ordens", () => {
     getCurrentUser.mockResolvedValue(null);
     const { GET } = await import("@/app/api/ordens/route");
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/ordens"));
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({ error: "Nao autenticado" });
   });
 
-  it("lists OS using the authenticated user scope", async () => {
-    const user = { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] };
-    const ordens = [{ id: "os1", numero: "1001" }];
+  it("lists a paginated, filtered page using the authenticated user scope", async () => {
+    const user = { id: "m1", perfil: "monitor", regiao: "Campinas" };
+    const rows = [{ id: "os1", numero: "1001" }];
     getCurrentUser.mockResolvedValue(user);
-    listOrdens.mockResolvedValue(ordens);
+    listOrdens.mockResolvedValue({ rows, total: 1, page: 2, pageSize: 20 });
     const { GET } = await import("@/app/api/ordens/route");
 
-    const response = await GET();
+    const response = await GET(
+      new Request("http://localhost/api/ordens?page=2&status=Pendente&fiscalId=__sem_fiscal__")
+    );
 
     expect(response.status).toBe(200);
-    expect(listOrdens).toHaveBeenCalledWith({ name: "repo" }, user);
-    await expect(response.json()).resolves.toEqual({ data: ordens });
+    expect(listOrdens).toHaveBeenCalledWith(
+      { name: "repo" },
+      user,
+      { filters: { status: "Pendente", fiscalId: null }, page: 2 }
+    );
+    await expect(response.json()).resolves.toEqual({ data: rows, total: 1, page: 2, pageSize: 20 });
   });
 });
 

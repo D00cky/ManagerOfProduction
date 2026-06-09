@@ -1,64 +1,62 @@
-import type { StatusOS } from "@prisma/client";
+import type { StatusOS, TipoServico } from "@prisma/client";
+import type { OsListFilters } from "@/server/os-service";
 
 /**
- * Pure (DOM-free) filtering + pagination for the Fila de OS table, so the queue
- * UI logic can be unit-tested without rendering. Empty string means "todos" for
- * each filter; SEM_FISCAL matches OS with no fiscal assigned.
+ * Fila de OS filters live in the URL and are resolved into a SQL `where` on the
+ * server (the queue is paginated server-side). Empty string means "todos";
+ * SEM_FISCAL matches OS with no fiscal assigned.
  */
 
 export const SEM_FISCAL = "__sem_fiscal__";
 
+/** String-shaped filters as held by the UI selects / URL query. */
 export type FilaFiltros = {
   poloId: string;
   fiscalId: string;
   tipoServico: string;
   status: string;
+  busca: string;
 };
 
 export const FILTROS_VAZIOS: FilaFiltros = {
   poloId: "",
   fiscalId: "",
   tipoServico: "",
-  status: ""
+  status: "",
+  busca: ""
 };
 
-export type FilaFiltravel = {
-  poloId: string | null;
-  fiscalId: string | null;
-  tipoServico: string;
-  status: StatusOS;
+type RawFiltros = {
+  poloId?: string | null;
+  fiscalId?: string | null;
+  tipoServico?: string | null;
+  status?: string | null;
+  busca?: string | null;
 };
 
-export function filtrarOrdens<T extends FilaFiltravel>(rows: T[], filtros: FilaFiltros): T[] {
-  return rows.filter((row) => {
-    if (filtros.poloId && row.poloId !== filtros.poloId) return false;
-    if (filtros.fiscalId === SEM_FISCAL) {
-      if (row.fiscalId) return false;
-    } else if (filtros.fiscalId && row.fiscalId !== filtros.fiscalId) {
-      return false;
-    }
-    if (filtros.tipoServico && row.tipoServico !== filtros.tipoServico) return false;
-    if (filtros.status && row.status !== filtros.status) return false;
-    return true;
-  });
+function clean(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
-export type Paginacao<T> = {
-  itens: T[];
-  paginaAtual: number;
-  totalPaginas: number;
-  total: number;
-};
+/** Convert raw query/URL values into the service's typed filter object. */
+export function parseFilaFilters(raw: RawFiltros): OsListFilters {
+  const filters: OsListFilters = {};
+  const poloId = clean(raw.poloId);
+  if (poloId) filters.poloId = poloId;
 
-export function paginar<T>(rows: T[], pagina: number, tamanho: number): Paginacao<T> {
-  const total = rows.length;
-  const totalPaginas = Math.max(1, Math.ceil(total / tamanho));
-  const paginaAtual = Math.min(Math.max(1, pagina), totalPaginas);
-  const inicio = (paginaAtual - 1) * tamanho;
-  return {
-    itens: rows.slice(inicio, inicio + tamanho),
-    paginaAtual,
-    totalPaginas,
-    total
-  };
+  const fiscalId = clean(raw.fiscalId);
+  if (fiscalId === SEM_FISCAL) filters.fiscalId = null;
+  else if (fiscalId) filters.fiscalId = fiscalId;
+
+  const tipoServico = clean(raw.tipoServico);
+  if (tipoServico) filters.tipoServico = tipoServico as TipoServico;
+
+  const status = clean(raw.status);
+  if (status) filters.status = status as StatusOS;
+
+  const busca = clean(raw.busca);
+  if (busca) filters.busca = busca;
+
+  return filters;
 }

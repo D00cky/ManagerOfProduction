@@ -67,7 +67,8 @@ export default async function DashboardPage({
     { label: "Entraram", value: funnel.entradas },
     { label: "Analisadas", value: funnel.analisadas },
     { label: "Concluidas", value: funnel.concluidas },
-    { label: "Conclusao", value: formatPercent(funnel.percentualConclusao) }
+    { label: "Conclusao", value: formatPercent(funnel.percentualConclusao) },
+    { label: "Fiscais ativos", value: resumo.fiscaisAtivos }
   ];
 
   const metricCards = [
@@ -108,7 +109,7 @@ export default async function DashboardPage({
             </Link>
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
           {funnelCards.map((card) => (
             <Card key={card.label}>
               <CardHeader>
@@ -136,6 +137,41 @@ export default async function DashboardPage({
                 </span>
               </div>
             ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <CardHeader>
+          <CardTitle>Desempenho por fiscal (periodo)</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {resumo.desempenhoFiscais.length === 0 ? (
+            <p className="px-6 pb-6 text-sm text-[hsl(var(--muted-foreground))]">Sem produção no periodo.</p>
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead className="border-y border-[hsl(var(--border))] text-xs uppercase text-[hsl(var(--muted-foreground))]">
+                <tr>
+                  <th className="px-6 py-2">Fiscal</th>
+                  <th className="px-6 py-2 text-right">Concluidas</th>
+                  <th className="px-6 py-2 text-right">Analisadas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resumo.desempenhoFiscais.map((fiscal) => (
+                  <tr key={fiscal.fiscalId} className="border-b border-[hsl(var(--border))] last:border-0">
+                    <td className="px-6 py-2">
+                      {fiscal.name}
+                      {fiscal.matricula ? (
+                        <span className="ml-1 text-xs text-[hsl(var(--muted-foreground))]">({fiscal.matricula})</span>
+                      ) : null}
+                    </td>
+                    <td className="px-6 py-2 text-right">{fiscal.concluidas}</td>
+                    <td className="px-6 py-2 text-right">{fiscal.analisadas}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </CardContent>
       </Card>
