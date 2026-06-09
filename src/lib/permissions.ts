@@ -22,6 +22,7 @@ export const rolePermissions: Record<Perfil, Permission[]> = {
     "importacao:write",
     "tabulacao:write",
     "equipe:read",
+    "equipe:write",
     "relatorios:read"
   ],
   supervisor: [

@@ -20,10 +20,17 @@ export type GeoFacet = {
   cidade: string | null;
 };
 
+export type DashboardFiscal = {
+  id: string;
+  name: string;
+  matricula: string;
+};
+
 export type DashboardRepository = {
   findOrdens(where: Prisma.OrdemServicoWhereInput): Promise<OrdemServico[]>;
   findRecentLogs(where: Prisma.OrdemServicoWhereInput): Promise<DashboardLog[]>;
   findGeoFacets(where: Prisma.OrdemServicoWhereInput): Promise<GeoFacet[]>;
+  findFiscais(ids: string[]): Promise<DashboardFiscal[]>;
 };
 
 export type DashboardResumo = {
@@ -38,6 +45,8 @@ export type DashboardResumo = {
   };
   progressoPorFiscal: Array<{
     fiscalId: string;
+    name: string;
+    matricula: string;
     total: number;
     concluidas: number;
     pendentes: number;
@@ -74,9 +83,17 @@ export async function getDashboardResumo(
     repository.findGeoFacets(scope)
   ]);
 
+  const progressoBase = calculateProgressoPorFiscal(ordens);
+  const fiscais = await repository.findFiscais(progressoBase.map((item) => item.fiscalId));
+  const fiscalPorId = new Map(fiscais.map((fiscal) => [fiscal.id, fiscal]));
+  const progressoPorFiscal = progressoBase.map((item) => {
+    const fiscal = fiscalPorId.get(item.fiscalId);
+    return { ...item, name: fiscal?.name ?? item.fiscalId, matricula: fiscal?.matricula ?? "" };
+  });
+
   return {
     metricas: calculateMetricas(ordens),
-    progressoPorFiscal: calculateProgressoPorFiscal(ordens),
+    progressoPorFiscal,
     osParadas: calculateOsParadas(ordens, now),
     atividades,
     filtros,
@@ -124,7 +141,16 @@ function calculateMetricas(ordens: OrdemServico[]): DashboardResumo["metricas"] 
   };
 }
 
-function calculateProgressoPorFiscal(ordens: OrdemServico[]): DashboardResumo["progressoPorFiscal"] {
+type ProgressoBaseFiscal = {
+  fiscalId: string;
+  total: number;
+  concluidas: number;
+  pendentes: number;
+  emExecucao: number;
+  percentualConclusao: number;
+};
+
+function calculateProgressoPorFiscal(ordens: OrdemServico[]): ProgressoBaseFiscal[] {
   const byFiscal = new Map<string, { fiscalId: string; total: number; concluidas: number; pendentes: number; emExecucao: number }>();
   for (const ordem of ordens) {
     if (!ordem.fiscalId) continue;

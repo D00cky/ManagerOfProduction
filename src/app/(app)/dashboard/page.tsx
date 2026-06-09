@@ -73,7 +73,12 @@ export default async function DashboardPage({
             ) : (
               resumo.progressoPorFiscal.map((item) => (
                 <div key={item.fiscalId} className="flex items-center justify-between text-sm">
-                  <span className="font-mono text-xs">{item.fiscalId}</span>
+                  <span>
+                    {item.name}
+                    {item.matricula ? (
+                      <span className="ml-1 text-xs text-[hsl(var(--muted-foreground))]">({item.matricula})</span>
+                    ) : null}
+                  </span>
                   <span>
                     {item.concluidas}/{item.total} ({formatPercent(item.percentualConclusao)})
                   </span>

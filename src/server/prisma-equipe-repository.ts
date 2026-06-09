@@ -22,5 +22,28 @@ export const prismaEquipeRepository: EquipeRepository = {
       orderBy: { name: "asc" },
       select: membroSelect
     });
+  },
+  findMembro(id: string) {
+    return prisma.user.findFirst({
+      where: { id, perfil: { in: ["fiscal", "monitor"] } },
+      select: membroSelect
+    });
+  },
+  updatePolo(id: string, poloId: string | null) {
+    return prisma.user.update({
+      where: { id },
+      data: { poloId },
+      select: membroSelect
+    });
+  },
+  async log(input) {
+    await prisma.logAtividade.create({
+      data: {
+        evento: input.evento,
+        descricao: input.descricao,
+        metadata: input.metadata ?? Prisma.JsonNull,
+        userId: input.userId
+      }
+    });
   }
 };

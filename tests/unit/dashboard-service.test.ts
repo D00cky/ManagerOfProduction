@@ -63,7 +63,10 @@ function repository(ordens: OrdemServico[]): DashboardRepository {
         facets.push({ regiaoAdministrativa: ordem.regiaoAdministrativa, cidade: ordem.cidade });
       }
       return facets;
-    })
+    }),
+    findFiscais: vi.fn(async (ids: string[]) =>
+      ids.map((id) => ({ id, name: `Fiscal ${id}`, matricula: id.toUpperCase() }))
+    )
   };
 }
 
@@ -109,8 +112,8 @@ describe("getDashboardResumo", () => {
     const resumo = await getDashboardResumo(repo, { id: "s1", perfil: "supervisor" });
 
     expect(resumo.progressoPorFiscal).toEqual([
-      { fiscalId: "f1", total: 2, concluidas: 1, pendentes: 1, emExecucao: 0, percentualConclusao: 0.5 },
-      { fiscalId: "f2", total: 1, concluidas: 0, pendentes: 0, emExecucao: 1, percentualConclusao: 0 }
+      { fiscalId: "f1", name: "Fiscal f1", matricula: "F1", total: 2, concluidas: 1, pendentes: 1, emExecucao: 0, percentualConclusao: 0.5 },
+      { fiscalId: "f2", name: "Fiscal f2", matricula: "F2", total: 1, concluidas: 0, pendentes: 0, emExecucao: 1, percentualConclusao: 0 }
     ]);
   });
 

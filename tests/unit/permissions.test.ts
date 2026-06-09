@@ -12,6 +12,12 @@ describe("permissions", () => {
     expect(hasPermission("monitor", "configuracoes:write")).toBe(false);
     expect(hasPermission("supervisor", "configuracoes:write")).toBe(true);
   });
+
+  it("lets supervisor and monitor (but not fiscal) change a member's polo", () => {
+    expect(hasPermission("supervisor", "equipe:write")).toBe(true);
+    expect(hasPermission("monitor", "equipe:write")).toBe(true);
+    expect(hasPermission("fiscal", "equipe:write")).toBe(false);
+  });
 });
 
 describe("canTransitionStatus", () => {
