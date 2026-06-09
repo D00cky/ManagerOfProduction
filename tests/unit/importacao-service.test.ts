@@ -37,6 +37,11 @@ function repository(existingNumbers: string[] = []): ImportacaoRepository {
     findPoloByNameOrCode: vi.fn(async (value: string) =>
       value.toLowerCase() === "norte" ? { id: "p1", nome: "Norte", codigo: "NRT" } : null
     ),
+    ensurePolo: vi.fn(async (value: string) => ({
+      id: `polo-${value}`,
+      nome: value,
+      codigo: (value.split(" - ")[0] ?? value).trim()
+    })),
     findFiscalByNameOrMatricula: vi.fn(async (value: string) => {
       if (value === "2001") return { id: "f1", name: "Joao Fiscal", matricula: "2001" };
       if (value === "Maria Fiscal") return { id: "f2", name: "Maria Fiscal", matricula: "2002" };
@@ -79,6 +84,34 @@ describe("confirmarImportacao", () => {
       status: "NaFila"
     }));
     expect(repo.createOrdem).toHaveBeenCalledWith(expect.objectContaining({ numero: "1002", fiscalId: "f2" }));
+  });
+
+  it("auto-creates a polo from the unidade executante when none matches", async () => {
+    const repo = repository();
+
+    const result = await confirmarImportacao(
+      repo,
+      { id: "m1", perfil: "monitor", poloId: "p1" },
+      [
+        {
+          numero: "5001",
+          enderecoCompleto: "Rua X, 1",
+          tipoServico: "Outros",
+          polo: "ORMR - DIV MANUT SERV OPE REGISTRO",
+          unidadeExecutante: "ORMR - DIV MANUT SERV OPE REGISTRO"
+        }
+      ],
+      "ignorar"
+    );
+
+    expect(repo.ensurePolo).toHaveBeenCalledWith("ORMR - DIV MANUT SERV OPE REGISTRO");
+    expect(result).toMatchObject({ criadas: 1, invalidas: 0 });
+    expect(repo.createOrdem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        poloId: "polo-ORMR - DIV MANUT SERV OPE REGISTRO",
+        unidadeExecutante: "ORMR - DIV MANUT SERV OPE REGISTRO"
+      })
+    );
   });
 
   it("ignores duplicate OS when duplicate mode is ignorar", async () => {

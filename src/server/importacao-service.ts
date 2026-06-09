@@ -12,14 +12,28 @@ export type ImportacaoOrdemExistente = { id: string; numero: string };
 export type ImportacaoOrdemInput = {
   numero: string;
   enderecoCompleto: string;
+  numeroImovel?: string | null;
+  complemento?: string | null;
   bairro?: string | null;
   cidade?: string | null;
+  regiaoAdministrativa?: string | null;
   tipoServico: TipoServico;
   status: StatusOS;
   poloId: string;
   fiscalId?: string | null;
+  unidadeExecutante?: string | null;
+  codigoContrato?: string | null;
+  descricaoContrato?: string | null;
+  codigoTss?: string | null;
+  descricaoTss?: string | null;
+  codigoTse?: string | null;
+  descricaoTse?: string | null;
+  pde?: string | null;
+  equipe?: string | null;
   observacao?: string | null;
   dataProgramada?: Date | null;
+  dataInicioExecucao?: Date | null;
+  dataFimExecucao?: Date | null;
 };
 
 export type ImportacaoLogInput = {
@@ -31,6 +45,7 @@ export type ImportacaoLogInput = {
 
 export type ImportacaoRepository = {
   findPoloByNameOrCode(value: string): Promise<ImportacaoPolo | null>;
+  ensurePolo(value: string): Promise<ImportacaoPolo>;
   findFiscalByNameOrMatricula(value: string): Promise<ImportacaoFiscal | null>;
   findOrdemByNumero(numero: string): Promise<ImportacaoOrdemExistente | null>;
   createOrdem(input: ImportacaoOrdemInput): Promise<unknown>;
@@ -74,8 +89,6 @@ export async function confirmarImportacao(
   for (const [index, row] of rows.entries()) {
     const linha = index + 1;
     const errors = validateRow(row);
-    const polo = row.polo ? await repository.findPoloByNameOrCode(row.polo) : null;
-    if (!polo) errors.push("polo obrigatorio ou nao encontrado");
 
     if (errors.length > 0) {
       resumo.invalidas += 1;
@@ -83,20 +96,42 @@ export async function confirmarImportacao(
       continue;
     }
 
-    if (!polo) throw new Error("Polo nao resolvido apos validacao");
+    // The Sabesp export has no Polo column, so the polo is keyed off the Unidade
+    // Executante and auto-created when it does not exist yet.
+    let polo = row.polo ? await repository.findPoloByNameOrCode(row.polo) : null;
+    if (!polo && row.polo) polo = await repository.ensurePolo(row.polo);
+    if (!polo) {
+      resumo.invalidas += 1;
+      resumo.erros.push({ linha, erros: ["polo/unidade executante obrigatorio"] });
+      continue;
+    }
     const resolvedPolo = polo;
     const fiscal = row.fiscal ? await repository.findFiscalByNameOrMatricula(row.fiscal) : null;
     const input: ImportacaoOrdemInput = {
       numero: row.numero,
       enderecoCompleto: row.enderecoCompleto,
+      numeroImovel: row.numeroImovel ?? null,
+      complemento: row.complemento ?? null,
       bairro: row.bairro ?? null,
       cidade: row.cidade ?? null,
+      regiaoAdministrativa: row.regiaoAdministrativa ?? null,
       tipoServico: row.tipoServico,
       status: "NaFila",
       poloId: resolvedPolo.id,
       fiscalId: fiscal?.id ?? null,
+      unidadeExecutante: row.unidadeExecutante ?? null,
+      codigoContrato: row.codigoContrato ?? null,
+      descricaoContrato: row.descricaoContrato ?? null,
+      codigoTss: row.codigoTss ?? null,
+      descricaoTss: row.descricaoTss ?? null,
+      codigoTse: row.codigoTse ?? null,
+      descricaoTse: row.descricaoTse ?? null,
+      pde: row.pde ?? null,
+      equipe: row.equipe ?? null,
       observacao: row.observacao ?? null,
-      dataProgramada: row.dataProgramada ?? null
+      dataProgramada: row.dataProgramada ?? null,
+      dataInicioExecucao: row.dataInicioExecucao ?? null,
+      dataFimExecucao: row.dataFimExecucao ?? null
     };
 
     const existente = await repository.findOrdemByNumero(row.numero);

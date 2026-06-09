@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { GeoFilter } from "@/components/dashboard/geo-filter";
+import { ESTADO } from "@/data/regioes-sp";
 import { defaultRedirect, hasPermission } from "@/lib/permissions";
 import { formatPercent } from "@/lib/utils";
 import { getDashboardResumo } from "@/server/dashboard-service";
@@ -8,12 +10,25 @@ import { getCurrentUser } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+function firstParam(value: string | string[] | undefined) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const trimmed = raw?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+export default async function DashboardPage({
+  searchParams
+}: {
+  searchParams: Promise<{ regiao?: string | string[]; municipio?: string | string[] }>;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (!hasPermission(user.perfil, "dashboard:read")) redirect(defaultRedirect(user.perfil));
 
-  const resumo = await getDashboardResumo(prismaDashboardRepository, user);
+  const params = await searchParams;
+  const filtros = { regiao: firstParam(params.regiao), municipio: firstParam(params.municipio) };
+
+  const resumo = await getDashboardResumo(prismaDashboardRepository, user, new Date(), filtros);
   const { metricas } = resumo;
 
   const metricCards = [
@@ -28,6 +43,13 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-8">
       <h1 className="text-2xl font-semibold">Dashboard</h1>
+
+      <GeoFilter
+        estado={ESTADO}
+        opcoes={resumo.opcoesGeograficas}
+        regiao={resumo.filtros.regiao}
+        municipio={resumo.filtros.municipio}
+      />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         {metricCards.map((card) => (

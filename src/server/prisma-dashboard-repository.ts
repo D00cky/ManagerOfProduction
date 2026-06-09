@@ -18,5 +18,12 @@ export const prismaDashboardRepository: DashboardRepository = {
       take: 20,
       select: { id: true, evento: true, descricao: true, createdAt: true }
     });
+  },
+  findGeoFacets(where: Prisma.OrdemServicoWhereInput) {
+    return prisma.ordemServico.findMany({
+      where,
+      select: { regiaoAdministrativa: true, cidade: true },
+      distinct: ["regiaoAdministrativa", "cidade"]
+    });
   }
 };

@@ -1,6 +1,7 @@
 import type { EventoLog, OrdemServico, Prisma, StatusOS } from "@prisma/client";
 import { differenceInCalendarDays } from "date-fns";
 import { buildOsScope, type SessionUserScope } from "@/lib/scope";
+import { REGIOES_SP } from "@/data/regioes-sp";
 
 export type DashboardLog = {
   id: string;
@@ -9,9 +10,20 @@ export type DashboardLog = {
   createdAt: Date;
 };
 
+export type DashboardFiltros = {
+  regiao?: string;
+  municipio?: string;
+};
+
+export type GeoFacet = {
+  regiaoAdministrativa: string | null;
+  cidade: string | null;
+};
+
 export type DashboardRepository = {
   findOrdens(where: Prisma.OrdemServicoWhereInput): Promise<OrdemServico[]>;
   findRecentLogs(where: Prisma.OrdemServicoWhereInput): Promise<DashboardLog[]>;
+  findGeoFacets(where: Prisma.OrdemServicoWhereInput): Promise<GeoFacet[]>;
 };
 
 export type DashboardResumo = {
@@ -41,25 +53,56 @@ export type DashboardResumo = {
     poloId: string;
   }>;
   atividades: DashboardLog[];
+  filtros: DashboardFiltros;
+  opcoesGeograficas: Array<{ regiao: string; municipios: string[] }>;
 };
 
 export async function getDashboardResumo(
   repository: DashboardRepository,
   user: SessionUserScope,
-  now = new Date()
+  now = new Date(),
+  filtros: DashboardFiltros = {}
 ): Promise<DashboardResumo> {
   const scope = buildOsScope(user);
-  const [ordens, atividades] = await Promise.all([
-    repository.findOrdens(scope),
-    repository.findRecentLogs(scope)
+  const ordensWhere: Prisma.OrdemServicoWhereInput = { ...scope, ...geoWhere(filtros) };
+  const [ordens, atividades, facets] = await Promise.all([
+    repository.findOrdens(ordensWhere),
+    // Recent activity stays on the access scope (not narrowed by the geo filter).
+    repository.findRecentLogs(scope),
+    // Filter options come from everything in scope, so they don't collapse as the
+    // user narrows the filter.
+    repository.findGeoFacets(scope)
   ]);
 
   return {
     metricas: calculateMetricas(ordens),
     progressoPorFiscal: calculateProgressoPorFiscal(ordens),
     osParadas: calculateOsParadas(ordens, now),
-    atividades
+    atividades,
+    filtros,
+    opcoesGeograficas: buildOpcoesGeograficas(facets)
   };
+}
+
+function geoWhere(filtros: DashboardFiltros): Prisma.OrdemServicoWhereInput {
+  const where: Prisma.OrdemServicoWhereInput = {};
+  if (filtros.regiao) where.regiaoAdministrativa = filtros.regiao;
+  if (filtros.municipio) where.cidade = filtros.municipio;
+  return where;
+}
+
+function buildOpcoesGeograficas(facets: GeoFacet[]): DashboardResumo["opcoesGeograficas"] {
+  const byRegiao = new Map<string, Set<string>>();
+  for (const facet of facets) {
+    if (!facet.regiaoAdministrativa) continue;
+    const municipios = byRegiao.get(facet.regiaoAdministrativa) ?? new Set<string>();
+    if (facet.cidade) municipios.add(facet.cidade);
+    byRegiao.set(facet.regiaoAdministrativa, municipios);
+  }
+  return REGIOES_SP.filter((regiao) => byRegiao.has(regiao)).map((regiao) => ({
+    regiao,
+    municipios: [...(byRegiao.get(regiao) ?? new Set<string>())].sort((a, b) => a.localeCompare(b, "pt-BR"))
+  }));
 }
 
 function calculateMetricas(ordens: OrdemServico[]): DashboardResumo["metricas"] {

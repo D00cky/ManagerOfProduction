@@ -135,6 +135,8 @@ export function ImportarForm() {
                   <tr>
                     <th className="px-3 py-2">Numero</th>
                     <th className="px-3 py-2">Endereco</th>
+                    <th className="px-3 py-2">Municipio</th>
+                    <th className="px-3 py-2">Regiao</th>
                     <th className="px-3 py-2">Tipo</th>
                     <th className="px-3 py-2">Polo</th>
                     <th className="px-3 py-2">Fiscal</th>
@@ -146,6 +148,8 @@ export function ImportarForm() {
                     <tr key={index} className="border-b border-[hsl(var(--border))] last:border-0">
                       <td className="px-3 py-2">{entry.row.numero || "-"}</td>
                       <td className="px-3 py-2">{entry.row.enderecoCompleto || "-"}</td>
+                      <td className="px-3 py-2">{entry.row.cidade ?? "-"}</td>
+                      <td className="px-3 py-2">{entry.row.regiaoAdministrativa ?? "-"}</td>
                       <td className="px-3 py-2">{entry.row.tipoServico}</td>
                       <td className="px-3 py-2">{entry.row.polo ?? "-"}</td>
                       <td className="px-3 py-2">{entry.row.fiscal ?? "-"}</td>

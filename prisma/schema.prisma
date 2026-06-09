@@ -101,14 +101,28 @@ model OrdemServico {
   id                String        @id @default(cuid())
   numero            String        @unique
   enderecoCompleto  String
+  numeroImovel      String?
+  complemento       String?
   bairro            String?
   cidade            String?
+  regiaoAdministrativa String?
   tipoServico       TipoServico
   status            StatusOS      @default(NaFila)
   poloId            String
   fiscalId          String?
+  unidadeExecutante String?
+  codigoContrato    String?
+  descricaoContrato String?
+  codigoTss         String?
+  descricaoTss      String?
+  codigoTse         String?
+  descricaoTse      String?
+  pde               String?
+  equipe            String?
   observacao        String?
   dataProgramada    DateTime?
+  dataInicioExecucao DateTime?
+  dataFimExecucao   DateTime?
   iniciadaEm        DateTime?
   concluidaEm       DateTime?
   canceladaEm       DateTime?

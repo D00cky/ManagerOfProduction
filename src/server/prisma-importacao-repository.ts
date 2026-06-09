@@ -15,6 +15,18 @@ export const prismaImportacaoRepository: ImportacaoRepository = {
       select: { id: true, nome: true, codigo: true }
     });
   },
+  ensurePolo(value: string) {
+    const nome = value.trim();
+    // Sabesp unit strings look like "ORMR - DIV MANUT SERV OPE REGISTRO" — use the
+    // leading token as the polo code, falling back to the full text.
+    const codigo = ((nome.split(" - ")[0] ?? nome).trim() || nome).slice(0, 60);
+    return prisma.polo.upsert({
+      where: { codigo },
+      update: {},
+      create: { codigo, nome },
+      select: { id: true, nome: true, codigo: true }
+    });
+  },
   findFiscalByNameOrMatricula(value: string) {
     return prisma.user.findFirst({
       where: {
