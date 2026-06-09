@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { TabulacaoForm } from "@/components/tabulacao/tabulacao-form";
 import { FiscalResumoCards } from "@/components/tabulacao/fiscal-resumo";
+import { FormularioFiscalizacaoHeader } from "@/components/tabulacao/formulario-fiscalizacao-header";
 import type { RespostasFfr } from "@/lib/ffr";
 import { defaultRedirect, hasPermission } from "@/lib/permissions";
 import { getTabulacaoEdicao } from "@/server/tabulacao-service";
@@ -20,7 +21,7 @@ export default async function TabulacaoPage({ params }: { params: Promise<{ id: 
   const edicao = await getTabulacaoEdicao(prismaTabulacaoRepository, user, id).catch(() => null);
   if (!edicao) redirect("/fila");
 
-  const { ordem, tabulacao } = edicao;
+  const { ordem, tabulacao, fiscalNome } = edicao;
   const respostas = (tabulacao?.respostas ?? {}) as unknown as RespostasFfr;
   // Embed the fiscal's own dashboard (imported / concluded / remaining).
   const home = user.perfil === "fiscal" ? await getFiscalHome(prismaFiscalRepository, user) : null;
@@ -32,9 +33,11 @@ export default async function TabulacaoPage({ params }: { params: Promise<{ id: 
         <p className="text-sm text-[hsl(var(--muted-foreground))]">{ordem.tipoServico}</p>
       </div>
       {home ? <FiscalResumoCards resumo={home.resumo} /> : null}
+      <FormularioFiscalizacaoHeader ordem={ordem} fiscalNome={fiscalNome} />
       <TabulacaoForm
         ordemId={ordem.id}
         tipoServico={ordem.tipoServico}
+        descricaoTss={ordem.descricaoTss}
         status={ordem.status}
         respostasIniciais={respostas}
         observacoesIniciais={tabulacao?.observacoes ?? ""}

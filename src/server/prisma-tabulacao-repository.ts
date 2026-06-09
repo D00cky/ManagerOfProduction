@@ -9,6 +9,10 @@ export const prismaTabulacaoRepository: TabulacaoRepository = {
   findTabulacaoByOrdem(ordemServicoId: string) {
     return prisma.tabulacao.findUnique({ where: { ordemServicoId } });
   },
+  async findFiscalNome(fiscalId: string) {
+    const user = await prisma.user.findUnique({ where: { id: fiscalId }, select: { name: true } });
+    return user?.name ?? null;
+  },
   upsertTabulacao(input: UpsertTabulacaoInput) {
     return prisma.tabulacao.upsert({
       where: { ordemServicoId: input.ordemServicoId },

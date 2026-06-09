@@ -62,6 +62,7 @@ function repo(record: OrdemServico, existing: Tabulacao | null = null): Tabulaca
   return {
     findOrdemById: vi.fn(async () => record),
     findTabulacaoByOrdem: vi.fn(async () => existing),
+    findFiscalNome: vi.fn(async () => "Fiscal Teste"),
     upsertTabulacao: vi.fn(async (_input) => tabulacao(_input)),
     log: vi.fn(async () => undefined)
   };
@@ -133,6 +134,7 @@ describe("getTabulacaoEdicao", () => {
     const repository: TabulacaoRepository = {
       findOrdemById: vi.fn(async () => null),
       findTabulacaoByOrdem: vi.fn(async () => null),
+      findFiscalNome: vi.fn(async () => null),
       upsertTabulacao: vi.fn(),
       log: vi.fn()
     };
@@ -159,6 +161,7 @@ describe("getTabulacaoEdicao", () => {
 
     expect(result.ordem.id).toBe("os1");
     expect(result.tabulacao?.observacoes).toBe("anterior");
+    expect(result.fiscalNome).toBe("Fiscal Teste");
     expect(repository.findTabulacaoByOrdem).toHaveBeenCalledWith("os1");
   });
 });

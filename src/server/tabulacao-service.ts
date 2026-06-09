@@ -31,6 +31,7 @@ export type TabulacaoLogInput = {
 export type TabulacaoRepository = {
   findOrdemById(id: string): Promise<OrdemServico | null>;
   findTabulacaoByOrdem(ordemServicoId: string): Promise<Tabulacao | null>;
+  findFiscalNome(fiscalId: string): Promise<string | null>;
   upsertTabulacao(input: UpsertTabulacaoInput): Promise<Tabulacao>;
   log(input: TabulacaoLogInput): Promise<void>;
 };
@@ -45,7 +46,8 @@ export async function getTabulacaoEdicao(
   if (!isOrdemInUserScope(ordem, user)) throw new Error("OS fora do escopo do usuario");
 
   const tabulacao = await repository.findTabulacaoByOrdem(ordemServicoId);
-  return { ordem, tabulacao };
+  const fiscalNome = ordem.fiscalId ? await repository.findFiscalNome(ordem.fiscalId) : null;
+  return { ordem, tabulacao, fiscalNome };
 }
 
 export async function saveTabulacao(
@@ -58,7 +60,10 @@ export async function saveTabulacao(
   if (!isOrdemInUserScope(ordem, user)) throw new Error("OS fora do escopo do usuario");
   if (ordem.status === "Concluida") throw new Error("Tabulacao bloqueada para OS concluida");
 
-  const resultado = calcularConceito(ordem.tipoServico, input.respostas);
+  const resultado = calcularConceito(
+    { tipoServico: ordem.tipoServico, descricaoTss: ordem.descricaoTss },
+    input.respostas
+  );
   const tabulacao = await repository.upsertTabulacao({
     ordemServicoId: ordem.id,
     fiscalId: user.id,

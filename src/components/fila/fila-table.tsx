@@ -145,6 +145,17 @@ export function FilaTable({
     router.push(qs ? `/fila?${qs}` : "/fila");
   }
 
+  // Carrega os filtros ativos no export, respeitando o escopo do usuário no servidor.
+  function exportHref(formato: "xlsx" | "csv" = "xlsx") {
+    const search = new URLSearchParams();
+    for (const [key, value] of Object.entries(filtros)) {
+      if (value) search.set(key, value);
+    }
+    if (formato !== "xlsx") search.set("formato", formato);
+    const qs = search.toString();
+    return qs ? `/api/ordens/exportar?${qs}` : "/api/ordens/exportar";
+  }
+
   async function mutate(url: string, method: string, body: unknown, id: string) {
     setBusyId(id);
     setError(null);
@@ -237,6 +248,10 @@ export function FilaTable({
             Limpar filtros
           </Button>
         ) : null}
+
+        <Button asChild variant="outline" size="sm">
+          <a href={exportHref()}>Exportar XLSX</a>
+        </Button>
       </Card>
 
       {showSelection && (selected.size > 0 || canDelete) ? (

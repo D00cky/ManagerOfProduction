@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { gruposParaTipo, type ValorResposta } from "@/data/grupos-ffr";
+import { gruposParaOrdem, type ValorResposta } from "@/data/grupos-ffr";
 import { calcularConceito, type RespostasFfr } from "@/lib/ffr";
 import { cn, formatPercent } from "@/lib/utils";
 
@@ -29,18 +29,23 @@ const conceitoStyles: Record<string, string> = {
 export function TabulacaoForm({
   ordemId,
   tipoServico,
+  descricaoTss,
   status,
   respostasIniciais,
   observacoesIniciais
 }: {
   ordemId: string;
   tipoServico: TipoServico;
+  descricaoTss: string | null;
   status: StatusOS;
   respostasIniciais: RespostasFfr;
   observacoesIniciais: string;
 }) {
   const router = useRouter();
-  const grupos = useMemo(() => gruposParaTipo(tipoServico), [tipoServico]);
+  const grupos = useMemo(
+    () => gruposParaOrdem({ tipoServico, descricaoTss }),
+    [tipoServico, descricaoTss]
+  );
   const [respostas, setRespostas] = useState<RespostasFfr>(respostasIniciais);
   const [observacoes, setObservacoes] = useState(observacoesIniciais);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +54,10 @@ export function TabulacaoForm({
   const [concluindo, setConcluindo] = useState(false);
 
   const bloqueada = status === "Concluida" || status === "Cancelada";
-  const resultado = useMemo(() => calcularConceito(tipoServico, respostas), [tipoServico, respostas]);
+  const resultado = useMemo(
+    () => calcularConceito({ tipoServico, descricaoTss }, respostas),
+    [tipoServico, descricaoTss, respostas]
+  );
 
   function setResposta(itemId: string, value: ValorResposta) {
     setSaved(false);
