@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { createLogAtividade } from "@/server/log";
 import type { LogInput, OrdemRepository, OrdemStatusUpdate } from "@/server/os-service";
 
 export const prismaOrdemRepository: OrdemRepository = {
@@ -30,14 +31,6 @@ export const prismaOrdemRepository: OrdemRepository = {
     return prisma.ordemServico.update({ where: { id }, data: { fiscalId } });
   },
   async log(input: LogInput) {
-    await prisma.logAtividade.create({
-      data: {
-        evento: input.evento,
-        descricao: input.descricao,
-        metadata: input.metadata ?? Prisma.JsonNull,
-        userId: input.userId,
-        ordemServicoId: input.ordemServicoId
-      }
-    });
+    await createLogAtividade(input);
   }
 };

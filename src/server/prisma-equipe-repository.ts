@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { createLogAtividade } from "@/server/log";
 import type { EquipeRepository } from "@/server/equipe-service";
 
 const membroSelect = {
@@ -37,13 +38,6 @@ export const prismaEquipeRepository: EquipeRepository = {
     });
   },
   async log(input) {
-    await prisma.logAtividade.create({
-      data: {
-        evento: input.evento,
-        descricao: input.descricao,
-        metadata: input.metadata ?? Prisma.JsonNull,
-        userId: input.userId
-      }
-    });
+    await createLogAtividade(input);
   }
 };

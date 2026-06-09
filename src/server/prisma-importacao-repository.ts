@@ -1,5 +1,5 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { createLogAtividade } from "@/server/log";
 import type { ImportacaoLogInput, ImportacaoOrdemInput, ImportacaoRepository } from "@/server/importacao-service";
 
 export const prismaImportacaoRepository: ImportacaoRepository = {
@@ -47,13 +47,6 @@ export const prismaImportacaoRepository: ImportacaoRepository = {
     return prisma.ordemServico.update({ where: { id }, data: input });
   },
   async log(input: ImportacaoLogInput) {
-    await prisma.logAtividade.create({
-      data: {
-        evento: input.evento,
-        descricao: input.descricao,
-        metadata: input.metadata ?? Prisma.JsonNull,
-        userId: input.userId
-      }
-    });
+    await createLogAtividade(input);
   }
 };

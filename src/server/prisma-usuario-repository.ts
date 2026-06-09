@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { createLogAtividade } from "@/server/log";
 import type {
   AtualizarUsuarioInput,
   CriarUsuarioInput,
@@ -48,13 +49,6 @@ export const prismaUsuarioRepository: UsuarioRepository = {
     return prisma.user.update({ where: { id }, data, select: resumoSelect });
   },
   async log(input: UsuarioLogInput) {
-    await prisma.logAtividade.create({
-      data: {
-        evento: input.evento,
-        descricao: input.descricao,
-        metadata: input.metadata ?? Prisma.JsonNull,
-        userId: input.userId
-      }
-    });
+    await createLogAtividade(input);
   }
 };

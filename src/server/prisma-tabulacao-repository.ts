@@ -1,5 +1,5 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { createLogAtividade } from "@/server/log";
 import type { TabulacaoLogInput, TabulacaoRepository, UpsertTabulacaoInput } from "@/server/tabulacao-service";
 
 export const prismaTabulacaoRepository: TabulacaoRepository = {
@@ -25,14 +25,6 @@ export const prismaTabulacaoRepository: TabulacaoRepository = {
     });
   },
   async log(input: TabulacaoLogInput) {
-    await prisma.logAtividade.create({
-      data: {
-        evento: input.evento,
-        descricao: input.descricao,
-        metadata: input.metadata ?? Prisma.JsonNull,
-        userId: input.userId,
-        ordemServicoId: input.ordemServicoId
-      }
-    });
+    await createLogAtividade(input);
   }
 };
