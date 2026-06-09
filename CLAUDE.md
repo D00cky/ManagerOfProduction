@@ -30,6 +30,15 @@ The current Render/free-tier deployment is a demo sandbox, not production persis
 - `Example/demo-os.xlsx` is the import demo workbook; the same 8 OS are also seeded by `prisma/seed.ts`.
 - Changes made through the app persist while the Render instance is online. With reset enabled, restart/cold start cleans the demo database.
 
+## Branching and deployment
+
+Two long-lived branches: **`main` = production/release**, **`staging` = test build**.
+
+- **Always branch new features off `main`** (the live line), never off `staging`. Build the feature, then open a PR into `staging` to test it. Once it looks good, promote by merging `staging → main`.
+- **Nothing reaches production without an explicit `staging → main` merge** — that gate is intentional. A half-baked feature can sit on `staging` without affecting `main`.
+- `staging` is the integration/test line; it may hold several in-flight features at once. The simple promotion is "merge `staging → main`"; reach for per-feature cherry-picks only when you need to ship one feature while another is still being tested.
+- Target host is **Heroku** (container stack, reuses the repo `Dockerfile`); planned flow is GitHub Actions auto-deploy (`staging` push → test site, `main` push → production). **Auto-deploy is not wired yet** — merging updates the branches but does not deploy until the Heroku apps + Actions workflows exist. The repo is private; keep it that way.
+
 ## Current implementation vs roadmap
 
 The app currently implements the Gerenciador FFR core (Bloco A) plus basic dashboard/reporting/export. The architecture file `ARQUITETURA_FFR_PLANEJAMENTO.md` describes the future target for the full platform, including Central de Conformidade, geographic dashboard, PostgreSQL analytics, materialized views, Redis/cache, ExcelJS formatted reports, PDF export, and Docker Compose corporate deployment. Do not present those roadmap items as already complete unless they are implemented and tested in this repo.

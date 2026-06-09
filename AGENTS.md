@@ -51,6 +51,15 @@ This project follows XP practices with a strict TDD workflow. Every agent workin
 - Do not describe the app as production-ready for analytics/conformidade until persistent PostgreSQL (and any required analytics schema) is implemented and validated.
 - If a future feature from the architecture document is implemented, add tests first and then move it from roadmap wording into implemented wording.
 
+## Branching and Delivery
+
+- Two long-lived branches: `main` is the production/release line; `staging` is the test build.
+- Start every feature branch from `main`, never from `staging`, so work builds on what is actually live.
+- Land features on `staging` first (via PR) for testing; promote to production only by merging `staging` into `main`.
+- Never merge straight into `main` without going through `staging` — the `staging → main` step is the explicit release gate.
+- Do not assume a merge deploys anything: Heroku + GitHub Actions auto-deploy is the target but is not wired yet, so merges only update branches for now.
+- Keep the repository private; secrets live only in untracked `.env*` files and the host's config, never committed.
+
 ## Implementation Order
 
 1. Add or update tests for the intended behavior.
