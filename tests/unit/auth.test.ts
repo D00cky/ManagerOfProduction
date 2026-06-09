@@ -2,15 +2,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const findFirst = vi.fn();
 const update = vi.fn();
+const userUpsert = vi.fn();
+const poloUpsert = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    user: { findFirst, update }
+    user: { findFirst, update, upsert: userUpsert },
+    polo: { upsert: poloUpsert }
   }
 }));
 
 vi.mock("bcryptjs", () => ({
-  default: { compare: vi.fn(async () => true) }
+  default: { compare: vi.fn(async () => true), hashSync: vi.fn(() => "demo-hash") }
 }));
 
 describe("authorizeCredentials", () => {
@@ -53,6 +56,31 @@ describe("authorizeCredentials", () => {
       poloId: "demo-polo"
     });
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it("materializes the demo account and its polo so persisted writes satisfy FKs", async () => {
+    process.env.DEMO_AUTH_ENABLED = "true";
+    findFirst.mockResolvedValue(null);
+    const { authorizeCredentials } = await import("@/lib/auth");
+
+    await authorizeCredentials({ login: "fiscal@example.com", password: "senha123" });
+
+    // The demo polo is ensured before the user (User.poloId references it).
+    expect(poloUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "demo-polo" } })
+    );
+    expect(userUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "demo-fiscal" },
+        create: expect.objectContaining({
+          id: "demo-fiscal",
+          email: "fiscal@example.com",
+          matricula: "F0001",
+          perfil: "fiscal",
+          poloId: "demo-polo"
+        })
+      })
+    );
   });
 
   it("does not return demo users unless demo auth is enabled", async () => {

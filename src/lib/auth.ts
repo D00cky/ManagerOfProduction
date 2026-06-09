@@ -97,11 +97,50 @@ export async function authorizeCredentials(credentials: Credentials | undefined)
 
   if (process.env.DEMO_AUTH_ENABLED !== "true" || password !== demoPassword) return null;
   const normalizedLogin = login.toLowerCase();
-  return (
-    demoUsers.find(
-      (demoUser) => demoUser.email.toLowerCase() === normalizedLogin || demoUser.matricula === login
-    ) ?? null
+  const demoUser = demoUsers.find(
+    (candidate) => candidate.email.toLowerCase() === normalizedLogin || candidate.matricula === login
   );
+  if (!demoUser) return null;
+  return ensureDemoUser(demoUser);
+}
+
+/**
+ * Materialize a demo account (and the polo it references) as real database rows.
+ *
+ * Demo auth lets the sample accounts log in even when the user table was never
+ * seeded, but anything they then persist — tabulações, assignments, activity
+ * logs — points back at their id via a foreign key. Without a matching User row
+ * those writes fail (e.g. `Tabulacao_fiscalId_fkey`). Upserting on login makes
+ * the demo account a stable, FK-valid row while keeping it idempotent.
+ */
+async function ensureDemoUser(demoUser: AuthUser): Promise<AuthUser> {
+  if (demoUser.poloId) {
+    await prisma.polo.upsert({
+      where: { id: demoUser.poloId },
+      update: {},
+      create: {
+        id: demoUser.poloId,
+        nome: "Polo Demo",
+        codigo: demoUser.poloId,
+        regiao: demoUser.regiao ?? "São Paulo"
+      }
+    });
+  }
+  await prisma.user.upsert({
+    where: { id: demoUser.id },
+    update: { status: "ativo" },
+    create: {
+      id: demoUser.id,
+      name: demoUser.name,
+      email: demoUser.email,
+      matricula: demoUser.matricula,
+      perfil: demoUser.perfil,
+      poloId: demoUser.poloId,
+      regiao: demoUser.regiao,
+      passwordHash: bcrypt.hashSync(demoPassword, 10)
+    }
+  });
+  return demoUser;
 }
 
 export const authOptions: NextAuthOptions = {
