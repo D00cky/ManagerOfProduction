@@ -56,6 +56,9 @@ export type OsParadaRow = {
 /** Throughput roll-up for one hierarchy key (região / polo / município). */
 export type HierarquiaLinha = { chave: string | null; entradas: number; concluidas: number };
 
+/** Per-fiscal output within the time window. */
+export type FiscalDesempenhoRow = { fiscalId: string; concluidas: number; analisadas: number };
+
 export type DashboardRepository = {
   /** Current snapshot, not time-windowed: drives the status cards. */
   countByStatus(where: Prisma.OrdemServicoWhereInput): Promise<StatusCount[]>;
@@ -73,6 +76,15 @@ export type DashboardRepository = {
     where: Prisma.OrdemServicoWhereInput,
     periodo: DashboardPeriodo
   ): Promise<HierarquiaLinha[]>;
+  desempenhoPorFiscal(
+    where: Prisma.OrdemServicoWhereInput,
+    periodo: DashboardPeriodo
+  ): Promise<FiscalDesempenhoRow[]>;
+  /** Distinct fiscais who concluded or analyzed at least one OS in the window. */
+  contarFiscaisAtivos(
+    where: Prisma.OrdemServicoWhereInput,
+    periodo: DashboardPeriodo
+  ): Promise<number>;
   findRecentLogs(where: Prisma.OrdemServicoWhereInput): Promise<DashboardLog[]>;
   findGeoFacets(where: Prisma.OrdemServicoWhereInput): Promise<GeoFacet[]>;
   findFiscais(ids: string[]): Promise<DashboardFiscal[]>;
@@ -87,6 +99,14 @@ export type DashboardResumo = {
     percentualConclusao: number;
   };
   porRegiao: Array<{ regiao: string | null; entradas: number; concluidas: number }>;
+  fiscaisAtivos: number;
+  desempenhoFiscais: Array<{
+    fiscalId: string;
+    name: string;
+    matricula: string;
+    concluidas: number;
+    analisadas: number;
+  }>;
   metricas: {
     total: number;
     naFila: number;
@@ -143,6 +163,8 @@ export async function getDashboardResumo(
     concluidas,
     analisadas,
     regiaoRows,
+    desempenhoRows,
+    fiscaisAtivos,
     atividades,
     facets
   ] = await Promise.all([
@@ -153,25 +175,42 @@ export async function getDashboardResumo(
     repository.contarConcluidas(where, periodo),
     repository.contarAnalisadas(where, periodo),
     repository.agruparPorRegiao(where, periodo),
+    repository.desempenhoPorFiscal(where, periodo),
+    repository.contarFiscaisAtivos(where, periodo),
     // Recent activity and geo filter options stay on the access scope (not narrowed
     // by the geo filter) so they don't collapse as the user narrows.
     repository.findRecentLogs(scope),
     repository.findGeoFacets(scope)
   ]);
 
-  const fiscais = await repository.findFiscais(progressoBase.map((item) => item.fiscalId));
+  // Resolve names once for every fiscal referenced by progress or performance.
+  const fiscalIds = [
+    ...new Set([
+      ...progressoBase.map((item) => item.fiscalId),
+      ...desempenhoRows.map((item) => item.fiscalId)
+    ])
+  ];
+  const fiscais = await repository.findFiscais(fiscalIds);
   const fiscalPorId = new Map(fiscais.map((fiscal) => [fiscal.id, fiscal]));
+  const nomeDe = (id: string) => fiscalPorId.get(id)?.name ?? id;
+  const matriculaDe = (id: string) => fiscalPorId.get(id)?.matricula ?? "";
+
   const progressoPorFiscal = progressoBase
-    .map((item) => {
-      const fiscal = fiscalPorId.get(item.fiscalId);
-      return {
-        ...item,
-        name: fiscal?.name ?? item.fiscalId,
-        matricula: fiscal?.matricula ?? "",
-        percentualConclusao: item.total > 0 ? item.concluidas / item.total : 0
-      };
-    })
+    .map((item) => ({
+      ...item,
+      name: nomeDe(item.fiscalId),
+      matricula: matriculaDe(item.fiscalId),
+      percentualConclusao: item.total > 0 ? item.concluidas / item.total : 0
+    }))
     .sort((a, b) => a.fiscalId.localeCompare(b.fiscalId));
+
+  const desempenhoFiscais = desempenhoRows
+    .map((item) => ({
+      ...item,
+      name: nomeDe(item.fiscalId),
+      matricula: matriculaDe(item.fiscalId)
+    }))
+    .sort((a, b) => b.concluidas - a.concluidas || b.analisadas - a.analisadas);
 
   return {
     periodo,
@@ -182,6 +221,8 @@ export async function getDashboardResumo(
       percentualConclusao: entradas > 0 ? concluidas / entradas : 0
     },
     porRegiao: mapRegiao(regiaoRows),
+    fiscaisAtivos,
+    desempenhoFiscais,
     metricas: calculateMetricas(statusCounts),
     progressoPorFiscal,
     osParadas: calculateOsParadas(parariasRows, now),
