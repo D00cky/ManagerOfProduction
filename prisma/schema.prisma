@@ -50,6 +50,7 @@ enum EventoLog {
   reatribuicao
   status
   tabulacao
+  exclusao
   usuario
   sync
 }

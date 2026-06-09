@@ -95,27 +95,35 @@ export function createPrismaOrdemRepository(
         select: { id: true, perfil: true, poloId: true }
       });
     },
-    async hasOpenWork(fiscalId: string, excludeOrdemId?: string) {
-      // Existence check stops at the first matching row instead of counting all.
-      const found = await client.ordemServico.findFirst({
-        where: {
-          fiscalId,
-          status: { in: ["NaFila", "EmExecucao", "Pendente"] },
-          ...(excludeOrdemId ? { id: { not: excludeOrdemId } } : {})
-        },
-        select: { id: true }
-      });
-      return found !== null;
+    updateFiscal(id: string, fiscalId: string) {
+      return client.ordemServico.update({ where: { id }, data: { fiscalId } });
     },
-    async updateFiscal(id: string, fiscalId: string) {
-      try {
-        return await client.ordemServico.update({ where: { id }, data: { fiscalId } });
-      } catch (error) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-          throw new Error("Fiscal ja possui OS aberta");
+    async assignManyToFiscal(ids, fiscalId, scope) {
+      const result = await client.ordemServico.updateMany({
+        where: { AND: [scope, { id: { in: ids } }] },
+        data: { fiscalId }
+      });
+      return result.count;
+    },
+    async deleteOrdens(where) {
+      return client.$transaction(async (transaction) => {
+        const ordens = await transaction.ordemServico.findMany({ where, select: { id: true } });
+        const ids = ordens.map((ordem) => ordem.id);
+        if (ids.length === 0) return 0;
+        const tabs = await transaction.tabulacao.findMany({
+          where: { ordemServicoId: { in: ids } },
+          select: { id: true }
+        });
+        const tabIds = tabs.map((tab) => tab.id);
+        // Required FKs default to Restrict: clear avaliações then tabulações
+        // before the OS. LogAtividade.ordemServicoId is optional (SetNull).
+        if (tabIds.length > 0) {
+          await transaction.avaliacao.deleteMany({ where: { tabulacaoId: { in: tabIds } } });
+          await transaction.tabulacao.deleteMany({ where: { id: { in: tabIds } } });
         }
-        throw error;
-      }
+        const deleted = await transaction.ordemServico.deleteMany({ where: { id: { in: ids } } });
+        return deleted.count;
+      });
     },
     async log(input: LogInput) {
       await logWriter(input);
