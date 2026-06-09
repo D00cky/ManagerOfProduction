@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { FilaTable, type FilaRow, type FiscalOption } from "@/components/fila/fila-table";
+import { parseFilaFilters, type FilaFiltros } from "@/lib/fila-filtros";
 import { defaultRedirect, hasPermission } from "@/lib/permissions";
 import { listEquipe } from "@/server/equipe-service";
 import { prismaEquipeRepository } from "@/server/prisma-equipe-repository";
@@ -11,15 +12,43 @@ import { getCurrentUser } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function FilaPage() {
+function firstParam(value: string | string[] | undefined) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw?.trim() ? raw.trim() : "";
+}
+
+type FilaSearchParams = {
+  poloId?: string | string[];
+  fiscalId?: string | string[];
+  tipoServico?: string | string[];
+  status?: string | string[];
+  busca?: string | string[];
+  page?: string | string[];
+};
+
+export default async function FilaPage({
+  searchParams
+}: {
+  searchParams: Promise<FilaSearchParams>;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (!hasPermission(user.perfil, "fila:read")) redirect(defaultRedirect(user.perfil));
 
   const canAssign = hasPermission(user.perfil, "os:write");
+  const params = await searchParams;
 
-  const [ordens, equipe, polos] = await Promise.all([
-    listOrdens(prismaOrdemRepository, user),
+  const filtros: FilaFiltros = {
+    poloId: firstParam(params.poloId),
+    fiscalId: firstParam(params.fiscalId),
+    tipoServico: firstParam(params.tipoServico),
+    status: firstParam(params.status),
+    busca: firstParam(params.busca)
+  };
+  const page = Math.max(1, Number(firstParam(params.page)) || 1);
+
+  const [pagina, equipe, polos] = await Promise.all([
+    listOrdens(prismaOrdemRepository, user, { filters: parseFilaFilters(filtros), page }),
     canAssign ? listEquipe(prismaEquipeRepository, user) : Promise.resolve([]),
     listPolos(prismaPoloRepository, user)
   ]);
@@ -30,7 +59,7 @@ export default async function FilaPage() {
   const fiscalNome = new Map(fiscais.map((fiscal) => [fiscal.id, fiscal.name]));
   const poloNome = new Map(polos.map((polo) => [polo.id, polo.nome]));
 
-  const rows: FilaRow[] = ordens.map((ordem) => ({
+  const rows: FilaRow[] = pagina.rows.map((ordem) => ({
     id: ordem.id,
     numero: ordem.numero,
     endereco: ordem.bairro ? `${ordem.enderecoCompleto}, ${ordem.bairro}` : ordem.enderecoCompleto,
@@ -46,7 +75,16 @@ export default async function FilaPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">Fila de OS</h1>
-      <FilaTable ordens={rows} fiscais={fiscais} canAssign={canAssign} />
+      <FilaTable
+        ordens={rows}
+        fiscais={fiscais}
+        polos={polos.map((polo) => ({ id: polo.id, nome: polo.nome }))}
+        canAssign={canAssign}
+        filtros={filtros}
+        total={pagina.total}
+        page={pagina.page}
+        pageSize={pagina.pageSize}
+      />
     </div>
   );
 }

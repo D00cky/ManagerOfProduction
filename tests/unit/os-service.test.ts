@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { OrdemServico, StatusOS } from "@prisma/client";
 import {
   atribuirOrdem,
+  buildListWhere,
   listOrdens,
   updateOrdemStatus,
   type FiscalRef,
@@ -53,7 +54,7 @@ function repo(
   hasOpenWork = false
 ): OrdemRepository {
   return {
-    findMany: vi.fn(async () => [record]),
+    findPage: vi.fn(async () => ({ rows: [record], total: 1 })),
     claimNextAvailable: vi.fn(async () => claimed),
     findById: vi.fn(async () => record),
     hasTabulacao: vi.fn(async () => hasTabulacao),
@@ -73,7 +74,7 @@ describe("listOrdens", () => {
     await listOrdens(repository, { id: "f1", perfil: "fiscal", poloId: "p1" });
 
     expect(repository.claimNextAvailable).toHaveBeenCalledWith("p1", "f1");
-    expect(repository.findMany).toHaveBeenCalledWith({ fiscalId: "f1" });
+    expect(repository.findPage).toHaveBeenCalledWith({ fiscalId: "f1" }, { skip: 0, take: 20 });
   });
 
   it("logs an automatic assignment when an OS is claimed", async () => {
@@ -117,8 +118,55 @@ describe("listOrdens", () => {
       regiao: "Campinas"
     });
 
-    expect(repository.findMany).toHaveBeenCalledWith({ regiaoAdministrativa: { in: ["Campinas"] } });
+    expect(repository.findPage).toHaveBeenCalledWith(
+      { regiaoAdministrativa: { in: ["Campinas"] } },
+      { skip: 0, take: 20 }
+    );
     expect(repository.claimNextAvailable).not.toHaveBeenCalled();
+  });
+
+  it("paginates and only auto-claims on the first page", async () => {
+    const repository = repo(os(), false, undefined, os());
+
+    const result = await listOrdens(repository, { id: "f1", perfil: "fiscal", poloId: "p1" }, { page: 2 });
+
+    expect(repository.claimNextAvailable).not.toHaveBeenCalled();
+    expect(repository.findPage).toHaveBeenCalledWith({ fiscalId: "f1" }, { skip: 20, take: 20 });
+    expect(result).toMatchObject({ total: 1, page: 2, pageSize: 20 });
+  });
+
+  it("applies queue filters to the scoped where", async () => {
+    const repository = repo(os());
+
+    await listOrdens(
+      repository,
+      { id: "s1", perfil: "supervisor" },
+      { filters: { status: "Pendente", poloId: "p9", fiscalId: null } }
+    );
+
+    expect(repository.findPage).toHaveBeenCalledWith(
+      { status: "Pendente", poloId: "p9", fiscalId: null },
+      { skip: 0, take: 20 }
+    );
+  });
+});
+
+describe("buildListWhere", () => {
+  it("merges scope with filters and maps the SEM_FISCAL sentinel (null) and busca", () => {
+    expect(
+      buildListWhere(
+        { regiaoAdministrativa: { in: ["Campinas"] } },
+        { fiscalId: null, status: "NaFila", busca: "1001" }
+      )
+    ).toEqual({
+      regiaoAdministrativa: { in: ["Campinas"] },
+      fiscalId: null,
+      status: "NaFila",
+      OR: [
+        { numero: { contains: "1001", mode: "insensitive" } },
+        { enderecoCompleto: { contains: "1001", mode: "insensitive" } }
+      ]
+    });
   });
 });
 
