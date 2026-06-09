@@ -100,6 +100,21 @@ describe("Sabesp execution export", () => {
     Equipe: "LEANDRO ESTEVAM"
   };
 
+  it("derives the service type from Descrição TSS instead of Família", () => {
+    const mapping = detectMapping(headers);
+    const { row } = normalizeImportRow(
+      {
+        ...sampleRow,
+        "Descrição TSS": "CORTE NO CAVALETE",
+        Família: "LIGAÇÃO DE ÁGUA"
+      },
+      mapping
+    );
+
+    expect(mapping.tipoServico).toBe("Descrição TSS");
+    expect(row.tipoServico).toBe("CorteAgua");
+  });
+
   it("maps the Sabesp columns, keys polo off the unit and derives the region", () => {
     const mapping = detectMapping(headers);
     const { row, errors } = normalizeImportRow(sampleRow, mapping);

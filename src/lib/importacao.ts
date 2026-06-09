@@ -63,7 +63,7 @@ export const aliases: Record<ImportColumn, string[]> = {
   complemento: ["complemento"],
   bairro: ["bairro"],
   cidade: ["cidade", "municipio"],
-  tipoServico: ["tipo_servico", "servico", "tipo", "familia", "descricao_tss"],
+  tipoServico: ["descricao_tss", "tipo_servico", "servico", "tipo", "familia"],
   polo: ["polo", "base"],
   fiscal: ["fiscal", "matricula", "nome_fiscal", "equipe"],
   unidadeExecutante: ["unidade_executante", "unidade"],
