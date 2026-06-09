@@ -62,6 +62,7 @@ export function FilaTable({
   fiscais,
   polos,
   canAssign,
+  canDelete,
   filtros,
   total,
   page,
@@ -71,6 +72,7 @@ export function FilaTable({
   fiscais: FiscalOption[];
   polos: PoloOption[];
   canAssign: boolean;
+  canDelete: boolean;
   filtros: FilaFiltros;
   total: number;
   page: number;
@@ -79,6 +81,51 @@ export function FilaTable({
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [loteFiscal, setLoteFiscal] = useState("");
+  const [loteBusy, setLoteBusy] = useState(false);
+
+  const showSelection = canAssign || canDelete;
+  const allOnPageSelected = ordens.length > 0 && ordens.every((o) => selected.has(o.id));
+
+  function toggleOne(id: string) {
+    setSelected((atual) => {
+      const next = new Set(atual);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function toggleAllOnPage() {
+    setSelected((atual) => {
+      const next = new Set(atual);
+      if (allOnPageSelected) ordens.forEach((o) => next.delete(o.id));
+      else ordens.forEach((o) => next.add(o.id));
+      return next;
+    });
+  }
+
+  async function acaoLote(url: string, body: unknown, confirmMsg?: string) {
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    setLoteBusy(true);
+    setError(null);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    setLoteBusy(false);
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      setError(payload.error ?? "Erro na operacao em lote.");
+      return;
+    }
+    setSelected(new Set());
+    setLoteFiscal("");
+    router.refresh();
+  }
+
+  const selectedIds = [...selected];
 
   const totalPaginas = Math.max(1, Math.ceil(total / pageSize));
   const algumFiltroAtivo = Boolean(
@@ -192,10 +239,90 @@ export function FilaTable({
         ) : null}
       </Card>
 
+      {showSelection && (selected.size > 0 || canDelete) ? (
+        <Card className="flex flex-wrap items-center gap-3 p-3 text-sm">
+          <span className="font-medium">{selected.size} selecionada(s)</span>
+          {canAssign ? (
+            <div className="flex items-center gap-1">
+              <Select
+                aria-label="Fiscal para atribuicao em lote"
+                className="h-9 w-44"
+                value={loteFiscal}
+                onChange={(event) => setLoteFiscal(event.target.value)}
+              >
+                <option value="">Atribuir a...</option>
+                {fiscais.map((fiscal) => (
+                  <option key={fiscal.id} value={fiscal.id}>
+                    {fiscal.name}
+                  </option>
+                ))}
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loteBusy || selected.size === 0 || !loteFiscal}
+                onClick={() =>
+                  acaoLote("/api/ordens/atribuir-lote", { ordemIds: selectedIds, fiscalId: loteFiscal })
+                }
+              >
+                Atribuir selecionadas
+              </Button>
+            </div>
+          ) : null}
+          {canDelete ? (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loteBusy || selected.size === 0}
+                onClick={() =>
+                  acaoLote(
+                    "/api/ordens/excluir-lote",
+                    { ordemIds: selectedIds },
+                    `Excluir definitivamente ${selected.size} OS selecionada(s)? Esta acao nao pode ser desfeita.`
+                  )
+                }
+              >
+                Excluir selecionadas
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loteBusy || total === 0}
+                onClick={() =>
+                  acaoLote(
+                    "/api/ordens/excluir-lote",
+                    { todas: true, filtros },
+                    `Excluir definitivamente TODAS as ${total} OS do filtro atual? Esta acao nao pode ser desfeita.`
+                  )
+                }
+              >
+                Excluir todas ({total})
+              </Button>
+            </>
+          ) : null}
+          {selected.size > 0 ? (
+            <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+              Limpar selecao
+            </Button>
+          ) : null}
+        </Card>
+      ) : null}
+
       <Card className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-[hsl(var(--border))] text-xs uppercase text-[hsl(var(--muted-foreground))]">
             <tr>
+              {showSelection ? (
+                <th className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label="Selecionar todas nesta pagina"
+                    checked={allOnPageSelected}
+                    onChange={toggleAllOnPage}
+                  />
+                </th>
+              ) : null}
               <th className="px-4 py-3">Numero</th>
               <th className="px-4 py-3">Endereco</th>
               <th className="px-4 py-3">Tipo</th>
@@ -208,13 +335,26 @@ export function FilaTable({
           <tbody>
             {ordens.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-[hsl(var(--muted-foreground))]">
+                <td
+                  colSpan={showSelection ? 8 : 7}
+                  className="px-4 py-8 text-center text-[hsl(var(--muted-foreground))]"
+                >
                   {algumFiltroAtivo ? "Nenhuma OS para os filtros selecionados." : "Nenhuma OS na fila."}
                 </td>
               </tr>
             ) : (
               ordens.map((ordem) => (
                 <tr key={ordem.id} className="border-b border-[hsl(var(--border))] align-top last:border-0">
+                  {showSelection ? (
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        aria-label={`Selecionar OS ${ordem.numero}`}
+                        checked={selected.has(ordem.id)}
+                        onChange={() => toggleOne(ordem.id)}
+                      />
+                    </td>
+                  ) : null}
                   <td className="px-4 py-3 font-medium">{ordem.numero}</td>
                   <td className="px-4 py-3">{ordem.endereco}</td>
                   <td className="px-4 py-3">{tipoServicoLabel(ordem.tipoServico)}</td>

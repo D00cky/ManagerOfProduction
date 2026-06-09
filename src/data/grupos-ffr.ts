@@ -16,97 +16,193 @@ export type FfrGrupo = {
   itens: FfrItem[];
 };
 
+// Formulario FFR v22_04_2026 (Roteiro + Formulario FFR). Itens marcados como
+// "Informativo" no formulario sao campos de texto (peso 0, fora do calculo).
+// Mapeamento de grupos por tipo de servico e best-effort: os grupos de agua
+// casam com o enum; esgoto/desobstrucao/lavagem/reposicao ficam em "Outros".
 export const gruposFfr: FfrGrupo[] = [
   {
     id: "gerais",
     nome: "Itens Gerais",
     tipos: "todos",
     itens: [
-      { id: "gerais_identificacao", texto: "Fiscal identificou OS, endereco e servico antes da execucao", peso: 1 },
-      { id: "gerais_epi", texto: "Equipe utilizou EPIs e sinalizacao adequada", peso: 1 },
-      { id: "gerais_fotos", texto: "Registro fotografico comprova antes, durante e depois", peso: 1 },
-      { id: "gerais_observacao", texto: "Observacoes complementares", peso: 0, tipo: "texto" }
+      { id: "gerais_q1", texto: "O REGISTRO FOTOGRÁFICO DO SERVIÇO FOI EXECUTADO?", peso: 3 },
+      { id: "gerais_q2", texto: "A QUALIDADE DAS FOTOS ESTÁ FAVORECENDO A FISCALIZAÇÃO (NÍTIDAS/BEM ENQUADRADAS)?", peso: 2 },
+      { id: "gerais_q3", texto: "AS COORDENADAS GEOGRÁFICAS CONDIZEM COM O ENDEREÇO DO SERVIÇO SOLICITADO?", peso: 3 },
+      { id: "gerais_q4", texto: "SERVIÇO DECORRENTE DE DANOS DE TERCEIROS?", peso: 0, tipo: "texto" },
     ]
   },
   {
-    id: "ligacao_agua",
-    nome: "Ligacao de Agua",
-    tipos: ["LigacaoAgua"],
-    itens: [
-      { id: "ligacao_ramal", texto: "Ramal executado conforme padrao tecnico", peso: 2 },
-      { id: "ligacao_cavalete", texto: "Cavalete instalado e testado sem vazamento", peso: 2 },
-      { id: "ligacao_pavimento", texto: "Reposicao do pavimento registrada", peso: 1 }
-    ]
-  },
-  {
-    id: "religacao_agua",
-    nome: "Religacao de Agua",
-    tipos: ["ReligacaoAgua"],
-    itens: [
-      { id: "religacao_lacre", texto: "Lacre removido com registro adequado", peso: 1 },
-      { id: "religacao_fluxo", texto: "Abastecimento restabelecido e testado", peso: 2 },
-      { id: "religacao_cliente", texto: "Cliente ou responsavel orientado", peso: 1 }
-    ]
-  },
-  {
-    id: "corte_agua",
-    nome: "Corte de Agua",
-    tipos: ["CorteAgua"],
-    itens: [
-      { id: "corte_confirmacao", texto: "Imovel e motivo do corte conferidos", peso: 2 },
-      { id: "corte_execucao", texto: "Corte executado no ponto correto", peso: 2 },
-      { id: "corte_lacre", texto: "Lacre aplicado e fotografado", peso: 1 }
-    ]
-  },
-  {
-    id: "troca_hidrometro",
-    nome: "Troca de Hidrometro",
-    tipos: ["TrocaHidrometro"],
-    itens: [
-      { id: "troca_leitura_antiga", texto: "Leitura e numero do hidrometro retirado registrados", peso: 2 },
-      { id: "troca_leitura_nova", texto: "Hidrometro novo instalado com dados completos", peso: 2 },
-      { id: "troca_teste", texto: "Teste de estanqueidade realizado", peso: 1 }
-    ]
-  },
-  {
-    id: "vistoria",
-    nome: "Vistoria",
-    tipos: ["Vistoria"],
-    itens: [
-      { id: "vistoria_acesso", texto: "Acesso ao local registrado", peso: 1 },
-      { id: "vistoria_constatacao", texto: "Constatacao tecnica descrita com evidencia", peso: 2 },
-      { id: "vistoria_encaminhamento", texto: "Encaminhamento informado corretamente", peso: 1 }
-    ]
-  },
-  {
-    id: "reparo_rede",
-    nome: "Reparo de Rede",
-    tipos: ["ReparoRede"],
-    itens: [
-      { id: "reparo_isolamento", texto: "Area isolada e rede manobrada com seguranca", peso: 2 },
-      { id: "reparo_execucao", texto: "Reparo executado conforme material previsto", peso: 2 },
-      { id: "reparo_reaterro", texto: "Reaterro e limpeza final registrados", peso: 1 }
-    ]
-  },
-  {
-    id: "outros",
-    nome: "Outros Servicos",
-    tipos: ["Outros"],
-    itens: [
-      { id: "outros_escopo", texto: "Escopo da OS foi cumprido", peso: 2 },
-      { id: "outros_evidencia", texto: "Evidencias sustentam a conclusao", peso: 2 },
-      { id: "outros_obs", texto: "Descricao livre do servico", peso: 0, tipo: "texto" }
-    ]
-  },
-  {
-    id: "qualidade_final",
-    nome: "Qualidade Final",
+    id: "nao_executado",
+    nome: "Servico nao executado",
     tipos: "todos",
     itens: [
-      { id: "qualidade_prazo", texto: "Execucao dentro do prazo operacional", peso: 1 },
-      { id: "qualidade_sistema", texto: "Baixa no sistema consistente com evidencias", peso: 1 }
+      { id: "nao_executado_q1", texto: "EM CASO DE NÃO EXECUÇÃO, HOUVE DESCRIÇÃO CORRETA DO MOTIVO?", peso: 2 },
+      { id: "nao_executado_q2", texto: "HOUVE ACATAMENTO DE ETAPA PARA CONTINUIDADE?", peso: 2 },
+      { id: "nao_executado_q3", texto: "TEM FOTO DA FACHADA DO IMÓVEL?", peso: 3 },
+      { id: "nao_executado_q4", texto: "HÁ EVIDÊNCIAS DA ENTREGA DO FOLHETO \"SABESP ESTEVE AQUI\"?", peso: 2 },
     ]
-  }
+  },
+  {
+    id: "rede_agua",
+    nome: "Rede de agua",
+    tipos: ["ReparoRede"],
+    itens: [
+      { id: "rede_agua_q1", texto: "TEM FOTO DA FACHADA DO IMÓVEL?", peso: 3 },
+      { id: "rede_agua_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
+      { id: "rede_agua_q3", texto: "TEM FOTO DA ETAPA FINAL?", peso: 3 },
+      { id: "rede_agua_q4", texto: "O MATERIAL APLICADO FOI INFORMADO?", peso: 3 },
+      { id: "rede_agua_q5", texto: "É POSSÍVEL IDENTIFICAR QUAL FOI O MATERIAL APLICADO?", peso: 2 },
+      { id: "rede_agua_q6", texto: "A QUANTIDADE DE MATERIAL APLICADO CONDIZ COM O SERVIÇO EXECUTADO?", peso: 2 },
+      { id: "rede_agua_q7", texto: "FOI REALIZADA CORRETAMENTE A SINALIZAÇÃO DE SEGURANÇA?", peso: 4 },
+      { id: "rede_agua_q8", texto: "FOI EVIDENCIADO USO DE EPI?", peso: 3 },
+      { id: "rede_agua_q9", texto: "CASO SEJA APLICÁVEL, FOI REALIZADO O ESCORAMENTO DE VALA?", peso: 4 },
+      { id: "rede_agua_q10", texto: "O SOLO UTILIZADO ESTAVA LIMPO E NÃO SATURADO?", peso: 3 },
+      { id: "rede_agua_q11", texto: "FOI EXECUTADO ENVOLTÓRIO DE AREIA?", peso: 3 },
+      { id: "rede_agua_q12", texto: "TEM FOTO DA EXECUÇÃO DO TESTE DE ESTANQUEIDADE?", peso: 2 },
+      { id: "rede_agua_q13", texto: "FOI REALIZADA COMPACTAÇÃO DE SOLO ADEQUADA?", peso: 3 },
+      { id: "rede_agua_q14", texto: "A VALA FOI REQUADRADA?", peso: 3 },
+      { id: "rede_agua_q15", texto: "O MATERIAL ESCAVADO FOI DEPOSITADO CORRETAMENTE EM LONA/ENCERADO?", peso: 3 },
+      { id: "rede_agua_q16", texto: "O LOCAL FOI LIMPO APÓS A EXECUÇÃO?", peso: 3 },
+      { id: "rede_agua_q17", texto: "FOI REALIZADA REPOSIÇÃO PROVISÓRIA DE PISO OU PAVIMENTO?", peso: 0, tipo: "texto" },
+      { id: "rede_agua_q18", texto: "HÁ SINALIZAÇÃO (CARIMBO DE PROVISÓRIO) QUE INDIQUE QUE A REPOSIÇÃO É PROVISÓRIA?", peso: 3 },
+    ]
+  },
+  {
+    id: "ramal_agua",
+    nome: "Ramal de agua",
+    tipos: ["LigacaoAgua"],
+    itens: [
+      { id: "ramal_agua_q1", texto: "TEM FOTO DA FACHADA DO IMÓVEL?", peso: 3 },
+      { id: "ramal_agua_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
+      { id: "ramal_agua_q3", texto: "TEM FOTO DA ETAPA FINAL?", peso: 3 },
+      { id: "ramal_agua_q4", texto: "TEM FOTO LEGÍVEL PARA LEITURA DO HIDRÔMETRO?", peso: 3 },
+      { id: "ramal_agua_q5", texto: "INFORME A LEITURA DO HIDRÔMETRO", peso: 0, tipo: "texto" },
+      { id: "ramal_agua_q6", texto: "TEM FOTO LEGÍVEL PARA LEITURA DA MATRÍCULA DO HIDRÔMETRO?", peso: 3 },
+      { id: "ramal_agua_q7", texto: "INFORME A MATRÍCULA DO HIDRÔMETRO", peso: 0, tipo: "texto" },
+      { id: "ramal_agua_q8", texto: "O MATERIAL APLICADO FOI INFORMADO?", peso: 3 },
+      { id: "ramal_agua_q9", texto: "É POSSIVEL IDENTIFICAR QUAL FOI O MATERIAL APLICADO?", peso: 2 },
+      { id: "ramal_agua_q10", texto: "A QUANTIDADE DE MATERIAL APLICADO CONDIZ COM O SERVIÇO EXECUTADO?", peso: 3 },
+      { id: "ramal_agua_q11", texto: "FOI REALIZADA CORRETAMENTE A SINALIZAÇÃO DE SEGURANÇA?", peso: 4 },
+      { id: "ramal_agua_q12", texto: "FOI EVIDENCIADO USO DE EPI?", peso: 3 },
+      { id: "ramal_agua_q13", texto: "CASO SEJA APLICÁVEL, FOI REALIZADO O ESCORAMENTO DE VALA?", peso: 4 },
+      { id: "ramal_agua_q14", texto: "A SUPRESSÃO DO RAMAL FOI EXECUTADA CORRETAMENTE?", peso: 2 },
+      { id: "ramal_agua_q15", texto: "O SOLO UTILIZADO ESTAVA LIMPO E NÃO SATURADO?", peso: 3 },
+      { id: "ramal_agua_q16", texto: "FOI EXECUTADO ENVOLTÓRIO DE AREIA?", peso: 3 },
+      { id: "ramal_agua_q17", texto: "TEM FOTO DA EXECUÇÃO DO TESTE DE ESTANQUEIDADE?", peso: 2 },
+      { id: "ramal_agua_q18", texto: "FOI REALIZADA COMPACTAÇÃO DE SOLO ADEQUADA?", peso: 3 },
+      { id: "ramal_agua_q19", texto: "A VALA FOI REQUADRADA?", peso: 3 },
+      { id: "ramal_agua_q20", texto: "O MATERIAL ESCAVADO FOI DEPOSITADO CORRETAMENTE EM LONA/ENCERADO?", peso: 3 },
+      { id: "ramal_agua_q21", texto: "O LOCAL FOI LIMPO APÓS A EXECUÇÃO?", peso: 3 },
+      { id: "ramal_agua_q22", texto: "FOI REALIZADA REPOSIÇÃO PROVISÓRIA DE PISO OU PAVIMENTO?", peso: 0, tipo: "texto" },
+      { id: "ramal_agua_q23", texto: "HÁ SINALIZAÇÃO (CARIMBO DE PROVISÓRIO) QUE INDIQUE QUE A REPOSIÇÃO É PROVISÓRIA?", peso: 3 },
+    ]
+  },
+  {
+    id: "cavalete_hidrometro",
+    nome: "Cavalete / hidrometro",
+    tipos: ["ReligacaoAgua", "CorteAgua", "TrocaHidrometro"],
+    itens: [
+      { id: "cavalete_hidrometro_q1", texto: "TEM FOTO DA FACHADA?", peso: 3 },
+      { id: "cavalete_hidrometro_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
+      { id: "cavalete_hidrometro_q3", texto: "TEM FOTO DA ETAPA FINAL?", peso: 3 },
+      { id: "cavalete_hidrometro_q4", texto: "TEM FOTO LEGÍVEL PARA LEITURA DO HIDRÔMETRO RETIRADO?", peso: 3 },
+      { id: "cavalete_hidrometro_q5", texto: "INFORME A LEITURA DO HIDRÔMETRO RETIRADO", peso: 0, tipo: "texto" },
+      { id: "cavalete_hidrometro_q6", texto: "TEM FOTO LEGÍVEL PARA LEITURA DO HIDRÔMETRO INSTALADO?", peso: 3 },
+      { id: "cavalete_hidrometro_q7", texto: "INFORME A LEITURA DO HIDRÔMETRO INSTALADO", peso: 0, tipo: "texto" },
+      { id: "cavalete_hidrometro_q8", texto: "TEM FOTO LEGÍVEL PARA LEITURA DA MATRÍCULA DO HIDRÔMETRO RETIRADO?", peso: 3 },
+      { id: "cavalete_hidrometro_q9", texto: "INFORME A MATRÍCULA DO HIDRÔMETRO RETIRADO", peso: 0, tipo: "texto" },
+      { id: "cavalete_hidrometro_q10", texto: "TEM FOTO LEGÍVEL PARA LEITURA DA MATRÍCULA DO HIDRÔMETRO INSTALADO?", peso: 3 },
+      { id: "cavalete_hidrometro_q11", texto: "INFORME A MATRÍCULA DO HIDRÔMETRO INSTALADO", peso: 0, tipo: "texto" },
+      { id: "cavalete_hidrometro_q12", texto: "O MATERIAL APLICADO FOI INFORMADO?", peso: 3 },
+      { id: "cavalete_hidrometro_q13", texto: "É POSSIVEL IDENTIFICAR QUAL FOI O MATERIAL APLICADO?", peso: 2 },
+      { id: "cavalete_hidrometro_q14", texto: "A QUANTIDADE DE MATERIAL APLICADO CONDIZ COM O SERVIÇO EXECUTADO?", peso: 3 },
+    ]
+  },
+  {
+    id: "esgoto",
+    nome: "Rede / Ramal de esgoto / PV / PI / TL",
+    tipos: ["Outros"],
+    itens: [
+      { id: "esgoto_q1", texto: "TEM FOTO DA FACHADA?", peso: 3 },
+      { id: "esgoto_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
+      { id: "esgoto_q3", texto: "TEM FOTO DA ETAPA FINAL?", peso: 3 },
+      { id: "esgoto_q4", texto: "FOI REALIZADA CORRETAMENTE A SINALIZAÇÃO DE SEGURANÇA?", peso: 4 },
+      { id: "esgoto_q5", texto: "FOI EVIDENCIADO USO DE EPI?", peso: 3 },
+      { id: "esgoto_q6", texto: "FOI REALIZADO O ESCORAMENTO DE VALA?", peso: 4 },
+      { id: "esgoto_q7", texto: "O SOLO UTILIZADO ESTAVA LIMPO E NÃO SATURADO?", peso: 3 },
+      { id: "esgoto_q8", texto: "FOI REALIZADA COMPACTAÇÃO DE SOLO ADEQUADA?", peso: 3 },
+      { id: "esgoto_q9", texto: "A VALA FOI REQUADRADA?", peso: 3 },
+      { id: "esgoto_q10", texto: "O MATERIAL ESCAVADO FOI DEPOSITADO CORRETAMENTE EM LONA/ENCERADO?", peso: 3 },
+      { id: "esgoto_q11", texto: "O LOCAL FOI LIMPO APÓS A EXECUÇÃO?", peso: 3 },
+      { id: "esgoto_q12", texto: "FOI REALIZADA REPOSIÇÃO PROVISÓRIA DE PISO OU PAVIMENTO?", peso: 0, tipo: "texto" },
+      { id: "esgoto_q13", texto: "HÁ SINALIZAÇÃO (CARIMBO DE PROVISÓRIO) QUE INDIQUE QUE A REPOSIÇÃO É PROVISÓRIA?", peso: 3 },
+    ]
+  },
+  {
+    id: "desobstrucao",
+    nome: "Desobstrucao / Lavagem de Rede / Ramal",
+    tipos: ["Outros"],
+    itens: [
+      { id: "desobstrucao_q1", texto: "TEM FOTO DA FACHADA?", peso: 3 },
+      { id: "desobstrucao_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
+      { id: "desobstrucao_q3", texto: "TEM FOTO DA ETAPA FINAL? (TAMPA FECHADA)", peso: 3 },
+      { id: "desobstrucao_q4", texto: "FOI REALIZADA CORRETAMENTE A SINALIZAÇÃO DE SEGURANÇA?", peso: 4 },
+      { id: "desobstrucao_q5", texto: "FOI EVIDENCIADO USO DE EPI?", peso: 3 },
+      { id: "desobstrucao_q6", texto: "O LOCAL FOI LIMPO APÓS A EXECUÇÃO?", peso: 3 },
+      { id: "desobstrucao_q7", texto: "EM CASO DE DESOBSTRUÇÃO, TEM FOTO DA DESOBSTRUÇÃO E LIMPEZA DA REDE / RAMAL?", peso: 3 },
+    ]
+  },
+  {
+    id: "lavagem_eee",
+    nome: "Lavagem de EEE",
+    tipos: ["Outros"],
+    itens: [
+      { id: "lavagem_eee_q1", texto: "TEM FOTO DA FACHADA?", peso: 3 },
+      { id: "lavagem_eee_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
+      { id: "lavagem_eee_q3", texto: "TEM FOTO DA ETAPA FINAL? (TAMPA FECHADA)", peso: 3 },
+      { id: "lavagem_eee_q4", texto: "FOI REALIZADA CORRETAMENTE A SINALIZAÇÃO DE SEGURANÇA?", peso: 4 },
+      { id: "lavagem_eee_q5", texto: "FOI EVIDENCIADO USO DE EPI?", peso: 3 },
+      { id: "lavagem_eee_q6", texto: "O LOCAL FOI LIMPO APÓS A EXECUÇÃO?", peso: 3 },
+      { id: "lavagem_eee_q7", texto: "TEM FOTO DA LIMPEZA DA EEE?", peso: 3 },
+    ]
+  },
+  {
+    id: "reposicao_piso",
+    nome: "Reposicao de piso / passeio",
+    tipos: ["Outros"],
+    itens: [
+      { id: "reposicao_piso_q1", texto: "TEM FOTO DA FACHADA?", peso: 3 },
+      { id: "reposicao_piso_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
+      { id: "reposicao_piso_q3", texto: "TEM FOTO DA ETAPA FINAL?", peso: 3 },
+      { id: "reposicao_piso_q4", texto: "FOI REALIZADA CORRETAMENTE A SINALIZAÇÃO DE SEGURANÇA?", peso: 4 },
+      { id: "reposicao_piso_q5", texto: "FOI EVIDENCIADO USO DE EPI?", peso: 3 },
+      { id: "reposicao_piso_q6", texto: "O MATERIAL APLICADO FOI INFORMADO?", peso: 3 },
+      { id: "reposicao_piso_q7", texto: "É POSSIVEL IDENTIFICAR QUAL FOI O MATERIAL APLICADO?", peso: 2 },
+      { id: "reposicao_piso_q8", texto: "A QUANTIDADE DE MATERIAL APLICADO CONDIZ COM O SERVIÇO EXECUTADO?", peso: 3 },
+      { id: "reposicao_piso_q9", texto: "A REPOSIÇÃO FOI RECOMPOSTA DE FORMA A PRESERVAR O ASPECTO ANTERIOR DO PAVIMENTO?", peso: 3 },
+      { id: "reposicao_piso_q10", texto: "O LOCAL FOI LIMPO APÓS A EXECUÇÃO?", peso: 3 },
+    ]
+  },
+  {
+    id: "reposicao_asfaltica",
+    nome: "Reposicao asfaltica",
+    tipos: ["Outros"],
+    itens: [
+      { id: "reposicao_asfaltica_q1", texto: "TEM FOTO DA FACHADA?", peso: 3 },
+      { id: "reposicao_asfaltica_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
+      { id: "reposicao_asfaltica_q3", texto: "TEM FOTO DA ETAPA FINAL?", peso: 3 },
+      { id: "reposicao_asfaltica_q4", texto: "FOI REALIZADA CORRETAMENTE A SINALIZAÇÃO DE SEGURANÇA?", peso: 4 },
+      { id: "reposicao_asfaltica_q5", texto: "FOI EVIDENCIADO USO DE EPI?", peso: 3 },
+      { id: "reposicao_asfaltica_q6", texto: "A VALA FOI REQUADRADA?", peso: 4 },
+      { id: "reposicao_asfaltica_q7", texto: "TEM FOTO DO TERMÔMETRO?", peso: 3 },
+      { id: "reposicao_asfaltica_q8", texto: "A TEMPERATURA MEDIDA ESTÁ ADEQUADA (ENTRE 165 ºC E 175 ºC PARA ASFALTO USINADO A QUENTE OU ENTRE 125 ºC E 150 º C PARA ASFALTO COM MISTURA MORNA)?", peso: 2 },
+      { id: "reposicao_asfaltica_q9", texto: "TEM FOTO DO NIVELAMENTO DA RECOMPOSIÇÃO? (COM RÉGUA E TRENA)", peso: 3 },
+      { id: "reposicao_asfaltica_q10", texto: "INFORME O DESNÍVEL MEDIDO (EM MM)", peso: 0, tipo: "texto" },
+      { id: "reposicao_asfaltica_q11", texto: "A REPOSIÇÃO FOI RECOMPOSTA DE FORMA A PRESERVAR O ASPECTO ANTERIOR DO PAVIMENTO?", peso: 3 },
+      { id: "reposicao_asfaltica_q12", texto: "O LOCAL FOI LIMPO APÓS A EXECUÇÃO?", peso: 3 },
+    ]
+  },
 ];
 
 export function gruposParaTipo(tipoServico: TipoServico) {

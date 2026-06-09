@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { OrdemServico, StatusOS } from "@prisma/client";
 import {
   atribuirOrdem,
+  atribuirOrdensLote,
   buildListWhere,
+  excluirOrdens,
   listOrdens,
   updateOrdemStatus,
   type FiscalRef,
@@ -50,8 +52,7 @@ function repo(
   record: OrdemServico,
   hasTabulacao = false,
   fiscal: FiscalRef | null = { id: "f2", perfil: "fiscal", poloId: "p1" },
-  claimed: OrdemServico | null = null,
-  hasOpenWork = false
+  claimed: OrdemServico | null = null
 ): OrdemRepository {
   return {
     findPage: vi.fn(async () => ({ rows: [record], total: 1 })),
@@ -60,8 +61,9 @@ function repo(
     hasTabulacao: vi.fn(async () => hasTabulacao),
     updateStatus: vi.fn(async (_id, data) => ({ ...record, ...data })),
     findFiscalById: vi.fn(async () => fiscal),
-    hasOpenWork: vi.fn(async () => hasOpenWork),
     updateFiscal: vi.fn(async (_id, fiscalId) => ({ ...record, fiscalId })),
+    assignManyToFiscal: vi.fn(async (ids: string[]) => ids.length),
+    deleteOrdens: vi.fn(async () => 2),
     log: vi.fn(async () => undefined)
   };
 }
@@ -277,25 +279,18 @@ describe("atribuirOrdem", () => {
     expect(repository.updateFiscal).not.toHaveBeenCalled();
   });
 
-  it("blocks assigning a second open OS to the same fiscal", async () => {
-    const repository = repo(
-      os({ fiscalId: null }),
-      false,
-      { id: "f2", perfil: "fiscal", poloId: "p1" },
-      null,
-      true
+  it("allows assigning even when the fiscal already holds open work (backlog)", async () => {
+    const repository = repo(os({ fiscalId: null }), false, { id: "f2", perfil: "fiscal", poloId: "p1" });
+
+    const updated = await atribuirOrdem(
+      repository,
+      { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] },
+      "os1",
+      "f2"
     );
 
-    await expect(
-      atribuirOrdem(
-        repository,
-        { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] },
-        "os1",
-        "f2"
-      )
-    ).rejects.toThrow("Fiscal ja possui OS aberta");
-    expect(repository.hasOpenWork).toHaveBeenCalledWith("f2", "os1");
-    expect(repository.updateFiscal).not.toHaveBeenCalled();
+    expect(updated.fiscalId).toBe("f2");
+    expect(repository.updateFiscal).toHaveBeenCalledWith("os1", "f2");
   });
 
   it("lets a supervisor assign a fiscal from any polo", async () => {
@@ -349,5 +344,95 @@ describe("atribuirOrdem", () => {
       ordemServicoId: "os1",
       metadata: { from: "f1", to: "f2" }
     });
+  });
+});
+
+describe("atribuirOrdensLote", () => {
+  it("rejects users without os:write", async () => {
+    const repository = repo(os());
+    await expect(
+      atribuirOrdensLote(repository, { id: "f1", perfil: "fiscal", poloId: "p1" }, ["os1"], "f2")
+    ).rejects.toThrow("Sem permissao");
+    expect(repository.assignManyToFiscal).not.toHaveBeenCalled();
+  });
+
+  it("rejects a fiscal outside the caller's polos", async () => {
+    const repository = repo(os(), false, { id: "f2", perfil: "fiscal", poloId: "p9" });
+    await expect(
+      atribuirOrdensLote(
+        repository,
+        { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] },
+        ["os1", "os2"],
+        "f2"
+      )
+    ).rejects.toThrow("Fiscal fora do escopo do usuario");
+  });
+
+  it("assigns every in-scope OS to the fiscal and logs the batch", async () => {
+    const repository = repo(os(), false, { id: "f2", perfil: "fiscal", poloId: "p1" });
+
+    const result = await atribuirOrdensLote(
+      repository,
+      { id: "m1", perfil: "monitor", regiao: "Campinas", polosPermitidos: ["p1"] },
+      ["os1", "os2"],
+      "f2"
+    );
+
+    expect(result).toEqual({ atribuidas: 2 });
+    expect(repository.assignManyToFiscal).toHaveBeenCalledWith(["os1", "os2"], "f2", {
+      regiaoAdministrativa: { in: ["Campinas"] }
+    });
+    expect(repository.log).toHaveBeenCalledWith(
+      expect.objectContaining({ evento: "atribuicao", metadata: { fiscalId: "f2", total: 2 } })
+    );
+  });
+});
+
+describe("excluirOrdens", () => {
+  it("rejects users without os:delete", async () => {
+    const repository = repo(os());
+    await expect(
+      excluirOrdens(repository, { id: "f1", perfil: "fiscal", poloId: "p1" }, { ids: ["os1"] })
+    ).rejects.toThrow("Sem permissao");
+    expect(repository.deleteOrdens).not.toHaveBeenCalled();
+  });
+
+  it("hard-deletes the selected OS intersected with the caller scope", async () => {
+    const repository = repo(os());
+
+    const result = await excluirOrdens(
+      repository,
+      { id: "m1", perfil: "monitor", regiao: "Campinas", polosPermitidos: ["p1"] },
+      { ids: ["os1", "os2"] }
+    );
+
+    expect(result).toEqual({ excluidas: 2 });
+    expect(repository.deleteOrdens).toHaveBeenCalledWith({
+      AND: [{ regiaoAdministrativa: { in: ["Campinas"] } }, { id: { in: ["os1", "os2"] } }]
+    });
+    expect(repository.log).toHaveBeenCalledWith(
+      expect.objectContaining({ evento: "exclusao", metadata: { total: 2, todas: false } })
+    );
+  });
+
+  it("deletes the whole filtered scope when todas is set", async () => {
+    const repository = repo(os());
+
+    await excluirOrdens(
+      repository,
+      { id: "sup", perfil: "supervisor", poloId: null },
+      { todas: true, filters: { status: "Cancelada" } }
+    );
+
+    expect(repository.deleteOrdens).toHaveBeenCalledWith({ status: "Cancelada" });
+  });
+
+  it("is a no-op when nothing is selected and todas is not set", async () => {
+    const repository = repo(os());
+
+    const result = await excluirOrdens(repository, { id: "sup", perfil: "supervisor", poloId: null }, { ids: [] });
+
+    expect(result).toEqual({ excluidas: 0 });
+    expect(repository.deleteOrdens).not.toHaveBeenCalled();
   });
 });

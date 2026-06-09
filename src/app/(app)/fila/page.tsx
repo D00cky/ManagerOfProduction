@@ -36,6 +36,7 @@ export default async function FilaPage({
   if (!hasPermission(user.perfil, "fila:read")) redirect(defaultRedirect(user.perfil));
 
   const canAssign = hasPermission(user.perfil, "os:write");
+  const canDelete = hasPermission(user.perfil, "os:delete");
   const params = await searchParams;
 
   const filtros: FilaFiltros = {
@@ -80,6 +81,7 @@ export default async function FilaPage({
         fiscais={fiscais}
         polos={polos.map((polo) => ({ id: polo.id, nome: polo.nome }))}
         canAssign={canAssign}
+        canDelete={canDelete}
         filtros={filtros}
         total={pagina.total}
         page={pagina.page}

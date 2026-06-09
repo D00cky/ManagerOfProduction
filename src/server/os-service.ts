@@ -56,8 +56,15 @@ export type OrdemRepository = {
   hasTabulacao(ordemServicoId: string): Promise<boolean>;
   updateStatus(id: string, data: OrdemStatusUpdate): Promise<OrdemServico>;
   findFiscalById(id: string): Promise<FiscalRef | null>;
-  hasOpenWork(fiscalId: string, excludeOrdemId?: string): Promise<boolean>;
   updateFiscal(id: string, fiscalId: string): Promise<OrdemServico>;
+  /** Assign every in-scope OS among `ids` to the fiscal; returns the count touched. */
+  assignManyToFiscal(
+    ids: string[],
+    fiscalId: string,
+    scope: Prisma.OrdemServicoWhereInput
+  ): Promise<number>;
+  /** Hard-delete the OS matching `where` (and their tabulações/avaliações); returns the count. */
+  deleteOrdens(where: Prisma.OrdemServicoWhereInput): Promise<number>;
   log(input: LogInput): Promise<void>;
 };
 
@@ -171,9 +178,6 @@ export async function atribuirOrdem(
   if (polos && (!fiscal.poloId || !polos.includes(fiscal.poloId))) {
     throw new Error("Fiscal fora do escopo do usuario");
   }
-  if (await repository.hasOpenWork(fiscalId, ordemServicoId)) {
-    throw new Error("Fiscal ja possui OS aberta");
-  }
 
   const evento: EventoLog = ordem.fiscalId ? "reatribuicao" : "atribuicao";
   const updated = await repository.updateFiscal(ordemServicoId, fiscalId);
@@ -185,6 +189,69 @@ export async function atribuirOrdem(
     metadata: { from: ordem.fiscalId, to: fiscalId }
   });
   return updated;
+}
+
+export async function atribuirOrdensLote(
+  repository: OrdemRepository,
+  user: SessionUserScope,
+  ordemIds: string[],
+  fiscalId: string
+): Promise<{ atribuidas: number }> {
+  if (!hasPermission(user.perfil, "os:write")) {
+    throw new Error("Sem permissao para atribuir OS");
+  }
+  if (ordemIds.length === 0) return { atribuidas: 0 };
+
+  const fiscal = await repository.findFiscalById(fiscalId);
+  if (!fiscal || fiscal.perfil !== "fiscal") throw new Error("Fiscal invalido");
+
+  const polos = allowedPoloIds(user);
+  if (polos && (!fiscal.poloId || !polos.includes(fiscal.poloId))) {
+    throw new Error("Fiscal fora do escopo do usuario");
+  }
+
+  // Only OS within the caller's scope are affected; a fiscal may hold a backlog
+  // of many assigned OS, so no one-open-per-fiscal check applies.
+  const atribuidas = await repository.assignManyToFiscal(ordemIds, fiscalId, buildOsScope(user));
+  await repository.log({
+    evento: "atribuicao",
+    descricao: `${atribuidas} OS atribuidas em lote ao fiscal ${fiscalId}`,
+    userId: user.id,
+    metadata: { fiscalId, total: atribuidas }
+  });
+  return { atribuidas };
+}
+
+export type ExcluirOrdensParams = { ids?: string[]; todas?: boolean; filters?: OsListFilters };
+
+export async function excluirOrdens(
+  repository: OrdemRepository,
+  user: SessionUserScope,
+  params: ExcluirOrdensParams
+): Promise<{ excluidas: number }> {
+  if (!hasPermission(user.perfil, "os:delete")) {
+    throw new Error("Sem permissao para excluir OS");
+  }
+
+  // Always intersect with the caller's row scope (and any active filters) so a
+  // user can never delete OS outside what they can see.
+  const scope = buildListWhere(buildOsScope(user), params.filters ?? {});
+  let where: Prisma.OrdemServicoWhereInput;
+  if (params.todas) {
+    where = scope;
+  } else {
+    if (!params.ids || params.ids.length === 0) return { excluidas: 0 };
+    where = { AND: [scope, { id: { in: params.ids } }] };
+  }
+
+  const excluidas = await repository.deleteOrdens(where);
+  await repository.log({
+    evento: "exclusao",
+    descricao: `${excluidas} OS excluidas definitivamente`,
+    userId: user.id,
+    metadata: { total: excluidas, todas: Boolean(params.todas) }
+  });
+  return { excluidas };
 }
 
 export function isOrdemInUserScope(ordem: OrdemServico, user: SessionUserScope) {
