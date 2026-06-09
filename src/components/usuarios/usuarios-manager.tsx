@@ -9,8 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import type { UsuarioResumo } from "@/server/usuario-service";
+import { perfilLabel } from "@/lib/perfil";
 import { cn } from "@/lib/utils";
+import type { UsuarioResumo } from "@/server/usuario-service";
 
 type PoloOption = { id: string; nome: string };
 
@@ -130,7 +131,7 @@ export function UsuariosManager({
               >
                 {perfis.map((perfil) => (
                   <option key={perfil} value={perfil}>
-                    {perfil}
+                    {perfilLabel(perfil)}
                   </option>
                 ))}
               </Select>
@@ -188,7 +189,7 @@ export function UsuariosManager({
                   <td className="px-4 py-3 font-medium">{usuario.name}</td>
                   <td className="px-4 py-3">{usuario.email}</td>
                   <td className="px-4 py-3">{usuario.matricula}</td>
-                  <td className="px-4 py-3 capitalize">{usuario.perfil}</td>
+                  <td className="px-4 py-3">{perfilLabel(usuario.perfil)}</td>
                   <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
                     {usuario.poloId ? poloNome.get(usuario.poloId) ?? "-" : "-"}
                   </td>

@@ -48,10 +48,12 @@ function os(overrides: Partial<OrdemServico> = {}): OrdemServico {
 function repo(
   record: OrdemServico,
   hasTabulacao = false,
-  fiscal: FiscalRef | null = { id: "f2", perfil: "fiscal", poloId: "p1" }
+  fiscal: FiscalRef | null = { id: "f2", perfil: "fiscal", poloId: "p1" },
+  claimed: OrdemServico | null = null
 ): OrdemRepository {
   return {
     findMany: vi.fn(async () => [record]),
+    claimNextAvailable: vi.fn(async () => claimed),
     findById: vi.fn(async () => record),
     hasTabulacao: vi.fn(async () => hasTabulacao),
     updateStatus: vi.fn(async (_id, data) => ({ ...record, ...data })),
@@ -62,12 +64,46 @@ function repo(
 }
 
 describe("listOrdens", () => {
-  it("scopes fiscal users to their own assigned OS", async () => {
+  it("claims the next OS from the fiscal's polo before listing assigned OS", async () => {
+    const claimed = os({ fiscalId: "f1", poloId: "p1" });
+    const repository = repo(claimed, false, undefined, claimed);
+
+    await listOrdens(repository, { id: "f1", perfil: "fiscal", poloId: "p1" });
+
+    expect(repository.claimNextAvailable).toHaveBeenCalledWith("p1", "f1");
+    expect(repository.findMany).toHaveBeenCalledWith({ fiscalId: "f1" });
+  });
+
+  it("logs an automatic assignment when an OS is claimed", async () => {
+    const claimed = os({ fiscalId: "f1", poloId: "p1" });
+    const repository = repo(claimed, false, undefined, claimed);
+
+    await listOrdens(repository, { id: "f1", perfil: "fiscal", poloId: "p1" });
+
+    expect(repository.log).toHaveBeenCalledWith({
+      evento: "atribuicao",
+      descricao: "OS 1001 atribuida automaticamente ao fiscal f1",
+      userId: "f1",
+      ordemServicoId: "os1",
+      metadata: { fiscalId: "f1", poloId: "p1", ordemServicoId: "os1" }
+    });
+  });
+
+  it("does not log when the fiscal already has open work or no OS is available", async () => {
     const repository = repo(os());
 
     await listOrdens(repository, { id: "f1", perfil: "fiscal", poloId: "p1" });
 
-    expect(repository.findMany).toHaveBeenCalledWith({ fiscalId: "f1" });
+    expect(repository.claimNextAvailable).toHaveBeenCalledWith("p1", "f1");
+    expect(repository.log).not.toHaveBeenCalled();
+  });
+
+  it("does not claim an OS for a fiscal without a polo", async () => {
+    const repository = repo(os());
+
+    await listOrdens(repository, { id: "f1", perfil: "fiscal", poloId: null });
+
+    expect(repository.claimNextAvailable).not.toHaveBeenCalled();
   });
 
   it("scopes monitor users to authorized polos", async () => {
@@ -81,6 +117,7 @@ describe("listOrdens", () => {
     });
 
     expect(repository.findMany).toHaveBeenCalledWith({ poloId: { in: ["p2", "p3"] } });
+    expect(repository.claimNextAvailable).not.toHaveBeenCalled();
   });
 });
 

@@ -3,6 +3,7 @@ import { login } from "./helpers";
 
 test("saved tabulation allows finalizing an OS", async ({ page }) => {
   await login(page, "supervisor@example.com");
+  await expect(page.getByText("Coordenação", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Fila de OS" }).click();
 
   const row = page.getByRole("row").filter({ hasText: "OS-1002" });

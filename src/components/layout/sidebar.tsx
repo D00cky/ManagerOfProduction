@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { perfilLabel } from "@/lib/perfil";
 import { cn } from "@/lib/utils";
+import type { Perfil } from "@prisma/client";
 
 export type NavItem = { href: string; label: string };
 
@@ -16,7 +18,7 @@ export function Sidebar({
 }: {
   items: NavItem[];
   userName?: string | null;
-  perfil: string;
+  perfil: Perfil;
 }) {
   const pathname = usePathname();
 
@@ -49,7 +51,7 @@ export function Sidebar({
 
       <div className="mt-4 border-t border-[hsl(var(--border))] pt-4">
         <p className="px-3 text-sm font-medium">{userName ?? "Usuario"}</p>
-        <p className="px-3 pb-2 text-xs capitalize text-[hsl(var(--muted-foreground))]">{perfil}</p>
+        <p className="px-3 pb-2 text-xs text-[hsl(var(--muted-foreground))]">{perfilLabel(perfil)}</p>
         <Button
           variant="ghost"
           size="sm"

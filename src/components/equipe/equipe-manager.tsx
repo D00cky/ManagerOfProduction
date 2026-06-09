@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
+import { perfilLabel } from "@/lib/perfil";
 import { cn } from "@/lib/utils";
 import type { MembroEquipe } from "@/server/equipe-service";
 
@@ -69,7 +70,7 @@ export function EquipeManager({
                 <tr key={membro.id} className="border-b border-[hsl(var(--border))] last:border-0">
                   <td className="px-4 py-3 font-medium">{membro.name}</td>
                   <td className="px-4 py-3">{membro.matricula}</td>
-                  <td className="px-4 py-3 capitalize">{membro.perfil}</td>
+                  <td className="px-4 py-3">{perfilLabel(membro.perfil)}</td>
                   <td className="px-4 py-3">
                     {canEditPolo ? (
                       <Select

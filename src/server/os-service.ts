@@ -20,8 +20,11 @@ export type FiscalRef = {
   poloId: string | null;
 };
 
+export type ClaimedOrdem = Pick<OrdemServico, "id" | "numero" | "poloId" | "fiscalId">;
+
 export type OrdemRepository = {
   findMany(where: Prisma.OrdemServicoWhereInput): Promise<OrdemServico[]>;
+  claimNextAvailable(poloId: string, fiscalId: string): Promise<ClaimedOrdem | null>;
   findById(id: string): Promise<OrdemServico | null>;
   hasTabulacao(ordemServicoId: string): Promise<boolean>;
   updateStatus(id: string, data: OrdemStatusUpdate): Promise<OrdemServico>;
@@ -31,6 +34,22 @@ export type OrdemRepository = {
 };
 
 export async function listOrdens(repository: OrdemRepository, user: SessionUserScope) {
+  if (user.perfil === "fiscal" && user.poloId) {
+    const claimed = await repository.claimNextAvailable(user.poloId, user.id);
+    if (claimed) {
+      await repository.log({
+        evento: "atribuicao",
+        descricao: `OS ${claimed.numero} atribuida automaticamente ao fiscal ${user.id}`,
+        userId: user.id,
+        ordemServicoId: claimed.id,
+        metadata: {
+          fiscalId: user.id,
+          poloId: user.poloId,
+          ordemServicoId: claimed.id
+        }
+      });
+    }
+  }
   return repository.findMany(buildOsScope(user));
 }
 
