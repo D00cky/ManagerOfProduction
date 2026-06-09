@@ -34,23 +34,25 @@ const rows: NormalizedImportRow[] = [
 function repository(existingNumbers: string[] = []): ImportacaoRepository {
   const existing = new Set(existingNumbers);
   return {
-    findPoloByNameOrCode: vi.fn(async (value: string) =>
-      value.toLowerCase() === "norte" ? { id: "p1", nome: "Norte", codigo: "NRT" } : null
+    listPolos: vi.fn(async () => [{ id: "p1", nome: "Norte", codigo: "NRT", regiao: "São Paulo" }]),
+    ensurePolos: vi.fn(async (values: string[]) =>
+      values.map((value) => ({
+        id: `polo-${value}`,
+        nome: value,
+        codigo: (value.split(" - ")[0] ?? value).trim(),
+        regiao: null
+      }))
     ),
-    ensurePolo: vi.fn(async (value: string) => ({
-      id: `polo-${value}`,
-      nome: value,
-      codigo: (value.split(" - ")[0] ?? value).trim()
-    })),
-    findFiscalByNameOrMatricula: vi.fn(async (value: string) => {
-      if (value === "2001") return { id: "f1", name: "Joao Fiscal", matricula: "2001" };
-      if (value === "Maria Fiscal") return { id: "f2", name: "Maria Fiscal", matricula: "2002" };
-      return null;
-    }),
-    hasOpenWork: vi.fn(async () => false),
-    findOrdemByNumero: vi.fn(async (numero: string) => (existing.has(numero) ? { id: `os-${numero}`, numero } : null)),
-    createOrdem: vi.fn(async (input) => ({ id: `new-${input.numero}`, ...input })),
-    updateOrdem: vi.fn(async (id, input) => ({ id, ...input })),
+    listFiscaisAtivos: vi.fn(async () => [
+      { id: "f1", name: "Joao Fiscal", matricula: "2001" },
+      { id: "f2", name: "Maria Fiscal", matricula: "2002" }
+    ]),
+    findOrdensByNumero: vi.fn(async (numeros: string[]) =>
+      numeros.filter((numero) => existing.has(numero)).map((numero) => ({ id: `os-${numero}`, numero }))
+    ),
+    openWorkByFiscal: vi.fn(async () => []),
+    createOrdens: vi.fn(async () => undefined),
+    updateOrdem: vi.fn(async () => undefined),
     log: vi.fn(async () => undefined)
   };
 }
@@ -63,7 +65,7 @@ describe("confirmarImportacao", () => {
       confirmarImportacao(repo, { id: "f1", perfil: "fiscal", poloId: "p1" }, rows, "ignorar")
     ).rejects.toThrow("Sem permissao para importar OS");
 
-    expect(repo.createOrdem).not.toHaveBeenCalled();
+    expect(repo.createOrdens).not.toHaveBeenCalled();
     expect(repo.updateOrdem).not.toHaveBeenCalled();
     expect(repo.log).not.toHaveBeenCalled();
   });
@@ -78,13 +80,19 @@ describe("confirmarImportacao", () => {
       { linha: 3, erros: ["numero_os obrigatorio"] },
       { linha: 4, erros: ["endereco_completo obrigatorio"] }
     ]);
-    expect(repo.createOrdem).toHaveBeenCalledWith(expect.objectContaining({
-      numero: "1001",
-      poloId: "p1",
-      fiscalId: "f1",
-      status: "NaFila"
-    }));
-    expect(repo.createOrdem).toHaveBeenCalledWith(expect.objectContaining({ numero: "1002", fiscalId: "f2" }));
+    expect(repo.createOrdens).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          numero: "1001",
+          poloId: "p1",
+          fiscalId: "f1",
+          status: "NaFila",
+          // Região is denormalized from the polo.
+          regiaoAdministrativa: "São Paulo"
+        }),
+        expect.objectContaining({ numero: "1002", fiscalId: "f2" })
+      ])
+    );
   });
 
   it("auto-creates a polo from the unidade executante when none matches", async () => {
@@ -105,13 +113,15 @@ describe("confirmarImportacao", () => {
       "ignorar"
     );
 
-    expect(repo.ensurePolo).toHaveBeenCalledWith("ORMR - DIV MANUT SERV OPE REGISTRO");
+    expect(repo.ensurePolos).toHaveBeenCalledWith(["ORMR - DIV MANUT SERV OPE REGISTRO"]);
     expect(result).toMatchObject({ criadas: 1, invalidas: 0 });
-    expect(repo.createOrdem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        poloId: "polo-ORMR - DIV MANUT SERV OPE REGISTRO",
-        unidadeExecutante: "ORMR - DIV MANUT SERV OPE REGISTRO"
-      })
+    expect(repo.createOrdens).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          poloId: "polo-ORMR - DIV MANUT SERV OPE REGISTRO",
+          unidadeExecutante: "ORMR - DIV MANUT SERV OPE REGISTRO"
+        })
+      ])
     );
   });
 
@@ -121,7 +131,7 @@ describe("confirmarImportacao", () => {
     const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, [rows[0]], "ignorar");
 
     expect(result).toMatchObject({ criadas: 0, atualizadas: 0, ignoradas: 1, invalidas: 0 });
-    expect(repo.createOrdem).not.toHaveBeenCalled();
+    expect(repo.createOrdens).not.toHaveBeenCalled();
     expect(repo.updateOrdem).not.toHaveBeenCalled();
   });
 
@@ -141,17 +151,42 @@ describe("confirmarImportacao", () => {
       { numero: "1004", enderecoCompleto: "Rua D", tipoServico: "Outros", polo: "Norte", fiscal: "9999" }
     ], "ignorar");
 
-    expect(repo.createOrdem).toHaveBeenCalledWith(expect.objectContaining({ fiscalId: null }));
+    expect(repo.createOrdens).toHaveBeenCalledWith([expect.objectContaining({ fiscalId: null })]);
   });
 
   it("keeps an imported OS unassigned when the matched fiscal already has open work", async () => {
     const repo = repository();
-    vi.mocked(repo.hasOpenWork).mockResolvedValue(true);
+    vi.mocked(repo.openWorkByFiscal).mockResolvedValue([{ fiscalId: "f1", ordemIds: ["os-outra"] }]);
 
     await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, [rows[0]], "ignorar");
 
-    expect(repo.hasOpenWork).toHaveBeenCalledWith("f1", undefined);
-    expect(repo.createOrdem).toHaveBeenCalledWith(expect.objectContaining({ fiscalId: null }));
+    expect(repo.openWorkByFiscal).toHaveBeenCalledWith(["f1"]);
+    expect(repo.createOrdens).toHaveBeenCalledWith([expect.objectContaining({ fiscalId: null })]);
+  });
+
+  it("assigns a fiscal to at most one OS within a single batch", async () => {
+    const repo = repository();
+    const mesmoFiscal: NormalizedImportRow[] = [
+      { numero: "7001", enderecoCompleto: "Rua A", tipoServico: "Outros", polo: "Norte", fiscal: "2001" },
+      { numero: "7002", enderecoCompleto: "Rua B", tipoServico: "Outros", polo: "Norte", fiscal: "2001" }
+    ];
+
+    const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, mesmoFiscal, "ignorar");
+
+    expect(result).toMatchObject({ criadas: 2 });
+    const fiscalIds = vi.mocked(repo.createOrdens).mock.calls[0][0].map((ordem) => ordem.fiscalId);
+    expect(fiscalIds.filter((id) => id === "f1")).toHaveLength(1);
+    expect(fiscalIds.filter((id) => id === null)).toHaveLength(1);
+  });
+
+  it("still assigns the fiscal when updating their own only open OS (exclude-self)", async () => {
+    const repo = repository(["1001"]);
+    // The fiscal's single open OS is exactly the one being updated.
+    vi.mocked(repo.openWorkByFiscal).mockResolvedValue([{ fiscalId: "f1", ordemIds: ["os-1001"] }]);
+
+    await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, [rows[0]], "atualizar");
+
+    expect(repo.updateOrdem).toHaveBeenCalledWith("os-1001", expect.objectContaining({ fiscalId: "f1" }));
   });
 
   it("logs the final import summary", async () => {
