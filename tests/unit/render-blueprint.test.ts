@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 
 describe("render.yaml", () => {
   const blueprint = readFileSync("render.yaml", "utf8");
+  const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
+    scripts?: Record<string, string>;
+  };
 
   it("deploys the app from the production Docker image", () => {
     expect(blueprint).toContain("type: web");
@@ -30,5 +33,11 @@ describe("render.yaml", () => {
     expect(blueprint).toContain("postgresMajorVersion:");
     expect(blueprint).toContain("maxmemoryPolicy: allkeys-lru");
     expect(blueprint).toContain("ipAllowList: []");
+  });
+
+  it("keeps the legacy Render start command compatible with PostgreSQL", () => {
+    expect(packageJson.scripts?.["start:render"]).toBe(
+      "npx prisma migrate deploy && npm start"
+    );
   });
 });
