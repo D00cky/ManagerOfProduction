@@ -254,12 +254,40 @@ describe("atribuirOrdem", () => {
     ).rejects.toThrow("OS fora do escopo do usuario");
   });
 
-  it("rejects a target that is not a fiscal", async () => {
-    const repository = repo(os({ fiscalId: null }), false, { id: "m2", perfil: "monitor", poloId: "p1" });
+  it("rejects a target that is neither fiscal nor monitor (e.g. supervisor)", async () => {
+    const repository = repo(os({ fiscalId: null }), false, { id: "s9", perfil: "supervisor", poloId: "p1" });
 
     await expect(
-      atribuirOrdem(repository, { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] }, "os1", "m2")
+      atribuirOrdem(repository, { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] }, "os1", "s9")
     ).rejects.toThrow("Fiscal invalido");
+  });
+
+  it("allows a monitor to assign an OS to another monitor", async () => {
+    const repository = repo(os({ fiscalId: null }), false, { id: "m2", perfil: "monitor", poloId: "p1" });
+
+    const updated = await atribuirOrdem(
+      repository,
+      { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] },
+      "os1",
+      "m2"
+    );
+
+    expect(updated.fiscalId).toBe("m2");
+    expect(repository.updateFiscal).toHaveBeenCalledWith("os1", "m2");
+  });
+
+  it("allows a monitor to assign an OS to themselves", async () => {
+    const repository = repo(os({ fiscalId: null }), false, { id: "m1", perfil: "monitor", poloId: "p1" });
+
+    const updated = await atribuirOrdem(
+      repository,
+      { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] },
+      "os1",
+      "m1"
+    );
+
+    expect(updated.fiscalId).toBe("m1");
+    expect(repository.updateFiscal).toHaveBeenCalledWith("os1", "m1");
   });
 
   it("rejects an unknown fiscal", async () => {
