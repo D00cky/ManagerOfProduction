@@ -52,7 +52,7 @@ describe("normalizeImportRow", () => {
     expect(result.row).toMatchObject({
       numero: "123",
       enderecoCompleto: "Rua A, 10",
-      tipoServico: "TrocaHidrometro",
+      tipoServico: "CavaleteHidrometro",
       fiscal: "1002",
       polo: "Norte"
     });
@@ -64,10 +64,15 @@ describe("normalizeTipoServico", () => {
     expect(normalizeTipoServico("servico especial")).toBe("Outros");
   });
 
-  it("matches Sabesp service descriptions by keyword", () => {
-    expect(normalizeTipoServico("LIGAÇÃO DE ÁGUA S/V")).toBe("LigacaoAgua");
-    expect(normalizeTipoServico("RELIGAÇÃO DE ÁGUA")).toBe("ReligacaoAgua");
-    expect(normalizeTipoServico("CORTE NO CAVALETE")).toBe("CorteAgua");
+  it("matches Sabesp service descriptions by keyword (FFR types)", () => {
+    expect(normalizeTipoServico("LIGAÇÃO DE ÁGUA S/V")).toBe("RedeRamalAgua");
+    expect(normalizeTipoServico("REPARO DE REDE DE ÁGUA")).toBe("RedeRamalAgua");
+    expect(normalizeTipoServico("RELIGAÇÃO DE ÁGUA")).toBe("CavaleteHidrometro");
+    expect(normalizeTipoServico("CORTE NO CAVALETE")).toBe("CavaleteHidrometro");
+    expect(normalizeTipoServico("REDE DE ESGOTO")).toBe("RedeRamalEsgoto");
+    expect(normalizeTipoServico("DESOBSTRUÇÃO DE RAMAL")).toBe("Desobstrucao");
+    expect(normalizeTipoServico("REPOSIÇÃO ASFÁLTICA")).toBe("ReposicaoAsfaltica");
+    expect(normalizeTipoServico("REPOSIÇÃO DE PISO / PASSEIO")).toBe("ReposicaoPiso");
   });
 });
 
@@ -112,7 +117,7 @@ describe("Sabesp execution export", () => {
     );
 
     expect(mapping.tipoServico).toBe("Descrição TSS");
-    expect(row.tipoServico).toBe("CorteAgua");
+    expect(row.tipoServico).toBe("CavaleteHidrometro");
   });
 
   it("maps the Sabesp columns, keys polo off the unit and derives the region", () => {
@@ -128,7 +133,7 @@ describe("Sabesp execution export", () => {
       bairro: "VILA KAMAIT",
       cidade: "MIRACATU",
       regiaoAdministrativa: "Registro",
-      tipoServico: "LigacaoAgua",
+      tipoServico: "RedeRamalAgua",
       // No Polo column — keyed off the Unidade Executante.
       polo: "ORMR - DIV MANUT SERV OPE REGISTRO",
       unidadeExecutante: "ORMR - DIV MANUT SERV OPE REGISTRO",

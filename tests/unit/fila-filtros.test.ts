@@ -11,13 +11,13 @@ describe("parseFilaFilters", () => {
     expect(
       parseFilaFilters({
         poloId: "polo-2",
-        tipoServico: "CorteAgua",
+        tipoServico: "CavaleteHidrometro",
         status: "Concluida",
         busca: " 1001 "
       })
     ).toEqual({
       poloId: "polo-2",
-      tipoServico: "CorteAgua",
+      tipoServico: "CavaleteHidrometro",
       status: "Concluida",
       busca: "1001"
     });

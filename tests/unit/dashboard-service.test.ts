@@ -13,7 +13,7 @@ function os(overrides: Partial<OrdemServico>): OrdemServico {
     bairro: null,
     cidade: overrides.cidade ?? null,
     regiaoAdministrativa: overrides.regiaoAdministrativa ?? null,
-    tipoServico: "Vistoria",
+    tipoServico: "Outros",
     status: overrides.status ?? "NaFila",
     poloId: overrides.poloId ?? "p1",
     fiscalId: overrides.fiscalId ?? null,

@@ -47,7 +47,7 @@ export const gruposFfr: FfrGrupo[] = [
   {
     id: "rede_agua",
     nome: "Rede de agua",
-    tipos: ["ReparoRede"],
+    tipos: ["RedeRamalAgua"],
     itens: [
       { id: "rede_agua_q1", texto: "TEM FOTO DA FACHADA DO IMÓVEL?", peso: 3 },
       { id: "rede_agua_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
@@ -72,7 +72,7 @@ export const gruposFfr: FfrGrupo[] = [
   {
     id: "ramal_agua",
     nome: "Ramal de agua",
-    tipos: ["LigacaoAgua"],
+    tipos: ["RedeRamalAgua"],
     itens: [
       { id: "ramal_agua_q1", texto: "TEM FOTO DA FACHADA DO IMÓVEL?", peso: 3 },
       { id: "ramal_agua_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
@@ -102,7 +102,7 @@ export const gruposFfr: FfrGrupo[] = [
   {
     id: "cavalete_hidrometro",
     nome: "Cavalete / hidrometro",
-    tipos: ["ReligacaoAgua", "CorteAgua", "TrocaHidrometro"],
+    tipos: ["CavaleteHidrometro"],
     itens: [
       { id: "cavalete_hidrometro_q1", texto: "TEM FOTO DA FACHADA?", peso: 3 },
       { id: "cavalete_hidrometro_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
@@ -123,7 +123,7 @@ export const gruposFfr: FfrGrupo[] = [
   {
     id: "esgoto",
     nome: "Rede / Ramal de esgoto / PV / PI / TL",
-    tipos: ["Outros"],
+    tipos: ["RedeRamalEsgoto"],
     itens: [
       { id: "esgoto_q1", texto: "TEM FOTO DA FACHADA?", peso: 3 },
       { id: "esgoto_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
@@ -143,7 +143,7 @@ export const gruposFfr: FfrGrupo[] = [
   {
     id: "desobstrucao",
     nome: "Desobstrucao / Lavagem de Rede / Ramal",
-    tipos: ["Outros"],
+    tipos: ["Desobstrucao"],
     itens: [
       { id: "desobstrucao_q1", texto: "TEM FOTO DA FACHADA?", peso: 3 },
       { id: "desobstrucao_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
@@ -157,7 +157,7 @@ export const gruposFfr: FfrGrupo[] = [
   {
     id: "lavagem_eee",
     nome: "Lavagem de EEE",
-    tipos: ["Outros"],
+    tipos: ["Desobstrucao"],
     itens: [
       { id: "lavagem_eee_q1", texto: "TEM FOTO DA FACHADA?", peso: 3 },
       { id: "lavagem_eee_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
@@ -171,7 +171,7 @@ export const gruposFfr: FfrGrupo[] = [
   {
     id: "reposicao_piso",
     nome: "Reposicao de piso / passeio",
-    tipos: ["Outros"],
+    tipos: ["ReposicaoPiso"],
     itens: [
       { id: "reposicao_piso_q1", texto: "TEM FOTO DA FACHADA?", peso: 3 },
       { id: "reposicao_piso_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
@@ -188,7 +188,7 @@ export const gruposFfr: FfrGrupo[] = [
   {
     id: "reposicao_asfaltica",
     nome: "Reposicao asfaltica",
-    tipos: ["Outros"],
+    tipos: ["ReposicaoAsfaltica"],
     itens: [
       { id: "reposicao_asfaltica_q1", texto: "TEM FOTO DA FACHADA?", peso: 3 },
       { id: "reposicao_asfaltica_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
@@ -251,12 +251,13 @@ const tssGrupoKeywords: Array<[needle: string, grupoId: string]> = [
 ];
 
 const tipoServicoFallback: Partial<Record<TipoServico, string>> = {
-  LigacaoAgua: "ramal_agua",
-  ReparoRede: "rede_agua",
-  ReligacaoAgua: "cavalete_hidrometro",
-  CorteAgua: "cavalete_hidrometro",
-  TrocaHidrometro: "cavalete_hidrometro"
-  // Vistoria / Outros: sem grupo específico (apenas Itens Gerais + não executado)
+  RedeRamalAgua: "ramal_agua", // a keyword TSS distingue rede vs ramal
+  CavaleteHidrometro: "cavalete_hidrometro",
+  RedeRamalEsgoto: "esgoto",
+  Desobstrucao: "desobstrucao", // keyword TSS distingue desobstrução vs lavagem EEE
+  ReposicaoPiso: "reposicao_piso",
+  ReposicaoAsfaltica: "reposicao_asfaltica"
+  // Outros: sem grupo específico (apenas Itens Gerais + não executado)
 };
 
 /** Resolve the single specific FFR group id for an OS (TSS keyword → tipo fallback). */

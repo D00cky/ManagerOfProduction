@@ -4,7 +4,7 @@ import { gruposParaTipo, gruposParaOrdem, selecionarGrupoEspecificoId } from "@/
 
 describe("calcularConceito", () => {
   it("sums obtained and possible points only for answers marked as 1 or 0", () => {
-    const result = calcularConceito({ tipoServico: "LigacaoAgua" }, {
+    const result = calcularConceito({ tipoServico: "RedeRamalAgua" }, {
       gerais_q1: "1", // peso 3 -> obtida + possivel
       gerais_q2: "0", // peso 2 -> possivel
       gerais_q3: "X", // excluido (nao avaliado)
@@ -41,11 +41,13 @@ describe("selecionarGrupoEspecificoId / gruposParaOrdem", () => {
     expect(selecionarGrupoEspecificoId({ tipoServico: "Outros", descricaoTss: "REPOSIÇÃO ASFÁLTICA" })).toBe("reposicao_asfaltica");
     expect(selecionarGrupoEspecificoId({ tipoServico: "Outros", descricaoTss: "DESOBSTRUÇÃO DE RAMAL" })).toBe("desobstrucao");
     expect(selecionarGrupoEspecificoId({ tipoServico: "Outros", descricaoTss: "REDE DE ESGOTO" })).toBe("esgoto");
+    expect(selecionarGrupoEspecificoId({ tipoServico: "Outros", descricaoTss: "REPARO DE REDE DE ÁGUA" })).toBe("rede_agua");
   });
 
   it("falls back to the tipoServico when the TSS text is empty/unmatched", () => {
-    expect(selecionarGrupoEspecificoId({ tipoServico: "ReparoRede", descricaoTss: null })).toBe("rede_agua");
-    expect(selecionarGrupoEspecificoId({ tipoServico: "Vistoria", descricaoTss: "algo sem palavra-chave" })).toBeNull();
+    expect(selecionarGrupoEspecificoId({ tipoServico: "RedeRamalAgua", descricaoTss: null })).toBe("ramal_agua");
+    expect(selecionarGrupoEspecificoId({ tipoServico: "CavaleteHidrometro", descricaoTss: null })).toBe("cavalete_hidrometro");
+    expect(selecionarGrupoEspecificoId({ tipoServico: "Outros", descricaoTss: "algo sem palavra-chave" })).toBeNull();
   });
 
   it("always returns Itens Gerais + Serviço não executado plus at most one specific group", () => {
@@ -56,14 +58,14 @@ describe("selecionarGrupoEspecificoId / gruposParaOrdem", () => {
     expect(ids).not.toContain("reposicao_asfaltica");
   });
 
-  it("shows only the general groups for Vistoria", () => {
-    expect(gruposParaOrdem({ tipoServico: "Vistoria" }).map((g) => g.id)).toEqual(["gerais", "nao_executado"]);
+  it("shows only the general groups for Outros without TSS keyword", () => {
+    expect(gruposParaOrdem({ tipoServico: "Outros" }).map((g) => g.id)).toEqual(["gerais", "nao_executado"]);
   });
 });
 
 describe("gruposParaTipo", () => {
   it("always includes the general groups and only the matching service group", () => {
-    const groups = gruposParaTipo("CorteAgua").map((group) => group.id);
+    const groups = gruposParaTipo("CavaleteHidrometro").map((group) => group.id);
 
     expect(groups).toContain("gerais");
     expect(groups).toContain("nao_executado");

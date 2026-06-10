@@ -18,7 +18,7 @@ export const demoOrdensServico: DemoOrdemServico[] = [
     enderecoCompleto: "Rua das Flores, 100",
     bairro: "Centro",
     cidade: "Cidade Teste",
-    tipoServico: "LigacaoAgua",
+    tipoServico: "RedeRamalAgua",
     status: "NaFila",
     poloCodigo: "POLO-01",
     observacao: "OS demo sem fiscal para testar atribuicao."
@@ -28,7 +28,7 @@ export const demoOrdensServico: DemoOrdemServico[] = [
     enderecoCompleto: "Av. Brasil, 200",
     bairro: "Jardim",
     cidade: "Cidade Teste",
-    tipoServico: "Vistoria",
+    tipoServico: "Outros",
     status: "NaFila",
     poloCodigo: "POLO-01",
     fiscalMatricula: "F0001",
@@ -39,7 +39,7 @@ export const demoOrdensServico: DemoOrdemServico[] = [
     enderecoCompleto: "Rua Aguas Claras, 45",
     bairro: "Vila Nova",
     cidade: "Cidade Teste",
-    tipoServico: "ReparoRede",
+    tipoServico: "RedeRamalEsgoto",
     status: "NaFila",
     poloCodigo: "POLO-01"
   },
@@ -48,7 +48,7 @@ export const demoOrdensServico: DemoOrdemServico[] = [
     enderecoCompleto: "Rua das Palmeiras, 88",
     bairro: "Centro",
     cidade: "Cidade Teste",
-    tipoServico: "TrocaHidrometro",
+    tipoServico: "CavaleteHidrometro",
     status: "NaFila",
     poloCodigo: "POLO-01"
   },
@@ -57,7 +57,7 @@ export const demoOrdensServico: DemoOrdemServico[] = [
     enderecoCompleto: "Travessa Norte, 12",
     bairro: "Jardim",
     cidade: "Cidade Teste",
-    tipoServico: "ReligacaoAgua",
+    tipoServico: "Desobstrucao",
     status: "NaFila",
     poloCodigo: "POLO-01"
   },
@@ -66,7 +66,7 @@ export const demoOrdensServico: DemoOrdemServico[] = [
     enderecoCompleto: "Alameda Santos, 300",
     bairro: "Industrial",
     cidade: "Cidade Teste",
-    tipoServico: "CorteAgua",
+    tipoServico: "CavaleteHidrometro",
     status: "NaFila",
     poloCodigo: "POLO-01"
   },
@@ -75,7 +75,7 @@ export const demoOrdensServico: DemoOrdemServico[] = [
     enderecoCompleto: "Rua Projetada, 7",
     bairro: "Lagoa",
     cidade: "Cidade Teste",
-    tipoServico: "Outros",
+    tipoServico: "ReposicaoPiso",
     status: "NaFila",
     poloCodigo: "POLO-01"
   },
@@ -84,7 +84,7 @@ export const demoOrdensServico: DemoOrdemServico[] = [
     enderecoCompleto: "Av. Central, 501",
     bairro: "Centro",
     cidade: "Cidade Teste",
-    tipoServico: "Vistoria",
+    tipoServico: "ReposicaoAsfaltica",
     status: "NaFila",
     poloCodigo: "POLO-01"
   }
