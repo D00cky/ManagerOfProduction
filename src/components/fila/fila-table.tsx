@@ -28,12 +28,12 @@ export type FiscalOption = { id: string; name: string };
 export type PoloOption = { id: string; nome: string };
 
 const TIPOS: TipoServico[] = [
-  "LigacaoAgua",
-  "ReligacaoAgua",
-  "CorteAgua",
-  "TrocaHidrometro",
-  "Vistoria",
-  "ReparoRede",
+  "RedeRamalAgua",
+  "CavaleteHidrometro",
+  "RedeRamalEsgoto",
+  "Desobstrucao",
+  "ReposicaoPiso",
+  "ReposicaoAsfaltica",
   "Outros"
 ];
 const STATUS: StatusOS[] = ["NaFila", "EmExecucao", "Pendente", "Concluida", "Cancelada"];

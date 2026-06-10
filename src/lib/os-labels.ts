@@ -9,12 +9,12 @@ export const statusLabels: Record<StatusOS, string> = {
 };
 
 export const tipoServicoLabels: Record<TipoServico, string> = {
-  LigacaoAgua: "Ligacao de Agua",
-  ReligacaoAgua: "Religacao de Agua",
-  CorteAgua: "Corte de Agua",
-  TrocaHidrometro: "Troca de Hidrometro",
-  Vistoria: "Vistoria",
-  ReparoRede: "Reparo de Rede",
+  RedeRamalAgua: "Rede / ramal de agua",
+  CavaleteHidrometro: "Cavalete / hidrometro",
+  RedeRamalEsgoto: "Rede / ramal de esgoto",
+  Desobstrucao: "Desobstrucao",
+  ReposicaoPiso: "Reposicao piso / passeio / bloquete / paralelo / sinalizacao horizontal",
+  ReposicaoAsfaltica: "Reposicao asfaltica",
   Outros: "Outros"
 };
 

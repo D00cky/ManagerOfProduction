@@ -81,30 +81,40 @@ export const aliases: Record<ImportColumn, string[]> = {
   observacao: ["observacao", "obs", "notas_de_acatamento"]
 };
 
+// Classificação canônica do Tipo de Serviço a partir da Descrição TSS, alinhada aos
+// 6 tipos do formulário FFR (+ "Outros"). Mantida consistente com a tabela de grupos
+// em grupos-ffr.ts (tssGrupoKeywords): tipo e grupo específico concordam.
 const tipoServicoMap: Record<string, TipoServico> = {
-  ligacaoagua: "LigacaoAgua",
-  ligacao: "LigacaoAgua",
-  religacaoagua: "ReligacaoAgua",
-  religacao: "ReligacaoAgua",
-  corteagua: "CorteAgua",
-  corte: "CorteAgua",
-  trocahidrometro: "TrocaHidrometro",
-  hidrometro: "TrocaHidrometro",
-  vistoria: "Vistoria",
-  reparorede: "ReparoRede",
-  reparo: "ReparoRede",
+  rederamaldeagua: "RedeRamalAgua",
+  cavaletehidrometro: "CavaleteHidrometro",
+  rederamaldeesgoto: "RedeRamalEsgoto",
+  desobstrucao: "Desobstrucao",
+  reposicaopiso: "ReposicaoPiso",
+  reposicaoasfaltica: "ReposicaoAsfaltica",
   outros: "Outros"
 };
 
 // Substring fallback for Sabesp service descriptions like "LIGAÇÃO DE ÁGUA S/V".
 // Order matters: more specific prefixes (religacao) before broader ones (ligacao).
 const tipoServicoKeywords: Array<[string, TipoServico]> = [
-  ["religacao", "ReligacaoAgua"],
-  ["ligacao", "LigacaoAgua"],
-  ["corte", "CorteAgua"],
-  ["hidrometro", "TrocaHidrometro"],
-  ["vistoria", "Vistoria"],
-  ["reparo", "ReparoRede"]
+  ["religacao", "CavaleteHidrometro"],
+  ["corte", "CavaleteHidrometro"],
+  ["hidrometro", "CavaleteHidrometro"],
+  ["cavalete", "CavaleteHidrometro"],
+  ["esgoto", "RedeRamalEsgoto"],
+  ["coletor", "RedeRamalEsgoto"],
+  ["desobstru", "Desobstrucao"],
+  ["lavagem", "Desobstrucao"],
+  ["asfalt", "ReposicaoAsfaltica"],
+  ["piso", "ReposicaoPiso"],
+  ["passeio", "ReposicaoPiso"],
+  ["calcada", "ReposicaoPiso"],
+  ["bloquete", "ReposicaoPiso"],
+  ["paralelep", "ReposicaoPiso"],
+  ["ligacao", "RedeRamalAgua"],
+  ["ramal", "RedeRamalAgua"],
+  ["reparo", "RedeRamalAgua"],
+  ["vazamento", "RedeRamalAgua"]
 ];
 
 export function normalizeHeader(value: string) {

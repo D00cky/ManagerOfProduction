@@ -27,12 +27,12 @@ enum StatusOS {
 }
 
 enum TipoServico {
-  LigacaoAgua
-  ReligacaoAgua
-  CorteAgua
-  TrocaHidrometro
-  Vistoria
-  ReparoRede
+  RedeRamalAgua
+  CavaleteHidrometro
+  RedeRamalEsgoto
+  Desobstrucao
+  ReposicaoPiso
+  ReposicaoAsfaltica
   Outros
 }
 

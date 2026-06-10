@@ -6,14 +6,14 @@ const rows: NormalizedImportRow[] = [
   {
     numero: "1001",
     enderecoCompleto: "Rua A, 10",
-    tipoServico: "LigacaoAgua",
+    tipoServico: "RedeRamalAgua",
     polo: "Norte",
     fiscal: "2001"
   },
   {
     numero: "1002",
     enderecoCompleto: "Rua B, 20",
-    tipoServico: "Vistoria",
+    tipoServico: "Outros",
     polo: "Norte",
     fiscal: "Maria Fiscal"
   },

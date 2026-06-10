@@ -24,7 +24,7 @@ describe("POST /api/importacao/confirmar", () => {
 
   it("confirms import through the service", async () => {
     const user = { id: "m1", perfil: "monitor", poloId: "p1" };
-    const rows = [{ numero: "1001", enderecoCompleto: "Rua A", tipoServico: "Vistoria", polo: "Norte" }];
+    const rows = [{ numero: "1001", enderecoCompleto: "Rua A", tipoServico: "Outros", polo: "Norte" }];
     const resumo = { total: 1, criadas: 1, atualizadas: 0, ignoradas: 0, invalidas: 0, erros: [] };
     getCurrentUser.mockResolvedValue(user);
     confirmarImportacao.mockResolvedValue(resumo);

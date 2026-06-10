@@ -32,7 +32,7 @@ test("fiscal receives one OS at a time from the polo and gets the next after com
     data: {
       numero: `AUTO-1-${suffix}`,
       enderecoCompleto: "Rua Primeira, 1",
-      tipoServico: "Vistoria",
+      tipoServico: "Outros",
       poloId: polo.id,
       dataProgramada: new Date("2026-06-01T10:00:00.000Z")
     }
@@ -41,7 +41,7 @@ test("fiscal receives one OS at a time from the polo and gets the next after com
     data: {
       numero: `AUTO-2-${suffix}`,
       enderecoCompleto: "Rua Segunda, 2",
-      tipoServico: "Vistoria",
+      tipoServico: "Outros",
       poloId: polo.id,
       dataProgramada: new Date("2026-06-02T10:00:00.000Z")
     }
