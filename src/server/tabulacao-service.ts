@@ -61,7 +61,7 @@ export async function saveTabulacao(
   if (ordem.status === "Concluida") throw new Error("Tabulacao bloqueada para OS concluida");
 
   const resultado = calcularConceito(
-    { tipoServico: ordem.tipoServico, descricaoTss: ordem.descricaoTss },
+    { tipoServico: ordem.tipoServico, descricaoTss: ordem.descricaoTss, descricaoTse: ordem.descricaoTse },
     input.respostas
   );
   const tabulacao = await repository.upsertTabulacao({

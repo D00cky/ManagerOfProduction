@@ -38,6 +38,7 @@ export default async function TabulacaoPage({ params }: { params: Promise<{ id: 
         ordemId={ordem.id}
         tipoServico={ordem.tipoServico}
         descricaoTss={ordem.descricaoTss}
+        descricaoTse={ordem.descricaoTse}
         status={ordem.status}
         respostasIniciais={respostas}
         observacoesIniciais={tabulacao?.observacoes ?? ""}

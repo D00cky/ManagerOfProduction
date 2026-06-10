@@ -30,6 +30,7 @@ export function TabulacaoForm({
   ordemId,
   tipoServico,
   descricaoTss,
+  descricaoTse,
   status,
   respostasIniciais,
   observacoesIniciais
@@ -37,14 +38,15 @@ export function TabulacaoForm({
   ordemId: string;
   tipoServico: TipoServico;
   descricaoTss: string | null;
+  descricaoTse: string | null;
   status: StatusOS;
   respostasIniciais: RespostasFfr;
   observacoesIniciais: string;
 }) {
   const router = useRouter();
   const grupos = useMemo(
-    () => gruposParaOrdem({ tipoServico, descricaoTss }),
-    [tipoServico, descricaoTss]
+    () => gruposParaOrdem({ tipoServico, descricaoTss, descricaoTse }),
+    [tipoServico, descricaoTss, descricaoTse]
   );
   const [respostas, setRespostas] = useState<RespostasFfr>(respostasIniciais);
   const [observacoes, setObservacoes] = useState(observacoesIniciais);
@@ -55,8 +57,8 @@ export function TabulacaoForm({
 
   const bloqueada = status === "Concluida" || status === "Cancelada";
   const resultado = useMemo(
-    () => calcularConceito({ tipoServico, descricaoTss }, respostas),
-    [tipoServico, descricaoTss, respostas]
+    () => calcularConceito({ tipoServico, descricaoTss, descricaoTse }, respostas),
+    [tipoServico, descricaoTss, descricaoTse, respostas]
   );
 
   function setResposta(itemId: string, value: ValorResposta) {

@@ -4,8 +4,8 @@ import { hasPermission } from "@/lib/permissions";
 import { buildListWhere, type OsListFilters } from "@/server/os-service";
 import {
   gruposFfr,
-  gruposParaOrdem,
-  selecionarGrupoEspecificoId,
+  gruposParaGrupoEspecifico,
+  selecionarGruposEspecificosIds,
   type FfrItem,
   type ValorResposta
 } from "@/data/grupos-ffr";
@@ -103,20 +103,25 @@ export async function buildExportDataset(
   const where = buildListWhere(buildOsScope(user), filters);
   const ordens = await repository.findOrdensParaExport(where);
 
-  // Agrupa cada OS na sua única categoria (grupo específico de critérios).
+  // Uma OS pode abranger vários serviços (TSS PAI + TSE): entra em cada planilha
+  // correspondente. Sem grupo específico, cai em "Sem categoria".
   const grupos = new Map<string, OrdemExport[]>();
   for (const ordem of ordens) {
-    const id = selecionarGrupoEspecificoId(ordem) ?? SEM_CATEGORIA.id;
-    const lista = grupos.get(id);
-    if (lista) lista.push(ordem);
-    else grupos.set(id, [ordem]);
+    const ids = selecionarGruposEspecificosIds(ordem);
+    for (const id of ids.length > 0 ? ids : [SEM_CATEGORIA.id]) {
+      const lista = grupos.get(id);
+      if (lista) lista.push(ordem);
+      else grupos.set(id, [ordem]);
+    }
   }
 
   const usados = new Set<string>();
   const sheets: ExportSheet[] = [];
 
   for (const [grupoId, ordensDoGrupo] of grupos) {
-    const itens = gruposParaOrdem(ordensDoGrupo[0]).flatMap((g) => g.itens);
+    // Cada planilha mostra apenas os critérios do seu próprio grupo específico.
+    const especificoId = grupoId === SEM_CATEGORIA.id ? null : grupoId;
+    const itens = gruposParaGrupoEspecifico(especificoId).flatMap((g) => g.itens);
     const colunas = [
       ...colunasMetadados.map(([label]) => label),
       ...itens.map((item) => item.texto),

@@ -95,6 +95,23 @@ describe("buildExportDataset", () => {
     expect(sheets.some((s) => s.nome.startsWith("Rede   Ramal de esgoto"))).toBe(true);
   });
 
+  it("places an OS spanning TSS PAI + TSE in both service sheets", async () => {
+    const { repository } = repo([
+      os({ id: "a", descricaoTss: "LIGAÇÃO DE ÁGUA", descricaoTse: "REPOSIÇÃO ASFÁLTICA" })
+    ]);
+
+    const { sheets } = await buildExportDataset(repository, supervisor, {});
+
+    expect(sheets).toHaveLength(2);
+    expect(sheets.map((s) => s.nome)).toContain("Ramal de agua");
+    expect(sheets.some((s) => s.nome.startsWith("Reposicao asfaltica"))).toBe(true);
+    // The same OS number shows up under each corresponding service.
+    for (const sheet of sheets) {
+      expect(sheet.linhas).toHaveLength(1);
+      expect(sheet.linhas[0][sheet.colunas.indexOf("nº OS")]).toBe("1001");
+    }
+  });
+
   it("includes metadata, criteria and score columns and maps answers", async () => {
     const { repository } = repo([
       os({
