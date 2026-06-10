@@ -180,6 +180,23 @@ export async function confirmarImportacao(
     });
   }
 
+  // Collapse intra-file duplicate OS numbers so each numero is written once
+  // (a "baixa" sheet can repeat the same OS on several rows). Last occurrence
+  // wins on "atualizar"; first wins on "ignorar"; collapsed rows are reported
+  // as ignoradas. Without this, every occurrence of a not-yet-persisted numero
+  // lands in `creates` and createMany self-collides on the unique constraint.
+  const porNumero = new Map<string, Preparada>();
+  for (const prep of preparadas) {
+    const previo = porNumero.get(prep.input.numero);
+    if (!previo) {
+      porNumero.set(prep.input.numero, prep);
+    } else {
+      resumo.ignoradas += 1;
+      if (duplicateMode === "atualizar") porNumero.set(prep.input.numero, prep);
+    }
+  }
+  const unicas = [...porNumero.values()].sort((a, b) => a.linha - b.linha);
+
   // Open work per referenced fiscal, in one query.
   const openWork = new Map(
     (await repository.openWorkByFiscal([...referencedFiscalIds])).map(
@@ -193,7 +210,7 @@ export async function confirmarImportacao(
   const creates: ImportacaoOrdemInput[] = [];
   const updates: Array<{ id: string; input: ImportacaoOrdemInput }> = [];
 
-  for (const prep of preparadas) {
+  for (const prep of unicas) {
     if (prep.fiscalId) {
       const open = openWork.get(prep.fiscalId);
       const hasOtherOpen = open
@@ -220,7 +237,12 @@ export async function confirmarImportacao(
   }
 
   if (creates.length > 0) await repository.createOrdens(creates);
-  for (const update of updates) await repository.updateOrdem(update.id, update.input);
+  // Update in parallel chunks instead of one sequential round-trip per row —
+  // the dominant cost on update-heavy ("baixa") imports.
+  const CHUNK = 25;
+  for (let i = 0; i < updates.length; i += CHUNK) {
+    await Promise.all(updates.slice(i, i + CHUNK).map((u) => repository.updateOrdem(u.id, u.input)));
+  }
 
   await repository.log({
     evento: "importacao",
