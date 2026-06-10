@@ -50,6 +50,19 @@ export const prismaUsuarioRepository: UsuarioRepository = {
   update(id: string, data: AtualizarUsuarioInput) {
     return prisma.user.update({ where: { id }, data, select: resumoSelect });
   },
+  async remove(id: string) {
+    try {
+      await prisma.user.delete({ where: { id } });
+    } catch (error) {
+      // Usuário referenciado por OS/tabulações/logs não pode ser apagado fisicamente.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+        throw new Error(
+          "Usuario possui registros vinculados (OS, tabulacoes ou logs); desative-o em vez de excluir."
+        );
+      }
+      throw error;
+    }
+  },
   async log(input: UsuarioLogInput) {
     await createLogAtividade(input);
   }

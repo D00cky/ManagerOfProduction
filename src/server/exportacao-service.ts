@@ -10,8 +10,10 @@ import {
   type ValorResposta
 } from "@/data/grupos-ffr";
 
+type Pessoa = { name: string; matricula: string };
+
 export type OrdemExport = OrdemServico & {
-  tabulacao: Tabulacao | null;
+  tabulacao: (Tabulacao & { tabuladoPor: Pessoa | null; alteradoPor: Pessoa | null }) | null;
   fiscal: { name: string | null } | null;
   polo: { nome: string } | null;
 };
@@ -67,6 +69,11 @@ const colunasMetadados: Array<[string, (o: OrdemExport) => string]> = [
 ];
 
 const colunasScore = ["Soma obtida", "Soma possível", "Percentual", "Conceito"];
+const colunasAuditoria = ["Tabulado por", "Alterada", "Alterado por", "Motivo da alteração"];
+
+function pessoaLabel(pessoa: { name: string; matricula: string } | null | undefined) {
+  return pessoa ? `${pessoa.name} (${pessoa.matricula})` : "";
+}
 
 /** Map a stored answer to a human label for the export cell. */
 export function mapearResposta(valor: ValorResposta | undefined, item: FfrItem): string {
@@ -120,7 +127,8 @@ export async function buildExportDataset(
     const colunas = [
       ...colunasMetadados.map(([label]) => label),
       ...itens.map((item) => item.texto),
-      ...colunasScore
+      ...colunasScore,
+      ...colunasAuditoria
     ];
 
     const linhas = ordensDoGrupo.map((ordem) => {
@@ -132,7 +140,11 @@ export async function buildExportDataset(
         tab ? tab.somaObtida : "",
         tab ? tab.somaPossivel : "",
         tab ? tab.percentual : "",
-        tab ? tab.conceito : ""
+        tab ? tab.conceito : "",
+        tab ? pessoaLabel(tab.tabuladoPor) : "",
+        tab ? (tab.alterada ? "Sim" : "Não") : "",
+        tab ? pessoaLabel(tab.alteradoPor) : "",
+        tab ? tab.motivoAlteracao ?? "" : ""
       ] as (string | number)[];
     });
 

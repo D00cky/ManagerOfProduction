@@ -44,6 +44,7 @@ export type UsuarioRepository = {
   findById(id: string): Promise<UsuarioResumo | null>;
   create(input: CriarUsuarioInput): Promise<UsuarioResumo>;
   update(id: string, data: AtualizarUsuarioInput): Promise<UsuarioResumo>;
+  remove(id: string): Promise<void>;
   log(input: UsuarioLogInput): Promise<void>;
 };
 
@@ -118,4 +119,24 @@ export async function atualizarUsuario(
     metadata: { id, changes: data as Prisma.InputJsonValue }
   });
   return updated;
+}
+
+export async function excluirUsuario(
+  repository: UsuarioRepository,
+  user: SessionUserScope,
+  id: string
+) {
+  ensureCanManage(user);
+  if (id === user.id) throw new Error("Nao e possivel excluir o proprio usuario");
+
+  const target = await repository.findById(id);
+  if (!target) throw new Error("Usuario nao encontrado");
+
+  await repository.remove(id);
+  await repository.log({
+    evento: "usuario",
+    descricao: `Usuario ${target.email} excluido`,
+    userId: user.id,
+    metadata: { id, perfil: target.perfil }
+  });
 }

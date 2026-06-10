@@ -31,5 +31,12 @@ export const prismaRelatorioRepository: RelatorioRepository = {
       total: row._count._all,
       mediaPercentual: row._avg.percentual ?? 0
     }));
+  },
+  async findFiscais(ids: string[]) {
+    if (ids.length === 0) return [];
+    return prisma.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, matricula: true }
+    });
   }
 };

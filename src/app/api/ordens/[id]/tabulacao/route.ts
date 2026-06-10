@@ -21,7 +21,8 @@ export async function PUT(request: Request, context: RouteContext) {
     const tabulacao = await saveTabulacao(prismaTabulacaoRepository, user, {
       ordemServicoId: id,
       respostas: body.respostas,
-      observacoes: body.observacoes
+      observacoes: body.observacoes,
+      motivoAlteracao: typeof body.motivoAlteracao === "string" ? body.motivoAlteracao : undefined
     });
     return NextResponse.json({ data: tabulacao });
   } catch (error) {

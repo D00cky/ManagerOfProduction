@@ -38,25 +38,6 @@ const TIPOS: TipoServico[] = [
 ];
 const STATUS: StatusOS[] = ["NaFila", "EmExecucao", "Pendente", "Concluida", "Cancelada"];
 
-const transitions: Record<StatusOS, { label: string; to: StatusOS }[]> = {
-  NaFila: [
-    { label: "Iniciar", to: "EmExecucao" },
-    { label: "Cancelar", to: "Cancelada" }
-  ],
-  EmExecucao: [
-    { label: "Pendenciar", to: "Pendente" },
-    { label: "Concluir", to: "Concluida" },
-    { label: "Cancelar", to: "Cancelada" }
-  ],
-  Pendente: [
-    { label: "Retomar", to: "EmExecucao" },
-    { label: "Concluir", to: "Concluida" },
-    { label: "Cancelar", to: "Cancelada" }
-  ],
-  Concluida: [],
-  Cancelada: []
-};
-
 export function FilaTable({
   ordens,
   fiscais,
@@ -171,6 +152,24 @@ export function FilaTable({
       return;
     }
     router.refresh();
+  }
+
+  // "Iniciar" coloca a OS em execução e já abre a OS para tabulação.
+  async function iniciar(id: string) {
+    setBusyId(id);
+    setError(null);
+    const response = await fetch(`/api/ordens/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "EmExecucao" })
+    });
+    if (!response.ok) {
+      setBusyId(null);
+      const payload = await response.json().catch(() => ({}));
+      setError(payload.error ?? "Erro ao iniciar a OS.");
+      return;
+    }
+    router.push(`/tabulacao/${id}`);
   }
 
   return (
@@ -382,20 +381,33 @@ export function FilaTable({
                   <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">{ordem.dataProgramada ?? "-"}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/tabulacao/${ordem.id}`}>Tabular</Link>
-                      </Button>
-                      {transitions[ordem.status].map((action) => (
+                      {ordem.status === "NaFila" ? (
                         <Button
-                          key={action.to}
                           variant="outline"
                           size="sm"
                           disabled={busyId === ordem.id}
-                          onClick={() => mutate(`/api/ordens/${ordem.id}`, "PATCH", { status: action.to }, ordem.id)}
+                          onClick={() => iniciar(ordem.id)}
                         >
-                          {action.label}
+                          Iniciar
                         </Button>
-                      ))}
+                      ) : null}
+                      {ordem.status === "EmExecucao" || ordem.status === "Pendente" ? (
+                        <Button asChild variant="outline" size="sm">
+                          <Link href={`/tabulacao/${ordem.id}`}>Abrir</Link>
+                        </Button>
+                      ) : null}
+                      {ordem.status !== "Concluida" && ordem.status !== "Cancelada" ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={busyId === ordem.id}
+                          onClick={() =>
+                            mutate(`/api/ordens/${ordem.id}`, "PATCH", { status: "Cancelada" }, ordem.id)
+                          }
+                        >
+                          Cancelar
+                        </Button>
+                      ) : null}
                       {canAssign && ordem.status !== "Concluida" && ordem.status !== "Cancelada" ? (
                         <AssignControl
                           ordemId={ordem.id}

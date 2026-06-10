@@ -69,16 +69,43 @@ export function UsuariosManager({
     router.refresh();
   }
 
-  async function toggleStatus(usuario: UsuarioResumo) {
+  async function patchUsuario(usuario: UsuarioResumo, body: Record<string, unknown>) {
+    setError(null);
     setBusyId(usuario.id);
-    const status = usuario.status === "ativo" ? "inativo" : "ativo";
     const response = await fetch(`/api/usuarios/${usuario.id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ status })
+      body: JSON.stringify(body)
     });
     setBusyId(null);
-    if (response.ok) router.refresh();
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      setError(payload.error ?? "Erro ao atualizar usuario.");
+      return;
+    }
+    router.refresh();
+  }
+
+  function toggleStatus(usuario: UsuarioResumo) {
+    return patchUsuario(usuario, { status: usuario.status === "ativo" ? "inativo" : "ativo" });
+  }
+
+  function changePerfil(usuario: UsuarioResumo, perfil: Perfil) {
+    return patchUsuario(usuario, { perfil });
+  }
+
+  async function excluir(usuario: UsuarioResumo) {
+    if (!window.confirm(`Excluir o usuario ${usuario.name}? Esta acao nao pode ser desfeita.`)) return;
+    setError(null);
+    setBusyId(usuario.id);
+    const response = await fetch(`/api/usuarios/${usuario.id}`, { method: "DELETE" });
+    setBusyId(null);
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      setError(payload.error ?? "Erro ao excluir usuario.");
+      return;
+    }
+    router.refresh();
   }
 
   return (
@@ -186,6 +213,8 @@ export function UsuariosManager({
         </CardContent>
       </Card>
 
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
       <Card className="overflow-hidden">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-[hsl(var(--border))] text-xs uppercase text-[hsl(var(--muted-foreground))]">
@@ -213,7 +242,21 @@ export function UsuariosManager({
                   <td className="px-4 py-3 font-medium">{usuario.name}</td>
                   <td className="px-4 py-3">{usuario.email}</td>
                   <td className="px-4 py-3">{usuario.matricula}</td>
-                  <td className="px-4 py-3">{perfilLabel(usuario.perfil)}</td>
+                  <td className="px-4 py-3">
+                    <Select
+                      aria-label={`Perfil de ${usuario.name}`}
+                      className="h-9 w-36"
+                      value={usuario.perfil}
+                      disabled={busyId === usuario.id}
+                      onChange={(event) => changePerfil(usuario, event.target.value as Perfil)}
+                    >
+                      {perfis.map((perfil) => (
+                        <option key={perfil} value={perfil}>
+                          {perfilLabel(perfil)}
+                        </option>
+                      ))}
+                    </Select>
+                  </td>
                   <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
                     {usuario.poloId ? poloNome.get(usuario.poloId) ?? "-" : "-"}
                   </td>
@@ -232,14 +275,25 @@ export function UsuariosManager({
                     </Badge>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={busyId === usuario.id}
-                      onClick={() => toggleStatus(usuario)}
-                    >
-                      {usuario.status === "ativo" ? "Desativar" : "Ativar"}
-                    </Button>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={busyId === usuario.id}
+                        onClick={() => toggleStatus(usuario)}
+                      >
+                        {usuario.status === "ativo" ? "Desativar" : "Ativar"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 hover:bg-red-50"
+                        disabled={busyId === usuario.id}
+                        onClick={() => excluir(usuario)}
+                      >
+                        Excluir
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))

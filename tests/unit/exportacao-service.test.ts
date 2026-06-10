@@ -53,6 +53,7 @@ function tab(overrides: Partial<NonNullable<OrdemExport["tabulacao"]>> = {}) {
     id: "tab1",
     ordemServicoId: "os1",
     fiscalId: "f1",
+    tabuladoPorId: "f1",
     respostas: {},
     somaObtida: 5,
     somaPossivel: 8,
@@ -60,8 +61,14 @@ function tab(overrides: Partial<NonNullable<OrdemExport["tabulacao"]>> = {}) {
     conceito: "B" as const,
     observacoes: null,
     bloqueada: false,
+    alterada: false,
+    alteradoPorId: null,
+    motivoAlteracao: null,
+    alteradaEm: null,
     createdAt: now,
     updatedAt: now,
+    tabuladoPor: { name: "Fiscal Teste", matricula: "F0001" },
+    alteradoPor: null,
     ...overrides
   };
 }
@@ -125,6 +132,30 @@ describe("buildExportDataset", () => {
     expect(linha[idx("SERVIÇO DECORRENTE DE DANOS DE TERCEIROS?")]).toBe("dano de terceiro");
     expect(linha[idx("Soma obtida")]).toBe(5);
     expect(linha[idx("Conceito")]).toBe("B");
+  });
+
+  it("includes audit columns (tabulador + alteração)", async () => {
+    const { repository } = repo([
+      os({
+        descricaoTss: "LIGAÇÃO DE ÁGUA",
+        tabulacao: tab({
+          tabuladoPor: { name: "Joao Fiscal", matricula: "F0001" },
+          alterada: true,
+          motivoAlteracao: "ajuste de peso",
+          alteradoPor: { name: "Ana Monitor", matricula: "M0001" }
+        })
+      })
+    ]);
+
+    const { sheets } = await buildExportDataset(repository, supervisor, {});
+    const sheet = sheets[0];
+    const idx = (label: string) => sheet.colunas.indexOf(label);
+    const linha = sheet.linhas[0];
+
+    expect(linha[idx("Tabulado por")]).toBe("Joao Fiscal (F0001)");
+    expect(linha[idx("Alterada")]).toBe("Sim");
+    expect(linha[idx("Alterado por")]).toBe("Ana Monitor (M0001)");
+    expect(linha[idx("Motivo da alteração")]).toBe("ajuste de peso");
   });
 
   it("emits blank cells for an OS without tabulação", async () => {

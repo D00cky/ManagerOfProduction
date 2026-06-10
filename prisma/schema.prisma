@@ -72,6 +72,8 @@ model User {
   acessosPolo  UserPoloAccess[]
   ordensFiscal OrdemServico[]   @relation("FiscalOS")
   tabulacoes   Tabulacao[]
+  tabuladas    Tabulacao[]      @relation("TabuladoPor")
+  alteradas    Tabulacao[]      @relation("AlteradoPor")
   avaliacoes   Avaliacao[]
   logs         LogAtividade[]
 }
@@ -150,21 +152,28 @@ model OrdemServico {
 }
 
 model Tabulacao {
-  id             String       @id @default(cuid())
-  ordemServicoId String       @unique
-  fiscalId       String
-  respostas      Json
-  somaObtida     Float
-  somaPossivel   Float
-  percentual     Float
-  conceito       Conceito
-  observacoes    String?
-  bloqueada      Boolean      @default(false)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  ordemServico   OrdemServico @relation(fields: [ordemServicoId], references: [id])
-  fiscal         User         @relation(fields: [fiscalId], references: [id])
-  avaliacoes     Avaliacao[]
+  id              String       @id @default(cuid())
+  ordemServicoId  String       @unique
+  fiscalId        String
+  tabuladoPorId   String?
+  respostas       Json
+  somaObtida      Float
+  somaPossivel    Float
+  percentual      Float
+  conceito        Conceito
+  observacoes     String?
+  bloqueada       Boolean      @default(false)
+  alterada        Boolean      @default(false)
+  alteradoPorId   String?
+  motivoAlteracao String?
+  alteradaEm      DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  ordemServico    OrdemServico @relation(fields: [ordemServicoId], references: [id])
+  fiscal          User         @relation(fields: [fiscalId], references: [id])
+  tabuladoPor     User?        @relation("TabuladoPor", fields: [tabuladoPorId], references: [id])
+  alteradoPor     User?        @relation("AlteradoPor", fields: [alteradoPorId], references: [id])
+  avaliacoes      Avaliacao[]
 
   @@index([fiscalId])
   @@index([createdAt])

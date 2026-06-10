@@ -45,6 +45,7 @@ function tabulacao(overrides: Partial<Tabulacao> = {}): Tabulacao {
     id: "tab1",
     ordemServicoId: "os1",
     fiscalId: "f1",
+    tabuladoPorId: "f1",
     respostas: {},
     somaObtida: 0,
     somaPossivel: 0,
@@ -52,6 +53,10 @@ function tabulacao(overrides: Partial<Tabulacao> = {}): Tabulacao {
     conceito: "NaoAvaliado",
     observacoes: null,
     bloqueada: false,
+    alterada: false,
+    alteradoPorId: null,
+    motivoAlteracao: null,
+    alteradaEm: null,
     createdAt: now,
     updatedAt: now,
     ...overrides
@@ -63,7 +68,16 @@ function repo(record: OrdemServico, existing: Tabulacao | null = null): Tabulaca
     findOrdemById: vi.fn(async () => record),
     findTabulacaoByOrdem: vi.fn(async () => existing),
     findFiscalNome: vi.fn(async () => "Fiscal Teste"),
-    upsertTabulacao: vi.fn(async (_input) => tabulacao(_input)),
+    findUsuarioBasico: vi.fn(async () => ({ name: "Fiscal Teste", matricula: "F0001" })),
+    upsertTabulacao: vi.fn(async ({ alteracao, ...base }) =>
+      tabulacao({
+        ...base,
+        alterada: Boolean(alteracao),
+        alteradoPorId: alteracao?.alteradoPorId ?? null,
+        motivoAlteracao: alteracao?.motivoAlteracao ?? null,
+        alteradaEm: alteracao?.alteradaEm ?? null
+      })
+    ),
     log: vi.fn(async () => undefined)
   };
 }
@@ -127,6 +141,68 @@ describe("saveTabulacao", () => {
       metadata: expect.objectContaining({ conceito: expect.any(String) })
     });
   });
+
+  it("records who tabulated and keeps the OS fiscal as the report key", async () => {
+    const repository = repo(os({ fiscalId: "f1" }));
+
+    // A monitor in scope tabulates an OS assigned to fiscal f1.
+    await saveTabulacao(repository, { id: "m1", perfil: "monitor", poloId: "p1", regiao: null }, {
+      ordemServicoId: "os1",
+      respostas: { gerais_q1: "1" }
+    });
+
+    expect(repository.upsertTabulacao).toHaveBeenCalledWith(
+      expect.objectContaining({ fiscalId: "f1", tabuladoPorId: "m1", alteracao: null })
+    );
+  });
+
+  it("requires a reason when a monitor alters someone else's tabulation", async () => {
+    const existing = tabulacao({ tabuladoPorId: "f1" });
+    const repository = repo(os({ fiscalId: "f1" }), existing);
+
+    await expect(
+      saveTabulacao(repository, { id: "m1", perfil: "monitor", poloId: "p1", regiao: null }, {
+        ordemServicoId: "os1",
+        respostas: { gerais_q1: "1" }
+      })
+    ).rejects.toThrow("Informe o motivo da alteracao");
+  });
+
+  it("records the alteration (who + reason) when reason is provided", async () => {
+    const existing = tabulacao({ tabuladoPorId: "f1" });
+    const repository = repo(os({ fiscalId: "f1" }), existing);
+
+    await saveTabulacao(
+      repository,
+      { id: "m1", perfil: "monitor", poloId: "p1", regiao: null },
+      { ordemServicoId: "os1", respostas: { gerais_q1: "1" }, motivoAlteracao: "correcao de peso" },
+      new Date("2026-06-10T12:00:00.000Z")
+    );
+
+    expect(repository.upsertTabulacao).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabuladoPorId: "f1",
+        alteracao: {
+          alteradoPorId: "m1",
+          motivoAlteracao: "correcao de peso",
+          alteradaEm: new Date("2026-06-10T12:00:00.000Z")
+        }
+      })
+    );
+  });
+
+  it("forbids a fiscal from altering a tabulation created by someone else", async () => {
+    // OS belongs to fiscal f2 (in scope), but the tabulation was created by f1.
+    const existing = tabulacao({ tabuladoPorId: "f1" });
+    const repository = repo(os({ fiscalId: "f2" }), existing);
+
+    await expect(
+      saveTabulacao(repository, { id: "f2", perfil: "fiscal", poloId: "p1" }, {
+        ordemServicoId: "os1",
+        respostas: {}
+      })
+    ).rejects.toThrow("Apenas monitor ou supervisor podem alterar");
+  });
 });
 
 describe("getTabulacaoEdicao", () => {
@@ -135,6 +211,7 @@ describe("getTabulacaoEdicao", () => {
       findOrdemById: vi.fn(async () => null),
       findTabulacaoByOrdem: vi.fn(async () => null),
       findFiscalNome: vi.fn(async () => null),
+      findUsuarioBasico: vi.fn(async () => null),
       upsertTabulacao: vi.fn(),
       log: vi.fn()
     };

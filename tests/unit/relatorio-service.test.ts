@@ -4,6 +4,7 @@ import {
   exportRelatorioCsv,
   getRelatorio,
   type ConceitoCount,
+  type FiscalInfo,
   type FiscalQualidade,
   type RelatorioOverall,
   type RelatorioRepository
@@ -13,11 +14,13 @@ function repo(options: {
   overall?: RelatorioOverall;
   conceitos?: ConceitoCount[];
   porFiscal?: FiscalQualidade[];
+  fiscais?: FiscalInfo[];
 }): RelatorioRepository {
   return {
     overall: vi.fn(async () => options.overall ?? { total: 0, mediaPercentual: 0 }),
     countByConceito: vi.fn(async () => options.conceitos ?? []),
-    mediaPorFiscal: vi.fn(async () => options.porFiscal ?? [])
+    mediaPorFiscal: vi.fn(async () => options.porFiscal ?? []),
+    findFiscais: vi.fn(async () => options.fiscais ?? [])
   };
 }
 
@@ -65,6 +68,10 @@ describe("getRelatorio", () => {
       porFiscal: [
         { fiscalId: "f2", total: 2, mediaPercentual: 0.4 },
         { fiscalId: "f1", total: 2, mediaPercentual: 0.75 }
+      ],
+      fiscais: [
+        { id: "f1", name: "Ana", matricula: "F0001" },
+        { id: "f2", name: "Bruno", matricula: "F0002" }
       ]
     });
 
@@ -73,19 +80,21 @@ describe("getRelatorio", () => {
     expect(resumo.totalAvaliadas).toBe(4);
     expect(resumo.conceitos).toEqual({ A: 1, B: 1, C: 1, D: 0, NaoAvaliado: 1 });
     expect(resumo.mediaPercentual).toBeCloseTo(0.575, 5);
+    // Resolved to name + matrícula and sorted by name (Ana before Bruno).
     expect(resumo.porFiscal).toEqual([
-      { fiscalId: "f1", total: 2, mediaPercentual: 0.75 },
-      { fiscalId: "f2", total: 2, mediaPercentual: 0.4 }
+      { fiscalId: "f1", name: "Ana", matricula: "F0001", total: 2, mediaPercentual: 0.75 },
+      { fiscalId: "f2", name: "Bruno", matricula: "F0002", total: 2, mediaPercentual: 0.4 }
     ]);
   });
 
-  it("exports scoped report rows as CSV", async () => {
+  it("exports scoped report rows as CSV with name + matrícula", async () => {
     const repository = repo({
-      porFiscal: [{ fiscalId: "f1", total: 2, mediaPercentual: 0.75 }]
+      porFiscal: [{ fiscalId: "f1", total: 2, mediaPercentual: 0.75 }],
+      fiscais: [{ id: "f1", name: "Ana", matricula: "F0001" }]
     });
 
     const csv = await exportRelatorioCsv(repository, { id: "sup", perfil: "supervisor", poloId: null });
 
-    expect(csv).toBe("Fiscal,Tabulacoes,Media FFR\nf1,2,75.00%");
+    expect(csv).toBe("Fiscal,Matricula,Tabulacoes,Media FFR\nAna,F0001,2,75.00%");
   });
 });

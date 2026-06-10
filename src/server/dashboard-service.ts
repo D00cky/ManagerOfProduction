@@ -29,6 +29,14 @@ export type DashboardFiscal = {
   id: string;
   name: string;
   matricula: string;
+  regiao: string | null;
+};
+
+export type DashboardMonitor = {
+  id: string;
+  name: string;
+  matricula: string;
+  regiao: string | null;
 };
 
 /** One status bucket from a `groupBy(status)` over the current snapshot. */
@@ -88,6 +96,8 @@ export type DashboardRepository = {
   findRecentLogs(where: Prisma.OrdemServicoWhereInput): Promise<DashboardLog[]>;
   findGeoFacets(where: Prisma.OrdemServicoWhereInput): Promise<GeoFacet[]>;
   findFiscais(ids: string[]): Promise<DashboardFiscal[]>;
+  /** All monitors (with the região each oversees) for the Monitor→Fiscal tree. */
+  findMonitores(): Promise<DashboardMonitor[]>;
 };
 
 export type DashboardResumo = {
@@ -106,6 +116,18 @@ export type DashboardResumo = {
     matricula: string;
     concluidas: number;
     analisadas: number;
+  }>;
+  /** Desempenho organizado em árvore Região → Monitores → Fiscais alocados. */
+  arvoreDesempenho: Array<{
+    regiao: string | null;
+    monitores: Array<{ name: string; matricula: string }>;
+    fiscais: Array<{
+      fiscalId: string;
+      name: string;
+      matricula: string;
+      concluidas: number;
+      analisadas: number;
+    }>;
   }>;
   metricas: {
     total: number;
@@ -190,7 +212,10 @@ export async function getDashboardResumo(
       ...desempenhoRows.map((item) => item.fiscalId)
     ])
   ];
-  const fiscais = await repository.findFiscais(fiscalIds);
+  const [fiscais, monitores] = await Promise.all([
+    repository.findFiscais(fiscalIds),
+    repository.findMonitores()
+  ]);
   const fiscalPorId = new Map(fiscais.map((fiscal) => [fiscal.id, fiscal]));
   const nomeDe = (id: string) => fiscalPorId.get(id)?.name ?? id;
   const matriculaDe = (id: string) => fiscalPorId.get(id)?.matricula ?? "";
@@ -212,6 +237,8 @@ export async function getDashboardResumo(
     }))
     .sort((a, b) => b.concluidas - a.concluidas || b.analisadas - a.analisadas);
 
+  const arvoreDesempenho = buildArvoreDesempenho(desempenhoFiscais, fiscalPorId, monitores);
+
   return {
     periodo,
     funnel: {
@@ -223,6 +250,7 @@ export async function getDashboardResumo(
     porRegiao: mapRegiao(regiaoRows),
     fiscaisAtivos,
     desempenhoFiscais,
+    arvoreDesempenho,
     metricas: calculateMetricas(statusCounts),
     progressoPorFiscal,
     osParadas: calculateOsParadas(parariasRows, now),
@@ -260,6 +288,41 @@ function mergeScopeAndGeo(
     where.regiaoAdministrativa = allowed ? filtros.regiao : { in: [] };
   }
   return where;
+}
+
+/**
+ * Agrupa o desempenho dos fiscais por região (a região do polo de cada fiscal) e
+ * pendura o(s) monitor(es) responsável(is) por aquela região — a árvore
+ * Região → Monitores → Fiscais alocados pedida no dashboard.
+ */
+function buildArvoreDesempenho(
+  desempenho: DashboardResumo["desempenhoFiscais"],
+  fiscalPorId: Map<string, DashboardFiscal>,
+  monitores: DashboardMonitor[]
+): DashboardResumo["arvoreDesempenho"] {
+  const monitoresPorRegiao = new Map<string | null, Array<{ name: string; matricula: string }>>();
+  for (const monitor of monitores) {
+    const chave = monitor.regiao ?? null;
+    const lista = monitoresPorRegiao.get(chave) ?? [];
+    lista.push({ name: monitor.name, matricula: monitor.matricula });
+    monitoresPorRegiao.set(chave, lista);
+  }
+
+  const fiscaisPorRegiao = new Map<string | null, DashboardResumo["desempenhoFiscais"]>();
+  for (const fiscal of desempenho) {
+    const chave = fiscalPorId.get(fiscal.fiscalId)?.regiao ?? null;
+    const lista = fiscaisPorRegiao.get(chave) ?? [];
+    lista.push(fiscal);
+    fiscaisPorRegiao.set(chave, lista);
+  }
+
+  return [...fiscaisPorRegiao.entries()]
+    .map(([regiao, fiscais]) => ({
+      regiao,
+      monitores: monitoresPorRegiao.get(regiao) ?? [],
+      fiscais
+    }))
+    .sort((a, b) => (a.regiao ?? "").localeCompare(b.regiao ?? "", "pt-BR"));
 }
 
 function mapRegiao(rows: HierarquiaLinha[]): DashboardResumo["porRegiao"] {
