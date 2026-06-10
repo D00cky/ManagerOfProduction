@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { calcularConceito } from "@/lib/ffr";
-import { gruposParaTipo, gruposParaOrdem, selecionarGrupoEspecificoId } from "@/data/grupos-ffr";
+import {
+  gruposParaTipo,
+  gruposParaOrdem,
+  selecionarGrupoEspecificoId,
+  selecionarGruposEspecificosIds
+} from "@/data/grupos-ffr";
 
 describe("calcularConceito", () => {
   it("sums obtained and possible points only for answers marked as 1 or 0", () => {
@@ -58,6 +63,49 @@ describe("selecionarGrupoEspecificoId / gruposParaOrdem", () => {
 
   it("shows only the general groups for Vistoria", () => {
     expect(gruposParaOrdem({ tipoServico: "Vistoria" }).map((g) => g.id)).toEqual(["gerais", "nao_executado"]);
+  });
+
+  it("derives a group from each of TSS PAI (descricaoTss) and TSE (descricaoTse)", () => {
+    const ctx = {
+      tipoServico: "LigacaoAgua" as const,
+      descricaoTss: "LIGAÇÃO DE ÁGUA S/V",
+      descricaoTse: "REPOSIÇÃO ASFÁLTICA"
+    };
+    expect(selecionarGruposEspecificosIds(ctx)).toEqual(["ramal_agua", "reposicao_asfaltica"]);
+    expect(gruposParaOrdem(ctx).map((g) => g.id)).toEqual([
+      "gerais",
+      "nao_executado",
+      "ramal_agua",
+      "reposicao_asfaltica"
+    ]);
+  });
+
+  it("de-duplicates when TSS PAI and TSE map to the same group", () => {
+    const ctx = {
+      tipoServico: "Outros" as const,
+      descricaoTss: "LIGAÇÃO DE ÁGUA",
+      descricaoTse: "LIGAÇÃO DE ÁGUA S/V"
+    };
+    expect(selecionarGruposEspecificosIds(ctx)).toEqual(["ramal_agua"]);
+    expect(gruposParaOrdem(ctx).map((g) => g.id)).toEqual(["gerais", "nao_executado", "ramal_agua"]);
+  });
+});
+
+describe("calcularConceito across multiple service groups", () => {
+  it("scores items from both the TSS PAI group and the TSE group", () => {
+    const result = calcularConceito(
+      { tipoServico: "LigacaoAgua", descricaoTss: "LIGAÇÃO DE ÁGUA", descricaoTse: "REPOSIÇÃO ASFÁLTICA" },
+      {
+        gerais_q1: "1", // peso 3 -> obtida + possivel
+        ramal_agua_q1: "1", // peso 3 (TSS PAI group) -> obtida + possivel
+        reposicao_asfaltica_q1: "0" // peso 3 (TSE group) -> possivel only
+      }
+    );
+
+    // Without the TSE group the asfáltica item would be ignored (obtida 6 / possivel 6 -> A).
+    expect(result.somaObtida).toBe(6);
+    expect(result.somaPossivel).toBe(9);
+    expect(result.conceito).toBe("C");
   });
 });
 

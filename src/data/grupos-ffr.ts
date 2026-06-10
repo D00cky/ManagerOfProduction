@@ -218,7 +218,13 @@ export function gruposParaTipo(tipoServico: TipoServico) {
 // regras mais específicas primeiro (ex.: "religacao" antes de "ligacao", já que
 // "religacao" contém "ligacao").
 
-export type OrdemFfrContext = { tipoServico: TipoServico; descricaoTss?: string | null };
+export type OrdemFfrContext = {
+  tipoServico: TipoServico;
+  /** Serviço solicitado / "TSS PAI". */
+  descricaoTss?: string | null;
+  /** Serviço executado / "TSE (fiscalizado)". */
+  descricaoTse?: string | null;
+};
 
 const gruposPorId = new Map(gruposFfr.map((grupo) => [grupo.id, grupo]));
 
@@ -259,22 +265,52 @@ const tipoServicoFallback: Partial<Record<TipoServico, string>> = {
   // Vistoria / Outros: sem grupo específico (apenas Itens Gerais + não executado)
 };
 
-/** Resolve the single specific FFR group id for an OS (TSS keyword → tipo fallback). */
-export function selecionarGrupoEspecificoId(ctx: OrdemFfrContext): string | null {
-  const texto = ctx.descricaoTss ? normalizeHeader(ctx.descricaoTss) : "";
-  if (texto) {
-    const padded = `_${texto}_`;
-    for (const [needle, grupoId] of tssGrupoKeywords) {
-      if (padded.includes(needle)) return grupoId;
-    }
+/** First specific group id matched by a single TSS/TSE description (keyword scan), or null. */
+function grupoPorDescricao(descricao: string | null | undefined): string | null {
+  if (!descricao) return null;
+  const padded = `_${normalizeHeader(descricao)}_`;
+  for (const [needle, grupoId] of tssGrupoKeywords) {
+    if (padded.includes(needle)) return grupoId;
   }
-  return tipoServicoFallback[ctx.tipoServico] ?? null;
+  return null;
 }
 
-/** Groups shown/scored for an OS: Itens Gerais + Serviço não executado + the specific one. */
+/**
+ * Specific FFR group ids for an OS, derived from BOTH the requested service
+ * (TSS PAI = descricaoTss) and the executed service (TSE = descricaoTse), so an
+ * OS that spans different solicitado/executado services shows each group's
+ * criteria. Ordered (TSS PAI first), de-duplicated. Falls back to the
+ * tipoServico group only when neither description matches a keyword.
+ */
+export function selecionarGruposEspecificosIds(ctx: OrdemFfrContext): string[] {
+  const ids: string[] = [];
+  for (const id of [grupoPorDescricao(ctx.descricaoTss), grupoPorDescricao(ctx.descricaoTse)]) {
+    if (id && !ids.includes(id)) ids.push(id);
+  }
+  if (ids.length === 0) {
+    const fallback = tipoServicoFallback[ctx.tipoServico];
+    if (fallback) ids.push(fallback);
+  }
+  return ids;
+}
+
+/** Single specific group id (first match) — kept for callers that need just one. */
+export function selecionarGrupoEspecificoId(ctx: OrdemFfrContext): string | null {
+  return selecionarGruposEspecificosIds(ctx)[0] ?? null;
+}
+
+/** Groups shown/scored for an OS: Itens Gerais + Serviço não executado + every specific service group. */
 export function gruposParaOrdem(ctx: OrdemFfrContext): FfrGrupo[] {
   const sempre = gruposFfr.filter((grupo) => grupo.tipos === "todos");
-  const especificoId = selecionarGrupoEspecificoId(ctx);
-  const especifico = especificoId ? gruposPorId.get(especificoId) : undefined;
+  const especificos = selecionarGruposEspecificosIds(ctx)
+    .map((id) => gruposPorId.get(id))
+    .filter((grupo): grupo is FfrGrupo => Boolean(grupo));
+  return [...sempre, ...especificos];
+}
+
+/** Groups for one specific group id: Itens Gerais + Serviço não executado + that group. Used per export sheet. */
+export function gruposParaGrupoEspecifico(grupoId: string | null): FfrGrupo[] {
+  const sempre = gruposFfr.filter((grupo) => grupo.tipos === "todos");
+  const especifico = grupoId ? gruposPorId.get(grupoId) : undefined;
   return especifico ? [...sempre, especifico] : sempre;
 }
