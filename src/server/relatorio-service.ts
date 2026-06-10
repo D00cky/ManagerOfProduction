@@ -5,18 +5,26 @@ import { buildOsScope, type SessionUserScope } from "@/lib/scope";
 export type RelatorioOverall = { total: number; mediaPercentual: number };
 export type ConceitoCount = { conceito: Conceito; count: number };
 export type FiscalQualidade = { fiscalId: string; total: number; mediaPercentual: number };
+export type FiscalInfo = { id: string; name: string; matricula: string };
 
 export type RelatorioRepository = {
   overall(scope: Prisma.OrdemServicoWhereInput): Promise<RelatorioOverall>;
   countByConceito(scope: Prisma.OrdemServicoWhereInput): Promise<ConceitoCount[]>;
   mediaPorFiscal(scope: Prisma.OrdemServicoWhereInput): Promise<FiscalQualidade[]>;
+  findFiscais(ids: string[]): Promise<FiscalInfo[]>;
 };
 
 export type RelatorioResumo = {
   totalAvaliadas: number;
   mediaPercentual: number;
   conceitos: Record<Conceito, number>;
-  porFiscal: Array<{ fiscalId: string; total: number; mediaPercentual: number }>;
+  porFiscal: Array<{
+    fiscalId: string;
+    name: string;
+    matricula: string;
+    total: number;
+    mediaPercentual: number;
+  }>;
 };
 
 const conceitos: Conceito[] = ["A", "B", "C", "D", "NaoAvaliado"];
@@ -36,13 +44,24 @@ export async function getRelatorio(
     repository.mediaPorFiscal(scope)
   ]);
 
+  // Resolve fiscal ids to human-readable name + matrícula (the table used to show
+  // the raw cuid, which looked like a meaningless hash).
+  const fiscais = await repository.findFiscais(porFiscalRows.map((row) => row.fiscalId));
+  const fiscalPorId = new Map(fiscais.map((fiscal) => [fiscal.id, fiscal]));
+
   return {
     totalAvaliadas: overall.total,
     mediaPercentual: overall.mediaPercentual,
     conceitos: zeroFillConceitos(conceitoCounts),
     porFiscal: porFiscalRows
-      .map((row) => ({ fiscalId: row.fiscalId, total: row.total, mediaPercentual: row.mediaPercentual }))
-      .sort((a, b) => a.fiscalId.localeCompare(b.fiscalId))
+      .map((row) => ({
+        fiscalId: row.fiscalId,
+        name: fiscalPorId.get(row.fiscalId)?.name ?? row.fiscalId,
+        matricula: fiscalPorId.get(row.fiscalId)?.matricula ?? "",
+        total: row.total,
+        mediaPercentual: row.mediaPercentual
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
   };
 }
 
@@ -55,9 +74,10 @@ function zeroFillConceitos(counts: ConceitoCount[]): Record<Conceito, number> {
 export async function exportRelatorioCsv(repository: RelatorioRepository, user: SessionUserScope) {
   const relatorio = await getRelatorio(repository, user);
   const rows = [
-    ["Fiscal", "Tabulacoes", "Media FFR"],
+    ["Fiscal", "Matricula", "Tabulacoes", "Media FFR"],
     ...relatorio.porFiscal.map((item) => [
-      item.fiscalId,
+      item.name,
+      item.matricula,
       String(item.total),
       `${(item.mediaPercentual * 100).toFixed(2)}%`
     ])

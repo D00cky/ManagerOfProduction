@@ -7,7 +7,7 @@ vi.mock("@/server/session", () => ({ getCurrentUser }));
 function previewRequest() {
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.json_to_sheet([
-    { "Número OS": "1001", "Endereço Completo": "Rua A", Serviço: "Vistoria", Polo: "Norte" },
+    { "Número OS": "1001", "Endereço Completo": "Rua A", Serviço: "Outros", Polo: "Norte" },
     { "Número OS": "", "Endereço Completo": "", Serviço: "Outros", Polo: "Norte" }
   ]);
   XLSX.utils.book_append_sheet(workbook, worksheet, "OS");

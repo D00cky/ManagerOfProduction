@@ -7,7 +7,12 @@ export const prismaExportacaoRepository: ExportacaoRepository = {
     return prisma.ordemServico.findMany({
       where,
       include: {
-        tabulacao: true,
+        tabulacao: {
+          include: {
+            tabuladoPor: { select: { name: true, matricula: true } },
+            alteradoPor: { select: { name: true, matricula: true } }
+          }
+        },
         fiscal: { select: { name: true } },
         polo: { select: { nome: true } }
       },

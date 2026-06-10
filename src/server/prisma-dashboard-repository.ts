@@ -152,10 +152,25 @@ export const prismaDashboardRepository: DashboardRepository = {
       distinct: ["regiaoAdministrativa", "cidade"]
     });
   },
-  findFiscais(ids: string[]) {
-    return prisma.user.findMany({
+  async findFiscais(ids: string[]) {
+    if (ids.length === 0) return [];
+    const rows = await prisma.user.findMany({
       where: { id: { in: ids } },
-      select: { id: true, name: true, matricula: true }
+      select: { id: true, name: true, matricula: true, regiao: true, polo: { select: { regiao: true } } }
+    });
+    // A região do fiscal vem do polo onde está alocado (com fallback ao campo do usuário).
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      matricula: row.matricula,
+      regiao: row.polo?.regiao ?? row.regiao ?? null
+    }));
+  },
+  findMonitores() {
+    return prisma.user.findMany({
+      where: { perfil: "monitor" },
+      select: { id: true, name: true, matricula: true, regiao: true },
+      orderBy: { name: "asc" }
     });
   }
 };

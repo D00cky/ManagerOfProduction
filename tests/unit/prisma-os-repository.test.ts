@@ -35,7 +35,7 @@ describePostgres("claimNextAvailable on PostgreSQL", () => {
         id,
         numero,
         enderecoCompleto: `Rua ${numero}`,
-        tipoServico: "Vistoria",
+        tipoServico: "Outros",
         poloId,
         fiscalId,
         status,

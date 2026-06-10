@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { StatusOS, TipoServico } from "@prisma/client";
+import type { Perfil, StatusOS, TipoServico } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,13 +26,21 @@ const conceitoStyles: Record<string, string> = {
   NaoAvaliado: "bg-slate-100 text-slate-600"
 };
 
+type AlteracaoInfo = { por: string | null; motivo: string; em: string | null };
+
 export function TabulacaoForm({
   ordemId,
   tipoServico,
   descricaoTss,
   status,
   respostasIniciais,
-  observacoesIniciais
+  observacoesIniciais,
+  currentUserId,
+  perfil,
+  jaTabulada,
+  tabuladoPorId,
+  tabuladoPorLabel,
+  alteracao
 }: {
   ordemId: string;
   tipoServico: TipoServico;
@@ -40,6 +48,12 @@ export function TabulacaoForm({
   status: StatusOS;
   respostasIniciais: RespostasFfr;
   observacoesIniciais: string;
+  currentUserId: string;
+  perfil: Perfil;
+  jaTabulada: boolean;
+  tabuladoPorId: string | null;
+  tabuladoPorLabel: string | null;
+  alteracao: AlteracaoInfo | null;
 }) {
   const router = useRouter();
   const grupos = useMemo(
@@ -54,6 +68,9 @@ export function TabulacaoForm({
   const [concluindo, setConcluindo] = useState(false);
 
   const bloqueada = status === "Concluida" || status === "Cancelada";
+  // Editar uma tabulação criada por outra pessoa é uma "alteração": exige motivo
+  // e só monitor/supervisor podem fazê-la (regra reforçada também no servidor).
+  const ehAlteracao = jaTabulada && tabuladoPorId !== null && tabuladoPorId !== currentUserId;
   const resultado = useMemo(
     () => calcularConceito({ tipoServico, descricaoTss }, respostas),
     [tipoServico, descricaoTss, respostas]
@@ -64,11 +81,27 @@ export function TabulacaoForm({
     setRespostas((current) => ({ ...current, [itemId]: value }));
   }
 
-  async function salvar(): Promise<boolean> {
+  /** @returns false if the user cancelled the required reason prompt. */
+  function pedirMotivo(): string | undefined | false {
+    if (!ehAlteracao) return undefined;
+    const motivo = window.prompt("Motivo da alteracao desta tabulacao:");
+    if (motivo === null) return false; // cancelou
+    if (motivo.trim().length === 0) {
+      setError("Informe o motivo da alteracao.");
+      return false;
+    }
+    return motivo.trim();
+  }
+
+  async function salvar(motivoAlteracao?: string): Promise<boolean> {
     const response = await fetch(`/api/ordens/${ordemId}/tabulacao`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ respostas, observacoes: observacoes.trim() || undefined })
+      body: JSON.stringify({
+        respostas,
+        observacoes: observacoes.trim() || undefined,
+        motivoAlteracao
+      })
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
@@ -81,8 +114,10 @@ export function TabulacaoForm({
   async function handleSave() {
     setError(null);
     setSaved(false);
+    const motivo = pedirMotivo();
+    if (motivo === false) return;
     setSaving(true);
-    const ok = await salvar();
+    const ok = await salvar(motivo || undefined);
     setSaving(false);
     if (!ok) return;
     setSaved(true);
@@ -95,9 +130,11 @@ export function TabulacaoForm({
     if (!window.confirm("Concluir esta OS? A tabulacao sera finalizada e nao podera mais ser editada.")) {
       return;
     }
+    const motivo = pedirMotivo();
+    if (motivo === false) return;
     setConcluindo(true);
     // Conclusão exige tabulação salva (canTransitionStatus): salva antes de concluir.
-    const ok = await salvar();
+    const ok = await salvar(motivo || undefined);
     if (!ok) {
       setConcluindo(false);
       return;
@@ -138,12 +175,31 @@ export function TabulacaoForm({
         </p>
       ) : null}
 
+      {tabuladoPorLabel || alteracao ? (
+        <Card>
+          <CardContent className="flex flex-col gap-1 p-4 text-sm">
+            {tabuladoPorLabel ? (
+              <p>
+                <span className="text-[hsl(var(--muted-foreground))]">Tabulado por: </span>
+                <span className="font-medium">{tabuladoPorLabel}</span>
+              </p>
+            ) : null}
+            {alteracao ? (
+              <p className="text-amber-700">
+                Alterada por {alteracao.por ?? "—"}
+                {alteracao.em ? ` em ${alteracao.em}` : ""} — motivo: {alteracao.motivo || "—"}
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       {grupos.map((grupo) => (
         <Card key={grupo.id}>
           <CardHeader>
             <CardTitle>{grupo.nome}</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col gap-5">
+          <CardContent className="grid gap-x-6 gap-y-4 md:grid-cols-2">
             {grupo.itens.map((item) => (
               <div key={item.id} className="flex flex-col gap-2">
                 <p className="text-sm">
@@ -154,6 +210,8 @@ export function TabulacaoForm({
                 </p>
                 {item.tipo === "texto" ? (
                   <Textarea
+                    className="max-w-xl"
+                    rows={2}
                     value={(respostas[item.id] as string) ?? ""}
                     onChange={(event) => setResposta(item.id, event.target.value)}
                     disabled={bloqueada}
@@ -189,6 +247,8 @@ export function TabulacaoForm({
             <Label htmlFor="observacoes">Observacoes</Label>
             <Textarea
               id="observacoes"
+              className="max-w-2xl"
+              rows={3}
               value={observacoes}
               onChange={(event) => setObservacoes(event.target.value)}
               disabled={bloqueada}

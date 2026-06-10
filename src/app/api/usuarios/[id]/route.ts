@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { atualizarUsuario, type AtualizarUsuarioInput } from "@/server/usuario-service";
+import {
+  atualizarUsuario,
+  excluirUsuario,
+  type AtualizarUsuarioInput
+} from "@/server/usuario-service";
 import { prismaUsuarioRepository } from "@/server/prisma-usuario-repository";
 import { getCurrentUser } from "@/server/session";
 
@@ -25,6 +29,21 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ data: usuario });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro ao atualizar usuario";
+    const status = message.startsWith("Sem permissao") ? 403 : 400;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
+export async function DELETE(_request: Request, context: RouteContext) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Nao autenticado" }, { status: 401 });
+
+  const { id } = await context.params;
+  try {
+    await excluirUsuario(prismaUsuarioRepository, user, id);
+    return NextResponse.json({ data: { id } });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro ao excluir usuario";
     const status = message.startsWith("Sem permissao") ? 403 : 400;
     return NextResponse.json({ error: message }, { status });
   }

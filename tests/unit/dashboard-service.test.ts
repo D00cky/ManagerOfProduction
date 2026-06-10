@@ -13,7 +13,7 @@ function os(overrides: Partial<OrdemServico>): OrdemServico {
     bairro: null,
     cidade: overrides.cidade ?? null,
     regiaoAdministrativa: overrides.regiaoAdministrativa ?? null,
-    tipoServico: "Vistoria",
+    tipoServico: "Outros",
     status: overrides.status ?? "NaFila",
     poloId: overrides.poloId ?? "p1",
     fiscalId: overrides.fiscalId ?? null,
@@ -154,8 +154,9 @@ function repository(ordens: OrdemServico[], tabulacoes: TabFixture[] = []): Dash
       return facets;
     }),
     findFiscais: vi.fn(async (ids: string[]) =>
-      ids.map((id) => ({ id, name: `Fiscal ${id}`, matricula: id.toUpperCase() }))
-    )
+      ids.map((id) => ({ id, name: `Fiscal ${id}`, matricula: id.toUpperCase(), regiao: null }))
+    ),
+    findMonitores: vi.fn(async () => [])
   };
 }
 
@@ -306,6 +307,45 @@ describe("getDashboardResumo", () => {
     expect(resumo.desempenhoFiscais).toEqual([
       { fiscalId: "f1", name: "Fiscal f1", matricula: "F1", concluidas: 2, analisadas: 0 },
       { fiscalId: "f2", name: "Fiscal f2", matricula: "F2", concluidas: 1, analisadas: 1 }
+    ]);
+  });
+
+  it("organizes performance into a Região → Monitor → Fiscal tree", async () => {
+    const dia = new Date("2026-06-08T12:00:00.000Z");
+    const ordens = [
+      os({ id: "1", fiscalId: "f1", status: "Concluida", concluidaEm: dia }),
+      os({ id: "2", fiscalId: "f2", status: "Concluida", concluidaEm: dia })
+    ];
+    const repo = repository(ordens);
+    repo.findFiscais = vi.fn(async (ids: string[]) =>
+      ids.map((id) => ({
+        id,
+        name: `Fiscal ${id}`,
+        matricula: id.toUpperCase(),
+        regiao: id === "f1" ? "Campinas" : "Santos"
+      }))
+    );
+    repo.findMonitores = vi.fn(async () => [
+      { id: "m1", name: "Ana", matricula: "M0001", regiao: "Campinas" }
+    ]);
+
+    const resumo = await getDashboardResumo(
+      repo,
+      { id: "s1", perfil: "supervisor" },
+      new Date("2026-06-08T20:00:00.000Z")
+    );
+
+    expect(resumo.arvoreDesempenho).toEqual([
+      {
+        regiao: "Campinas",
+        monitores: [{ name: "Ana", matricula: "M0001" }],
+        fiscais: [{ fiscalId: "f1", name: "Fiscal f1", matricula: "F1", concluidas: 1, analisadas: 0 }]
+      },
+      {
+        regiao: "Santos",
+        monitores: [],
+        fiscais: [{ fiscalId: "f2", name: "Fiscal f2", matricula: "F2", concluidas: 1, analisadas: 0 }]
+      }
     ]);
   });
 

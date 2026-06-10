@@ -81,7 +81,7 @@ export default async function DashboardPage({
   ];
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-5">
       <h1 className="text-2xl font-semibold">Dashboard</h1>
 
       <GeoFilter
@@ -141,37 +141,43 @@ export default async function DashboardPage({
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden">
+      <Card>
         <CardHeader>
-          <CardTitle>Desempenho por fiscal (periodo)</CardTitle>
+          <CardTitle>Desempenho por monitor → fiscal (periodo)</CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
-          {resumo.desempenhoFiscais.length === 0 ? (
-            <p className="px-6 pb-6 text-sm text-[hsl(var(--muted-foreground))]">Sem produção no periodo.</p>
+        <CardContent className="flex flex-col gap-5">
+          {resumo.arvoreDesempenho.length === 0 ? (
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">Sem produção no periodo.</p>
           ) : (
-            <table className="w-full text-left text-sm">
-              <thead className="border-y border-[hsl(var(--border))] text-xs uppercase text-[hsl(var(--muted-foreground))]">
-                <tr>
-                  <th className="px-6 py-2">Fiscal</th>
-                  <th className="px-6 py-2 text-right">Concluidas</th>
-                  <th className="px-6 py-2 text-right">Analisadas</th>
-                </tr>
-              </thead>
-              <tbody>
-                {resumo.desempenhoFiscais.map((fiscal) => (
-                  <tr key={fiscal.fiscalId} className="border-b border-[hsl(var(--border))] last:border-0">
-                    <td className="px-6 py-2">
-                      {fiscal.name}
-                      {fiscal.matricula ? (
-                        <span className="ml-1 text-xs text-[hsl(var(--muted-foreground))]">({fiscal.matricula})</span>
-                      ) : null}
-                    </td>
-                    <td className="px-6 py-2 text-right">{fiscal.concluidas}</td>
-                    <td className="px-6 py-2 text-right">{fiscal.analisadas}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            resumo.arvoreDesempenho.map((grupo) => (
+              <div key={grupo.regiao ?? "sem-regiao"} className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[hsl(var(--border))] pb-1">
+                  <span className="text-sm font-semibold">{grupo.regiao ?? "Sem regiao"}</span>
+                  <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                    {grupo.monitores.length > 0
+                      ? `Monitor: ${grupo.monitores.map((m) => `${m.name} (${m.matricula})`).join(", ")}`
+                      : "Sem monitor"}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1 pl-3">
+                  {grupo.fiscais.map((fiscal) => (
+                    <div key={fiscal.fiscalId} className="flex items-center justify-between text-sm">
+                      <span>
+                        {fiscal.name}
+                        {fiscal.matricula ? (
+                          <span className="ml-1 text-xs text-[hsl(var(--muted-foreground))]">
+                            ({fiscal.matricula})
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="text-[hsl(var(--muted-foreground))]">
+                        {fiscal.concluidas} concl. · {fiscal.analisadas} anal.
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
           )}
         </CardContent>
       </Card>

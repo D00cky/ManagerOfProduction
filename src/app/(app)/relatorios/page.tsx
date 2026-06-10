@@ -74,7 +74,14 @@ export default async function RelatoriosPage() {
               ) : (
                 relatorio.porFiscal.map((item) => (
                   <tr key={item.fiscalId} className="border-b border-[hsl(var(--border))] last:border-0">
-                    <td className="px-4 py-3 font-mono text-xs">{item.fiscalId}</td>
+                    <td className="px-4 py-3">
+                      {item.name}
+                      {item.matricula ? (
+                        <span className="ml-1 text-xs text-[hsl(var(--muted-foreground))]">
+                          ({item.matricula})
+                        </span>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-3">{item.total}</td>
                     <td className="px-4 py-3">{formatPercent(item.mediaPercentual)}</td>
                   </tr>

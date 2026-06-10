@@ -6,7 +6,7 @@ describe("demoOrdensServico", () => {
     expect(demoOrdensServico).toHaveLength(8);
     expect(new Set(demoOrdensServico.map((ordem) => ordem.numero)).size).toBe(demoOrdensServico.length);
     expect(demoOrdensServico.map((ordem) => ordem.tipoServico)).toEqual(
-      expect.arrayContaining(["LigacaoAgua", "Vistoria", "ReparoRede", "TrocaHidrometro"])
+      expect.arrayContaining(["RedeRamalAgua", "CavaleteHidrometro", "RedeRamalEsgoto", "Outros"])
     );
   });
 

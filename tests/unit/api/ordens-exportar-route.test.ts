@@ -38,7 +38,7 @@ describe("GET /api/ordens/exportar", () => {
     const { GET } = await import("@/app/api/ordens/exportar/route");
 
     const response = await GET(
-      new Request("http://localhost/api/ordens/exportar?status=Concluida&tipoServico=LigacaoAgua")
+      new Request("http://localhost/api/ordens/exportar?status=Concluida&tipoServico=RedeRamalAgua")
     );
 
     expect(response.status).toBe(200);
@@ -47,7 +47,7 @@ describe("GET /api/ordens/exportar", () => {
     expect(buildExportDataset).toHaveBeenCalledWith(
       { name: "repo" },
       user,
-      expect.objectContaining({ status: "Concluida", tipoServico: "LigacaoAgua" })
+      expect.objectContaining({ status: "Concluida", tipoServico: "RedeRamalAgua" })
     );
   });
 
