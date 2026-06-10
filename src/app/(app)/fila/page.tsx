@@ -54,8 +54,10 @@ export default async function FilaPage({
     listPolos(prismaPoloRepository, user)
   ]);
 
+  // Responsáveis atribuíveis: fiscais e monitores (um monitor pode atribuir OS a
+  // si mesmo ou a outros monitores). Supervisores não recebem OS.
   const fiscais: FiscalOption[] = equipe
-    .filter((membro) => membro.perfil === "fiscal")
+    .filter((membro) => membro.perfil === "fiscal" || membro.perfil === "monitor")
     .map((membro) => ({ id: membro.id, name: membro.name }));
   const fiscalNome = new Map(fiscais.map((fiscal) => [fiscal.id, fiscal.name]));
   const poloNome = new Map(polos.map((polo) => [polo.id, polo.nome]));
