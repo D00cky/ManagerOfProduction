@@ -189,6 +189,52 @@ describe("confirmarImportacao", () => {
     expect(repo.updateOrdem).toHaveBeenCalledWith("os-1001", expect.objectContaining({ fiscalId: "f1" }));
   });
 
+  it("collapses an in-file duplicate numero into a single create (atualizar, last wins)", async () => {
+    const repo = repository();
+    const duplicadas: NormalizedImportRow[] = [
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "Outros", polo: "Norte" },
+      { numero: "1001", enderecoCompleto: "Rua A, 99 (baixa)", tipoServico: "Outros", polo: "Norte" }
+    ];
+
+    const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, duplicadas, "atualizar");
+
+    expect(result).toMatchObject({ criadas: 1, atualizadas: 0, ignoradas: 1, invalidas: 0 });
+    const created = vi.mocked(repo.createOrdens).mock.calls[0][0];
+    expect(created).toHaveLength(1);
+    // Last occurrence wins on atualizar.
+    expect(created[0]).toMatchObject({ numero: "1001", enderecoCompleto: "Rua A, 99 (baixa)" });
+  });
+
+  it("collapses an in-file duplicate numero into a single create (ignorar, first wins)", async () => {
+    const repo = repository();
+    const duplicadas: NormalizedImportRow[] = [
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "Outros", polo: "Norte" },
+      { numero: "1001", enderecoCompleto: "Rua A, 99 (baixa)", tipoServico: "Outros", polo: "Norte" }
+    ];
+
+    const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, duplicadas, "ignorar");
+
+    expect(result).toMatchObject({ criadas: 1, atualizadas: 0, ignoradas: 1, invalidas: 0 });
+    const created = vi.mocked(repo.createOrdens).mock.calls[0][0];
+    expect(created).toHaveLength(1);
+    expect(created[0]).toMatchObject({ numero: "1001", enderecoCompleto: "Rua A, 10" });
+  });
+
+  it("updates an existing numero only once when the file repeats it (atualizar)", async () => {
+    const repo = repository(["1001"]);
+    const duplicadas: NormalizedImportRow[] = [
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "Outros", polo: "Norte" },
+      { numero: "1001", enderecoCompleto: "Rua A, 99 (baixa)", tipoServico: "Outros", polo: "Norte" }
+    ];
+
+    const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, duplicadas, "atualizar");
+
+    expect(result).toMatchObject({ criadas: 0, atualizadas: 1, ignoradas: 1, invalidas: 0 });
+    expect(repo.createOrdens).not.toHaveBeenCalled();
+    expect(repo.updateOrdem).toHaveBeenCalledTimes(1);
+    expect(repo.updateOrdem).toHaveBeenCalledWith("os-1001", expect.objectContaining({ enderecoCompleto: "Rua A, 99 (baixa)" }));
+  });
+
   it("logs the final import summary", async () => {
     const repo = repository();
 
