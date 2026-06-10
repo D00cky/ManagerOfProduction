@@ -140,7 +140,7 @@ model OrdemServico {
   tabulacao            Tabulacao?
   logs                 LogAtividade[]
 
-  @@index([fiscalId, status])
+  // [fiscalId, status] is covered by the [fiscalId, status, concluidaEm] prefix below.
   @@index([poloId, status, fiscalId, dataProgramada, createdAt])
   @@index([createdAt])
   @@index([regiaoAdministrativa, cidade])
