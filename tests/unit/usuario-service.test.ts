@@ -180,6 +180,46 @@ describe("atualizarUsuario", () => {
     expect(updated.perfil).toBe("monitor");
     expect(repository.update).toHaveBeenCalledWith("u1", { perfil: "monitor" });
   });
+
+  it("resets the password when provided and keeps it out of the log", async () => {
+    const repository = repo();
+
+    await atualizarUsuario(repository, supervisor, "u1", { password: "novaSenha1" });
+
+    expect(repository.update).toHaveBeenCalledWith("u1", { password: "novaSenha1" });
+    expect(repository.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ senhaAlterada: true, changes: {} })
+      })
+    );
+  });
+
+  it("rejects a password shorter than 6 characters", async () => {
+    const repository = repo();
+
+    await expect(
+      atualizarUsuario(repository, supervisor, "u1", { password: "123" })
+    ).rejects.toThrow("ao menos 6");
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects an email or matricula already used by another user", async () => {
+    const repository = repo({ existing: usuario({ id: "other" }) });
+
+    await expect(
+      atualizarUsuario(repository, supervisor, "u1", { email: "Other@Example.com" })
+    ).rejects.toThrow("ja cadastrado");
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it("allows changing identifiers when the only match is the same user", async () => {
+    const repository = repo({ existing: usuario({ id: "u1" }) });
+
+    const updated = await atualizarUsuario(repository, supervisor, "u1", { email: "New@Example.com" });
+
+    expect(updated.email).toBe("new@example.com");
+    expect(repository.update).toHaveBeenCalledWith("u1", { email: "new@example.com" });
+  });
 });
 
 describe("excluirUsuario", () => {

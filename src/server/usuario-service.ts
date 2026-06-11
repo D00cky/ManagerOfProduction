@@ -25,10 +25,14 @@ export type CriarUsuarioInput = {
 
 export type AtualizarUsuarioInput = Partial<{
   name: string;
+  email: string;
+  matricula: string;
   perfil: Perfil;
   poloId: string | null;
   regiao: string | null;
   status: StatusUsuario;
+  /** Nova senha (reset pelo supervisor); o repositório aplica o hash. */
+  password: string;
 }>;
 
 export type UsuarioLogInput = {
@@ -110,13 +114,40 @@ export async function atualizarUsuario(
   if (!target) throw new Error("Usuario nao encontrado");
 
   const sanitized: AtualizarUsuarioInput = { ...data };
+  if (sanitized.name !== undefined) sanitized.name = sanitized.name.trim();
+  if (sanitized.email !== undefined) sanitized.email = sanitized.email.trim().toLowerCase();
+  if (sanitized.matricula !== undefined) sanitized.matricula = sanitized.matricula.trim();
   if (sanitized.regiao !== undefined) sanitized.regiao = sanitized.regiao?.trim() || null;
+
+  if (sanitized.name !== undefined && !sanitized.name) throw new Error("Nome obrigatorio");
+  if (sanitized.email !== undefined && !sanitized.email) throw new Error("E-mail obrigatorio");
+  if (sanitized.matricula !== undefined && !sanitized.matricula) throw new Error("Matricula obrigatoria");
+  if (sanitized.perfil !== undefined && !perfis.includes(sanitized.perfil)) {
+    throw new Error("Perfil invalido");
+  }
+  if (sanitized.password !== undefined && sanitized.password.length < 6) {
+    throw new Error("Senha deve ter ao menos 6 caracteres");
+  }
+
+  // Unicidade ao alterar identificadores: e-mail/matrícula não podem colidir com
+  // outro usuário (o próprio registro é ignorado).
+  if (sanitized.email || sanitized.matricula) {
+    const existing = await repository.findByLogin(sanitized.email ?? "", sanitized.matricula ?? "");
+    if (existing && existing.id !== id) throw new Error("E-mail ou matricula ja cadastrado");
+  }
+
   const updated = await repository.update(id, sanitized);
+  // Nunca registrar a senha em texto no log de atividade.
+  const { password, ...changesSemSenha } = data;
   await repository.log({
     evento: "usuario",
     descricao: `Usuario ${target.email} atualizado`,
     userId: user.id,
-    metadata: { id, changes: data as Prisma.InputJsonValue }
+    metadata: {
+      id,
+      changes: changesSemSenha as Prisma.InputJsonValue,
+      senhaAlterada: password !== undefined
+    }
   });
   return updated;
 }
