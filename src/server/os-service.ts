@@ -171,8 +171,12 @@ export async function atribuirOrdem(
   if (!ordem) throw new Error("OS nao encontrada");
   if (!isOrdemInUserScope(ordem, user)) throw new Error("OS fora do escopo do usuario");
 
+  // O responsável por uma OS pode ser um fiscal ou um monitor (monitor pode
+  // atribuir a si mesmo ou a outros monitores). Supervisores não são atribuíveis.
   const fiscal = await repository.findFiscalById(fiscalId);
-  if (!fiscal || fiscal.perfil !== "fiscal") throw new Error("Fiscal invalido");
+  if (!fiscal || (fiscal.perfil !== "fiscal" && fiscal.perfil !== "monitor")) {
+    throw new Error("Fiscal invalido");
+  }
 
   const polos = allowedPoloIds(user);
   if (polos && (!fiscal.poloId || !polos.includes(fiscal.poloId))) {
@@ -202,8 +206,11 @@ export async function atribuirOrdensLote(
   }
   if (ordemIds.length === 0) return { atribuidas: 0 };
 
+  // Responsável pode ser fiscal ou monitor (mesma regra da atribuição individual).
   const fiscal = await repository.findFiscalById(fiscalId);
-  if (!fiscal || fiscal.perfil !== "fiscal") throw new Error("Fiscal invalido");
+  if (!fiscal || (fiscal.perfil !== "fiscal" && fiscal.perfil !== "monitor")) {
+    throw new Error("Fiscal invalido");
+  }
 
   const polos = allowedPoloIds(user);
   if (polos && (!fiscal.poloId || !polos.includes(fiscal.poloId))) {
