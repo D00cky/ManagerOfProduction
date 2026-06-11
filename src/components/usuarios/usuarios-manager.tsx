@@ -40,8 +40,58 @@ export function UsuariosManager({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState(emptyForm);
 
   const poloNome = new Map(polos.map((polo) => [polo.id, polo.nome]));
+
+  function startEdit(usuario: UsuarioResumo) {
+    setError(null);
+    setEditId(usuario.id);
+    setEditForm({
+      name: usuario.name,
+      email: usuario.email,
+      matricula: usuario.matricula,
+      password: "",
+      perfil: usuario.perfil,
+      poloId: usuario.poloId ?? "",
+      regiao: usuario.regiao ?? ""
+    });
+  }
+
+  function cancelEdit() {
+    setEditId(null);
+    setEditForm(emptyForm);
+  }
+
+  async function handleUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editId) return;
+    setError(null);
+    setBusyId(editId);
+    const response = await fetch(`/api/usuarios/${editId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: editForm.name,
+        email: editForm.email,
+        matricula: editForm.matricula,
+        perfil: editForm.perfil,
+        poloId: editForm.poloId || null,
+        regiao: editForm.perfil === "monitor" ? editForm.regiao || null : null,
+        // Senha só vai quando preenchida (reset opcional).
+        ...(editForm.password ? { password: editForm.password } : {})
+      })
+    });
+    setBusyId(null);
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      setError(body.error ?? "Erro ao atualizar usuario.");
+      return;
+    }
+    cancelEdit();
+    router.refresh();
+  }
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -213,7 +263,116 @@ export function UsuariosManager({
         </CardContent>
       </Card>
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {editId ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Editar usuario</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form className="grid gap-4 md:grid-cols-2" onSubmit={handleUpdate}>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="edit-name">Nome</Label>
+                <Input
+                  id="edit-name"
+                  value={editForm.name}
+                  onChange={(event) => setEditForm({ ...editForm, name: event.target.value })}
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="edit-email">E-mail</Label>
+                <Input
+                  id="edit-email"
+                  type="email"
+                  value={editForm.email}
+                  onChange={(event) => setEditForm({ ...editForm, email: event.target.value })}
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="edit-matricula">Matricula</Label>
+                <Input
+                  id="edit-matricula"
+                  value={editForm.matricula}
+                  onChange={(event) => setEditForm({ ...editForm, matricula: event.target.value })}
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="edit-password">Nova senha (deixe em branco para manter)</Label>
+                <Input
+                  id="edit-password"
+                  type="password"
+                  value={editForm.password}
+                  onChange={(event) => setEditForm({ ...editForm, password: event.target.value })}
+                  autoComplete="new-password"
+                  minLength={6}
+                  placeholder="••••••"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="edit-perfil">Perfil</Label>
+                <Select
+                  id="edit-perfil"
+                  value={editForm.perfil}
+                  onChange={(event) => setEditForm({ ...editForm, perfil: event.target.value as Perfil })}
+                >
+                  {perfis.map((perfil) => (
+                    <option key={perfil} value={perfil}>
+                      {perfilLabel(perfil)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="edit-poloId">Polo</Label>
+                <Select
+                  id="edit-poloId"
+                  value={editForm.poloId}
+                  onChange={(event) => setEditForm({ ...editForm, poloId: event.target.value })}
+                >
+                  <option value="">Sem polo</option>
+                  {polos.map((polo) => (
+                    <option key={polo.id} value={polo.id}>
+                      {polo.nome}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              {editForm.perfil === "monitor" ? (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="edit-regiao">Regiao (monitor)</Label>
+                  <Select
+                    id="edit-regiao"
+                    value={editForm.regiao}
+                    onChange={(event) => setEditForm({ ...editForm, regiao: event.target.value })}
+                  >
+                    <option value="">Sem regiao</option>
+                    {REGIOES_SP.map((regiao) => (
+                      <option key={regiao} value={regiao}>
+                        {regiao}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              ) : null}
+
+              {error ? <p className="text-sm text-red-600 md:col-span-2">{error}</p> : null}
+
+              <div className="flex gap-2 md:col-span-2">
+                <Button type="submit" disabled={busyId === editId}>
+                  {busyId === editId ? "Salvando..." : "Salvar alteracoes"}
+                </Button>
+                <Button type="button" variant="outline" onClick={cancelEdit}>
+                  Cancelar
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {error && !editId ? <p className="text-sm text-red-600">{error}</p> : null}
 
       <Card className="overflow-hidden">
         <table className="w-full text-left text-sm">
@@ -276,6 +435,14 @@ export function UsuariosManager({
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={busyId === usuario.id}
+                        onClick={() => startEdit(usuario)}
+                      >
+                        Editar
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
