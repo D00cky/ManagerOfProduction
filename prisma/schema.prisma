@@ -106,7 +106,7 @@ model UserPoloAccess {
 
 model OrdemServico {
   id                   String         @id @default(cuid())
-  numero               String         @unique
+  numero               String
   enderecoCompleto     String
   numeroImovel         String?
   complemento          String?
@@ -140,6 +140,9 @@ model OrdemServico {
   tabulacao            Tabulacao?
   logs                 LogAtividade[]
 
+  // Uma OS é única por numero + TSS + TSE: a mesma OS com serviço (TSS/TSE)
+  // diferente é um registro distinto, não uma duplicata.
+  @@unique([numero, codigoTss, codigoTse])
   // [fiscalId, status] is covered by the [fiscalId, status, concluidaEm] prefix below.
   @@index([poloId, status, fiscalId, dataProgramada, createdAt])
   @@index([createdAt])

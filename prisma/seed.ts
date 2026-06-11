@@ -67,10 +67,12 @@ async function main() {
 
   const fiscais = new Map([[fiscal.matricula, fiscal.id]]);
   for (const ordem of demoOrdensServico) {
-    await prisma.ordemServico.upsert({
-      where: { numero: ordem.numero },
-      update: {},
-      create: {
+    // numero não é mais único por si só (a unicidade é numero + TSS + TSE), então
+    // mantemos a idempotência checando a existência antes de criar.
+    const existente = await prisma.ordemServico.findFirst({ where: { numero: ordem.numero } });
+    if (existente) continue;
+    await prisma.ordemServico.create({
+      data: {
         numero: ordem.numero,
         enderecoCompleto: ordem.enderecoCompleto,
         bairro: ordem.bairro,

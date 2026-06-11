@@ -7,7 +7,12 @@ export type DuplicateMode = "ignorar" | "atualizar";
 
 export type ImportacaoPolo = { id: string; nome: string; codigo: string; regiao: string | null };
 export type ImportacaoFiscal = { id: string; name: string; matricula: string };
-export type ImportacaoOrdemExistente = { id: string; numero: string };
+export type ImportacaoOrdemExistente = {
+  id: string;
+  numero: string;
+  codigoTss: string | null;
+  codigoTse: string | null;
+};
 /** Open (NaFila/EmExecucao/Pendente) OS ids a fiscal currently holds. */
 export type OpenWorkFiscal = { fiscalId: string; ordemIds: string[] };
 
@@ -111,9 +116,12 @@ export async function confirmarImportacao(
     for (const polo of await repository.ensurePolos(missingPolos)) addPolo(poloMap, polo);
   }
 
+  // Uma OS só é "duplicada" quando coincide numero + TSS + TSE. A mesma OS com
+  // TSS/TSE diferentes é um serviço distinto e deve coexistir, então a chave de
+  // deduplicação (aqui e no colapso intra-arquivo abaixo) combina os três.
   const existentes = new Map(
     (await repository.findOrdensByNumero(rows.map((row) => row.numero).filter(Boolean))).map(
-      (ordem) => [ordem.numero, ordem] as const
+      (ordem) => [ordemKey(ordem.numero, ordem.codigoTss, ordem.codigoTse), ordem] as const
     )
   );
 
@@ -149,7 +157,7 @@ export async function confirmarImportacao(
     preparadas.push({
       linha,
       fiscalId: fiscal?.id ?? null,
-      existente: existentes.get(row.numero) ?? null,
+      existente: existentes.get(ordemKey(row.numero, row.codigoTss, row.codigoTse)) ?? null,
       input: {
         numero: row.numero,
         enderecoCompleto: row.enderecoCompleto,
@@ -180,22 +188,23 @@ export async function confirmarImportacao(
     });
   }
 
-  // Collapse intra-file duplicate OS numbers so each numero is written once
-  // (a "baixa" sheet can repeat the same OS on several rows). Last occurrence
-  // wins on "atualizar"; first wins on "ignorar"; collapsed rows are reported
-  // as ignoradas. Without this, every occurrence of a not-yet-persisted numero
-  // lands in `creates` and createMany self-collides on the unique constraint.
-  const porNumero = new Map<string, Preparada>();
+  // Collapse intra-file duplicate OS (mesma numero + TSS + TSE) so each is
+  // written once (a "baixa" sheet can repeat the same OS on several rows). Last
+  // occurrence wins on "atualizar"; first wins on "ignorar"; collapsed rows are
+  // reported as ignoradas. Without this, every occurrence of a not-yet-persisted
+  // OS lands in `creates` and createMany self-collides on the unique constraint.
+  const porChave = new Map<string, Preparada>();
   for (const prep of preparadas) {
-    const previo = porNumero.get(prep.input.numero);
+    const chave = ordemKey(prep.input.numero, prep.input.codigoTss, prep.input.codigoTse);
+    const previo = porChave.get(chave);
     if (!previo) {
-      porNumero.set(prep.input.numero, prep);
+      porChave.set(chave, prep);
     } else {
       resumo.ignoradas += 1;
-      if (duplicateMode === "atualizar") porNumero.set(prep.input.numero, prep);
+      if (duplicateMode === "atualizar") porChave.set(chave, prep);
     }
   }
-  const unicas = [...porNumero.values()].sort((a, b) => a.linha - b.linha);
+  const unicas = [...porChave.values()].sort((a, b) => a.linha - b.linha);
 
   // Open work per referenced fiscal, in one query.
   const openWork = new Map(
@@ -258,6 +267,16 @@ export async function confirmarImportacao(
   });
 
   return resumo;
+}
+
+// Chave de duplicidade de uma OS: mesma numero + TSS + TSE. Codigos ausentes
+// normalizam para "" para que dois registros sem TSS/TSE colapsem entre si.
+function ordemKey(
+  numero: string,
+  codigoTss: string | null | undefined,
+  codigoTse: string | null | undefined
+) {
+  return `${numero} ${codigoTss ?? ""} ${codigoTse ?? ""}`;
 }
 
 function validateRow(row: NormalizedImportRow) {
