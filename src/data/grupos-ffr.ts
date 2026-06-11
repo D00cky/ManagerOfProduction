@@ -279,13 +279,14 @@ function grupoPorDescricao(descricao: string | null | undefined): string | null 
  * Specific FFR group ids for an OS, derived from BOTH the requested service
  * (TSS PAI = descricaoTss) and the executed service (TSE = descricaoTse), so an
  * OS that spans different solicitado/executado services shows each group's
- * criteria. Ordered (TSS PAI first), de-duplicated. Falls back to the
+ * criteria. Ordered (TSS PAI first). Duplicates are kept: if both descriptions
+ * resolve to the same group, it appears once per service. Falls back to the
  * tipoServico group only when neither description matches a keyword.
  */
 export function selecionarGruposEspecificosIds(ctx: OrdemFfrContext): string[] {
   const ids: string[] = [];
   for (const id of [grupoPorDescricao(ctx.descricaoTss), grupoPorDescricao(ctx.descricaoTse)]) {
-    if (id && !ids.includes(id)) ids.push(id);
+    if (id) ids.push(id);
   }
   if (ids.length === 0) {
     const fallback = tipoServicoFallback[ctx.tipoServico];

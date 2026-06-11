@@ -104,11 +104,13 @@ export async function buildExportDataset(
   const ordens = await repository.findOrdensParaExport(where);
 
   // Uma OS pode abranger vários serviços (TSS PAI + TSE): entra em cada planilha
-  // correspondente. Sem grupo específico, cai em "Sem categoria".
+  // correspondente. Aqui as categorias repetidas colapsam para não duplicar a
+  // mesma linha numa aba; sem grupo específico, cai em "Sem categoria".
   const grupos = new Map<string, OrdemExport[]>();
   for (const ordem of ordens) {
     const ids = selecionarGruposEspecificosIds(ordem);
-    for (const id of ids.length > 0 ? ids : [SEM_CATEGORIA.id]) {
+    const categorias = ids.length > 0 ? Array.from(new Set(ids)) : [SEM_CATEGORIA.id];
+    for (const id of categorias) {
       const lista = grupos.get(id);
       if (lista) lista.push(ordem);
       else grupos.set(id, [ordem]);

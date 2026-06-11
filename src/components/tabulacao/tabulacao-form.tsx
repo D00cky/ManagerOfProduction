@@ -140,8 +140,8 @@ export function TabulacaoForm({
         </p>
       ) : null}
 
-      {grupos.map((grupo) => (
-        <Card key={grupo.id}>
+      {grupos.map((grupo, index) => (
+        <Card key={`${grupo.id}-${index}`}>
           <CardHeader>
             <CardTitle>{grupo.nome}</CardTitle>
           </CardHeader>

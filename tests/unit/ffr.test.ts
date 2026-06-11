@@ -80,14 +80,19 @@ describe("selecionarGrupoEspecificoId / gruposParaOrdem", () => {
     ]);
   });
 
-  it("de-duplicates when TSS PAI and TSE map to the same group", () => {
+  it("keeps the repeated group when TSS PAI and TSE map to the same one", () => {
     const ctx = {
       tipoServico: "Outros" as const,
       descricaoTss: "LIGAÇÃO DE ÁGUA",
       descricaoTse: "LIGAÇÃO DE ÁGUA S/V"
     };
-    expect(selecionarGruposEspecificosIds(ctx)).toEqual(["ramal_agua"]);
-    expect(gruposParaOrdem(ctx).map((g) => g.id)).toEqual(["gerais", "nao_executado", "ramal_agua"]);
+    expect(selecionarGruposEspecificosIds(ctx)).toEqual(["ramal_agua", "ramal_agua"]);
+    expect(gruposParaOrdem(ctx).map((g) => g.id)).toEqual([
+      "gerais",
+      "nao_executado",
+      "ramal_agua",
+      "ramal_agua"
+    ]);
   });
 });
 
