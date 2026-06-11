@@ -51,7 +51,7 @@ function os(overrides: Partial<OrdemServico> = {}): OrdemServico {
 function repo(
   record: OrdemServico,
   hasTabulacao = false,
-  fiscal: FiscalRef | null = { id: "f2", perfil: "fiscal", poloId: "p1" },
+  fiscal: FiscalRef | null = { id: "f2", perfil: "fiscal", poloId: "p1", regiao: "Campinas" },
   claimed: OrdemServico | null = null
 ): OrdemRepository {
   return {
@@ -212,11 +212,11 @@ describe("updateOrdemStatus", () => {
   });
 
   it("uses logical cancellation and preserves the record", async () => {
-    const repository = repo(os({ status: "Pendente" }), false);
+    const repository = repo(os({ status: "Pendente", regiaoAdministrativa: "Campinas" }), false);
 
     const updated = await updateOrdemStatus(
       repository,
-      { id: "m1", perfil: "monitor", poloId: "p1" },
+      { id: "m1", perfil: "monitor", poloId: "p1", regiao: "Campinas" },
       "os1",
       "Cancelada",
       new Date("2026-06-07T13:00:00.000Z")
@@ -227,16 +227,57 @@ describe("updateOrdemStatus", () => {
     expect(repository.updateStatus).toHaveBeenCalledWith("os1", expect.objectContaining({ status: "Cancelada" }));
   });
 
-  it("rejects invalid transitions", async () => {
-    const repository = repo(os({ status: "NaFila" }), false);
+  it("lets a monitor change status of a região-matching OS in a different polo", async () => {
+    // OS importada: polo auto-criado diferente, mas mesma região do monitor.
+    const repository = repo(
+      os({ status: "EmExecucao", poloId: "polo-importado", regiaoAdministrativa: "Campinas" }),
+      false
+    );
+
+    const updated = await updateOrdemStatus(
+      repository,
+      { id: "m1", perfil: "monitor", poloId: "p1", regiao: "Campinas" },
+      "os1",
+      "Pendente"
+    );
+
+    expect(updated.status).toBe("Pendente");
+  });
+
+  it("blocks a monitor from a status change on an OS in another região", async () => {
+    const repository = repo(os({ status: "NaFila", regiaoAdministrativa: "Santos" }), false);
 
     await expect(
-      updateOrdemStatus(repository, { id: "m1", perfil: "monitor", poloId: "p1" }, "os1", "Concluida")
+      updateOrdemStatus(
+        repository,
+        { id: "m1", perfil: "monitor", poloId: "p1", regiao: "Campinas" },
+        "os1",
+        "EmExecucao"
+      )
+    ).rejects.toThrow("OS fora do escopo do usuario");
+  });
+
+  it("rejects invalid transitions", async () => {
+    const repository = repo(os({ status: "NaFila", regiaoAdministrativa: "Campinas" }), false);
+
+    await expect(
+      updateOrdemStatus(
+        repository,
+        { id: "m1", perfil: "monitor", poloId: "p1", regiao: "Campinas" },
+        "os1",
+        "Concluida"
+      )
     ).rejects.toThrow("Finalizacao exige tabulacao salva");
   });
 });
 
 describe("atribuirOrdem", () => {
+  // Monitor de Campinas e OS na mesma região (o polo pode ser qualquer um, ex.: polo
+  // auto-criado de uma importação) — o escopo do monitor é por região, não por polo.
+  const monitorCampinas = { id: "m1", perfil: "monitor" as const, poloId: "p1", regiao: "Campinas" };
+  const osCampinas = (overrides: Partial<OrdemServico> = {}) =>
+    os({ regiaoAdministrativa: "Campinas", fiscalId: null, ...overrides });
+
   it("denies users without the os:write capability", async () => {
     const repository = repo(os());
 
@@ -246,83 +287,103 @@ describe("atribuirOrdem", () => {
     expect(repository.updateFiscal).not.toHaveBeenCalled();
   });
 
-  it("blocks assigning an OS outside the requester scope", async () => {
-    const repository = repo(os({ poloId: "p9", fiscalId: null }));
+  it("blocks assigning an OS in another região", async () => {
+    const repository = repo(osCampinas({ regiaoAdministrativa: "Santos" }));
 
-    await expect(
-      atribuirOrdem(repository, { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] }, "os1", "f2")
-    ).rejects.toThrow("OS fora do escopo do usuario");
+    await expect(atribuirOrdem(repository, monitorCampinas, "os1", "f2")).rejects.toThrow(
+      "OS fora do escopo do usuario"
+    );
+  });
+
+  it("blocks a monitor when the OS has no regiaoAdministrativa", async () => {
+    const repository = repo(osCampinas({ regiaoAdministrativa: null }));
+
+    await expect(atribuirOrdem(repository, monitorCampinas, "os1", "f2")).rejects.toThrow(
+      "OS fora do escopo do usuario"
+    );
   });
 
   it("rejects a target that is neither fiscal nor monitor (e.g. supervisor)", async () => {
-    const repository = repo(os({ fiscalId: null }), false, { id: "s9", perfil: "supervisor", poloId: "p1" });
+    const repository = repo(osCampinas(), false, { id: "s9", perfil: "supervisor", poloId: "p1", regiao: null });
 
-    await expect(
-      atribuirOrdem(repository, { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] }, "os1", "s9")
-    ).rejects.toThrow("Fiscal invalido");
+    await expect(atribuirOrdem(repository, monitorCampinas, "os1", "s9")).rejects.toThrow("Fiscal invalido");
   });
 
-  it("allows a monitor to assign an OS to another monitor", async () => {
-    const repository = repo(os({ fiscalId: null }), false, { id: "m2", perfil: "monitor", poloId: "p1" });
+  it("allows a monitor to assign an OS to another monitor in the same região", async () => {
+    const repository = repo(osCampinas(), false, { id: "m2", perfil: "monitor", poloId: null, regiao: "Campinas" });
 
-    const updated = await atribuirOrdem(
-      repository,
-      { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] },
-      "os1",
-      "m2"
-    );
+    const updated = await atribuirOrdem(repository, monitorCampinas, "os1", "m2");
 
     expect(updated.fiscalId).toBe("m2");
     expect(repository.updateFiscal).toHaveBeenCalledWith("os1", "m2");
   });
 
-  it("allows a monitor to assign an OS to themselves", async () => {
-    const repository = repo(os({ fiscalId: null }), false, { id: "m1", perfil: "monitor", poloId: "p1" });
+  it("blocks a monitor from assigning to a monitor in another região", async () => {
+    const repository = repo(osCampinas(), false, { id: "m2", perfil: "monitor", poloId: null, regiao: "Santos" });
 
-    const updated = await atribuirOrdem(
-      repository,
-      { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] },
-      "os1",
-      "m1"
+    await expect(atribuirOrdem(repository, monitorCampinas, "os1", "m2")).rejects.toThrow(
+      "Fiscal fora do escopo do usuario"
     );
+    expect(repository.updateFiscal).not.toHaveBeenCalled();
+  });
+
+  it("allows a monitor to assign an OS to themselves", async () => {
+    const repository = repo(osCampinas(), false, { id: "m1", perfil: "monitor", poloId: "p1", regiao: "Campinas" });
+
+    const updated = await atribuirOrdem(repository, monitorCampinas, "os1", "m1");
 
     expect(updated.fiscalId).toBe("m1");
     expect(repository.updateFiscal).toHaveBeenCalledWith("os1", "m1");
   });
 
-  it("rejects an unknown fiscal", async () => {
-    const repository = repo(os({ fiscalId: null }), false, null);
+  it("allows a monitor to self-assign even if their own polo has no região", async () => {
+    // Self-assign é sempre permitido, independentemente da região efetiva do responsável.
+    const repository = repo(osCampinas(), false, { id: "m1", perfil: "monitor", poloId: "px", regiao: null });
 
-    await expect(
-      atribuirOrdem(repository, { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] }, "os1", "ghost")
-    ).rejects.toThrow("Fiscal invalido");
+    const updated = await atribuirOrdem(repository, monitorCampinas, "os1", "m1");
+
+    expect(updated.fiscalId).toBe("m1");
   });
 
-  it("blocks a monitor from assigning a fiscal outside their polos", async () => {
-    const repository = repo(os({ fiscalId: null }), false, { id: "f2", perfil: "fiscal", poloId: "p2" });
-
-    await expect(
-      atribuirOrdem(repository, { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] }, "os1", "f2")
-    ).rejects.toThrow("Fiscal fora do escopo do usuario");
-    expect(repository.updateFiscal).not.toHaveBeenCalled();
-  });
-
-  it("allows assigning even when the fiscal already holds open work (backlog)", async () => {
-    const repository = repo(os({ fiscalId: null }), false, { id: "f2", perfil: "fiscal", poloId: "p1" });
-
-    const updated = await atribuirOrdem(
-      repository,
-      { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] },
-      "os1",
-      "f2"
+  it("allows a monitor to assign an imported OS (região match, different polo) to a região fiscal", async () => {
+    const repository = repo(
+      osCampinas({ poloId: "polo-importado" }),
+      false,
+      { id: "f2", perfil: "fiscal", poloId: "polo-campinas", regiao: "Campinas" }
     );
+
+    const updated = await atribuirOrdem(repository, monitorCampinas, "os1", "f2");
 
     expect(updated.fiscalId).toBe("f2");
     expect(repository.updateFiscal).toHaveBeenCalledWith("os1", "f2");
   });
 
-  it("lets a supervisor assign a fiscal from any polo", async () => {
-    const repository = repo(os({ fiscalId: null }), false, { id: "f2", perfil: "fiscal", poloId: "p9" });
+  it("rejects an unknown fiscal", async () => {
+    const repository = repo(osCampinas(), false, null);
+
+    await expect(atribuirOrdem(repository, monitorCampinas, "os1", "ghost")).rejects.toThrow("Fiscal invalido");
+  });
+
+  it("blocks a monitor from assigning a fiscal outside their região", async () => {
+    const repository = repo(osCampinas(), false, { id: "f2", perfil: "fiscal", poloId: "p2", regiao: "Santos" });
+
+    await expect(atribuirOrdem(repository, monitorCampinas, "os1", "f2")).rejects.toThrow(
+      "Fiscal fora do escopo do usuario"
+    );
+    expect(repository.updateFiscal).not.toHaveBeenCalled();
+  });
+
+  it("allows assigning even when the fiscal already holds open work (backlog)", async () => {
+    const repository = repo(osCampinas(), false, { id: "f2", perfil: "fiscal", poloId: "p1", regiao: "Campinas" });
+
+    const updated = await atribuirOrdem(repository, monitorCampinas, "os1", "f2");
+
+    expect(updated.fiscalId).toBe("f2");
+    expect(repository.updateFiscal).toHaveBeenCalledWith("os1", "f2");
+  });
+
+  it("lets a supervisor assign a fiscal from any região", async () => {
+    const repository = repo(os({ fiscalId: null }), false, { id: "f2", perfil: "fiscal", poloId: "p9", regiao: "Santos" });
 
     const updated = await atribuirOrdem(
       repository,
@@ -335,14 +396,9 @@ describe("atribuirOrdem", () => {
   });
 
   it("assigns a fiscal and logs an atribuicao when previously unassigned", async () => {
-    const repository = repo(os({ fiscalId: null }));
+    const repository = repo(osCampinas({ fiscalId: null }));
 
-    const updated = await atribuirOrdem(
-      repository,
-      { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] },
-      "os1",
-      "f2"
-    );
+    const updated = await atribuirOrdem(repository, monitorCampinas, "os1", "f2");
 
     expect(updated.fiscalId).toBe("f2");
     expect(repository.updateFiscal).toHaveBeenCalledWith("os1", "f2");
@@ -384,12 +440,12 @@ describe("atribuirOrdensLote", () => {
     expect(repository.assignManyToFiscal).not.toHaveBeenCalled();
   });
 
-  it("rejects a fiscal outside the caller's polos", async () => {
-    const repository = repo(os(), false, { id: "f2", perfil: "fiscal", poloId: "p9" });
+  it("rejects a responsável outside the caller's região", async () => {
+    const repository = repo(os(), false, { id: "f2", perfil: "fiscal", poloId: "p9", regiao: "Santos" });
     await expect(
       atribuirOrdensLote(
         repository,
-        { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] },
+        { id: "m1", perfil: "monitor", poloId: "p1", regiao: "Campinas" },
         ["os1", "os2"],
         "f2"
       )
@@ -397,7 +453,7 @@ describe("atribuirOrdensLote", () => {
   });
 
   it("assigns every in-scope OS to the fiscal and logs the batch", async () => {
-    const repository = repo(os(), false, { id: "f2", perfil: "fiscal", poloId: "p1" });
+    const repository = repo(os(), false, { id: "f2", perfil: "fiscal", poloId: "p1", regiao: "Campinas" });
 
     const result = await atribuirOrdensLote(
       repository,

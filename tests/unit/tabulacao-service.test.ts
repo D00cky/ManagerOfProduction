@@ -143,10 +143,10 @@ describe("saveTabulacao", () => {
   });
 
   it("records who tabulated and keeps the OS fiscal as the report key", async () => {
-    const repository = repo(os({ fiscalId: "f1" }));
+    const repository = repo(os({ fiscalId: "f1", regiaoAdministrativa: "Campinas" }));
 
     // A monitor in scope tabulates an OS assigned to fiscal f1.
-    await saveTabulacao(repository, { id: "m1", perfil: "monitor", poloId: "p1", regiao: null }, {
+    await saveTabulacao(repository, { id: "m1", perfil: "monitor", poloId: "p1", regiao: "Campinas" }, {
       ordemServicoId: "os1",
       respostas: { gerais_q1: "1" }
     });
@@ -156,12 +156,35 @@ describe("saveTabulacao", () => {
     );
   });
 
-  it("requires a reason when a monitor alters someone else's tabulation", async () => {
-    const existing = tabulacao({ tabuladoPorId: "f1" });
-    const repository = repo(os({ fiscalId: "f1" }), existing);
+  it("lets a monitor tabulate a região-matching imported OS in a foreign polo", async () => {
+    // OS importada: polo auto-criado diferente, mas mesma região do monitor.
+    const repository = repo(os({ fiscalId: "f1", poloId: "polo-importado", regiaoAdministrativa: "Campinas" }));
+
+    await saveTabulacao(repository, { id: "m1", perfil: "monitor", poloId: "p1", regiao: "Campinas" }, {
+      ordemServicoId: "os1",
+      respostas: { gerais_q1: "1" }
+    });
+
+    expect(repository.upsertTabulacao).toHaveBeenCalled();
+  });
+
+  it("blocks a monitor from tabulating an OS in another região", async () => {
+    const repository = repo(os({ fiscalId: "f1", regiaoAdministrativa: "Santos" }));
 
     await expect(
-      saveTabulacao(repository, { id: "m1", perfil: "monitor", poloId: "p1", regiao: null }, {
+      saveTabulacao(repository, { id: "m1", perfil: "monitor", poloId: "p1", regiao: "Campinas" }, {
+        ordemServicoId: "os1",
+        respostas: { gerais_q1: "1" }
+      })
+    ).rejects.toThrow("OS fora do escopo do usuario");
+  });
+
+  it("requires a reason when a monitor alters someone else's tabulation", async () => {
+    const existing = tabulacao({ tabuladoPorId: "f1" });
+    const repository = repo(os({ fiscalId: "f1", regiaoAdministrativa: "Campinas" }), existing);
+
+    await expect(
+      saveTabulacao(repository, { id: "m1", perfil: "monitor", poloId: "p1", regiao: "Campinas" }, {
         ordemServicoId: "os1",
         respostas: { gerais_q1: "1" }
       })
@@ -170,11 +193,11 @@ describe("saveTabulacao", () => {
 
   it("records the alteration (who + reason) when reason is provided", async () => {
     const existing = tabulacao({ tabuladoPorId: "f1" });
-    const repository = repo(os({ fiscalId: "f1" }), existing);
+    const repository = repo(os({ fiscalId: "f1", regiaoAdministrativa: "Campinas" }), existing);
 
     await saveTabulacao(
       repository,
-      { id: "m1", perfil: "monitor", poloId: "p1", regiao: null },
+      { id: "m1", perfil: "monitor", poloId: "p1", regiao: "Campinas" },
       { ordemServicoId: "os1", respostas: { gerais_q1: "1" }, motivoAlteracao: "correcao de peso" },
       new Date("2026-06-10T12:00:00.000Z")
     );

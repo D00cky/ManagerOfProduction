@@ -2,6 +2,15 @@ import type { Perfil, Prisma, StatusUsuario } from "@prisma/client";
 import { hasPermission } from "@/lib/permissions";
 import { allowedPoloIds, type SessionUserScope } from "@/lib/scope";
 
+/**
+ * Escopo de listagem da equipe: supervisor vê todos; monitor vê quem está na sua
+ * região (fiscais/monitores cujo polo é da região, monitores da região, e sempre
+ * o próprio monitor, mesmo que o polo dele esteja inconsistente).
+ */
+export type EquipeScope =
+  | { tipo: "todos" }
+  | { tipo: "regiao"; regiao: string; selfId: string };
+
 export type MembroEquipe = {
   id: string;
   name: string;
@@ -20,8 +29,7 @@ export type EquipeLogInput = {
 };
 
 export type EquipeRepository = {
-  // poloIds === undefined means no polo restriction (supervisor scope).
-  list(poloIds: string[] | undefined): Promise<MembroEquipe[]>;
+  list(scope: EquipeScope): Promise<MembroEquipe[]>;
   findMembro(id: string): Promise<MembroEquipe | null>;
   updatePolo(id: string, poloId: string | null): Promise<MembroEquipe>;
   log(input: EquipeLogInput): Promise<void>;
@@ -31,7 +39,11 @@ export async function listEquipe(repository: EquipeRepository, user: SessionUser
   if (!hasPermission(user.perfil, "equipe:read")) {
     throw new Error("Sem permissao para ver a equipe");
   }
-  return repository.list(allowedPoloIds(user));
+  const scope: EquipeScope =
+    user.perfil === "supervisor"
+      ? { tipo: "todos" }
+      : { tipo: "regiao", regiao: user.regiao ?? "", selfId: user.id };
+  return repository.list(scope);
 }
 
 export async function atualizarPoloMembro(
