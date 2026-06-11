@@ -238,26 +238,6 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Atividades recentes</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          {resumo.atividades.length === 0 ? (
-            <p className="text-sm text-[hsl(var(--muted-foreground))]">Sem atividades.</p>
-          ) : (
-            resumo.atividades.map((log) => (
-              <div key={log.id} className="flex items-center justify-between text-sm">
-                <span>{log.descricao}</span>
-                <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                  {log.createdAt.toLocaleString("pt-BR")}
-                </span>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

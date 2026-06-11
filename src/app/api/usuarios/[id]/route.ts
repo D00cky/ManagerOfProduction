@@ -18,10 +18,13 @@ export async function PATCH(request: Request, context: RouteContext) {
   const body = (await request.json().catch(() => ({}))) as Partial<AtualizarUsuarioInput>;
   const data: AtualizarUsuarioInput = {};
   if (typeof body.name === "string") data.name = body.name;
+  if (typeof body.email === "string") data.email = body.email;
+  if (typeof body.matricula === "string") data.matricula = body.matricula;
   if (body.perfil !== undefined) data.perfil = body.perfil;
   if (body.poloId !== undefined) data.poloId = body.poloId;
   if (body.regiao !== undefined) data.regiao = body.regiao;
   if (body.status !== undefined) data.status = body.status;
+  if (typeof body.password === "string") data.password = body.password;
 
   const { id } = await context.params;
   try {

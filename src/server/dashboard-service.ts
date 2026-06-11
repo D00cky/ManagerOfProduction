@@ -1,14 +1,7 @@
-import type { EventoLog, Prisma, StatusOS } from "@prisma/client";
+import type { Prisma, StatusOS } from "@prisma/client";
 import { differenceInCalendarDays, startOfDay } from "date-fns";
 import { buildOsScope, type SessionUserScope } from "@/lib/scope";
 import { REGIOES_SP } from "@/data/regioes-sp";
-
-export type DashboardLog = {
-  id: string;
-  evento: EventoLog;
-  descricao: string;
-  createdAt: Date;
-};
 
 export type DashboardFiltros = {
   regiao?: string;
@@ -93,7 +86,6 @@ export type DashboardRepository = {
     where: Prisma.OrdemServicoWhereInput,
     periodo: DashboardPeriodo
   ): Promise<number>;
-  findRecentLogs(where: Prisma.OrdemServicoWhereInput): Promise<DashboardLog[]>;
   findGeoFacets(where: Prisma.OrdemServicoWhereInput): Promise<GeoFacet[]>;
   findFiscais(ids: string[]): Promise<DashboardFiscal[]>;
   /** All monitors (with the região each oversees) for the Monitor→Fiscal tree. */
@@ -156,7 +148,6 @@ export type DashboardResumo = {
     fiscalId: string | null;
     poloId: string;
   }>;
-  atividades: DashboardLog[];
   filtros: { regiao?: string; municipio?: string };
   opcoesGeograficas: Array<{ regiao: string; municipios: string[] }>;
 };
@@ -187,7 +178,6 @@ export async function getDashboardResumo(
     regiaoRows,
     desempenhoRows,
     fiscaisAtivos,
-    atividades,
     facets
   ] = await Promise.all([
     repository.countByStatus(where),
@@ -199,9 +189,8 @@ export async function getDashboardResumo(
     repository.agruparPorRegiao(where, periodo),
     repository.desempenhoPorFiscal(where, periodo),
     repository.contarFiscaisAtivos(where, periodo),
-    // Recent activity and geo filter options stay on the access scope (not narrowed
-    // by the geo filter) so they don't collapse as the user narrows.
-    repository.findRecentLogs(scope),
+    // Geo filter options stay on the access scope (not narrowed by the geo filter)
+    // so they don't collapse as the user narrows.
     repository.findGeoFacets(scope)
   ]);
 
@@ -254,7 +243,6 @@ export async function getDashboardResumo(
     metricas: calculateMetricas(statusCounts),
     progressoPorFiscal,
     osParadas: calculateOsParadas(parariasRows, now),
-    atividades,
     filtros: { regiao: filtros.regiao, municipio: filtros.municipio },
     opcoesGeograficas: buildOpcoesGeograficas(facets)
   };

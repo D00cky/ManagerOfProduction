@@ -48,7 +48,12 @@ export const prismaUsuarioRepository: UsuarioRepository = {
     });
   },
   update(id: string, data: AtualizarUsuarioInput) {
-    return prisma.user.update({ where: { id }, data, select: resumoSelect });
+    const { password, ...rest } = data;
+    return prisma.user.update({
+      where: { id },
+      data: password ? { ...rest, passwordHash: bcrypt.hashSync(password, 10) } : rest,
+      select: resumoSelect
+    });
   },
   async remove(id: string) {
     try {
