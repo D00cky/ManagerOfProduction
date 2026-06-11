@@ -277,17 +277,25 @@ function grupoPorDescricao(descricao: string | null | undefined): string | null 
 
 /**
  * Specific FFR group ids for an OS, derived from BOTH the requested service
- * (TSS PAI = descricaoTss) and the executed service (TSE = descricaoTse), so an
- * OS that spans different solicitado/executado services shows each group's
- * criteria. Ordered (TSS PAI first). Duplicates are kept: if both descriptions
- * resolve to the same group, it appears once per service. Falls back to the
- * tipoServico group only when neither description matches a keyword.
+ * (TSS PAI = descricaoTss) and the executed service (TSE = descricaoTse), in
+ * order (TSS PAI first). A duplicate is only the SAME service on the same OS:
+ * when the two descriptions are equal, the group is shown once. Two DIFFERENT
+ * services are kept even when they resolve to the same criteria group (e.g.
+ * CORTE + RELIGAÇÃO → cavalete). Falls back to the tipoServico group only when
+ * neither description matches a keyword.
  */
 export function selecionarGruposEspecificosIds(ctx: OrdemFfrContext): string[] {
+  const grupoTss = grupoPorDescricao(ctx.descricaoTss);
+  const grupoTse = grupoPorDescricao(ctx.descricaoTse);
+  const mesmoServico =
+    ctx.descricaoTss != null &&
+    ctx.descricaoTse != null &&
+    normalizeHeader(ctx.descricaoTss) === normalizeHeader(ctx.descricaoTse);
+
   const ids: string[] = [];
-  for (const id of [grupoPorDescricao(ctx.descricaoTss), grupoPorDescricao(ctx.descricaoTse)]) {
-    if (id) ids.push(id);
-  }
+  if (grupoTss) ids.push(grupoTss);
+  if (grupoTse && !mesmoServico) ids.push(grupoTse);
+
   if (ids.length === 0) {
     const fallback = tipoServicoFallback[ctx.tipoServico];
     if (fallback) ids.push(fallback);
