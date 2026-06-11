@@ -135,16 +135,6 @@ export const prismaDashboardRepository: DashboardRepository = {
     for (const row of analisaram) ativos.add(row.fiscalId);
     return ativos.size;
   },
-  findRecentLogs(where: Prisma.OrdemServicoWhereInput) {
-    return prisma.logAtividade.findMany({
-      where: {
-        OR: [{ ordemServico: where }, { ordemServicoId: null }]
-      },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-      select: { id: true, evento: true, descricao: true, createdAt: true }
-    });
-  },
   findGeoFacets(where: Prisma.OrdemServicoWhereInput) {
     return prisma.ordemServico.findMany({
       where,

@@ -139,9 +139,6 @@ function repository(ordens: OrdemServico[], tabulacoes: TabFixture[] = []): Dash
       }
       return ativos.size;
     }),
-    findRecentLogs: vi.fn(async () => [
-      { id: "log1", evento: "status" as const, descricao: "OS atualizada", createdAt: new Date("2026-06-07T11:00:00.000Z") }
-    ]),
     findGeoFacets: vi.fn(async (where: Record<string, unknown>) => {
       const seen = new Set<string>();
       const facets: Array<{ regiaoAdministrativa: string | null; cidade: string | null }> = [];
