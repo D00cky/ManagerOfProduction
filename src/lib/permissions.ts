@@ -46,6 +46,7 @@ export const rolePermissions: Record<Perfil, Permission[]> = {
 export const navigation = [
   { href: "/dashboard", label: "Dashboard", permission: "dashboard:read" },
   { href: "/fila", label: "Fila de OS", permission: "fila:read" },
+  { href: "/tabulacao", label: "Minhas OS", permission: "tabulacao:write" },
   { href: "/importar", label: "Importar Excel", permission: "importacao:write" },
   { href: "/equipe", label: "Equipe", permission: "equipe:read" },
   { href: "/usuarios", label: "Usuarios", permission: "usuarios:write" },

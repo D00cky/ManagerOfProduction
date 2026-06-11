@@ -1,7 +1,9 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type Perfil } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createLogAtividade } from "@/server/log";
 import type { EquipeRepository } from "@/server/equipe-service";
+
+const perfisEquipe: Perfil[] = ["fiscal", "monitor"];
 
 const membroSelect = {
   id: true,
@@ -14,15 +16,22 @@ const membroSelect = {
 } satisfies Prisma.UserSelect;
 
 export const prismaEquipeRepository: EquipeRepository = {
-  list(poloIds: string[] | undefined) {
-    return prisma.user.findMany({
-      where: {
-        perfil: { in: ["fiscal", "monitor"] },
-        ...(poloIds ? { poloId: { in: poloIds } } : {})
-      },
-      orderBy: { name: "asc" },
-      select: membroSelect
-    });
+  list(scope) {
+    const where: Prisma.UserWhereInput =
+      scope.tipo === "todos"
+        ? { perfil: { in: perfisEquipe } }
+        : {
+            perfil: { in: perfisEquipe },
+            OR: [
+              // Fiscais/monitores cujo polo é da região (fiscais herdam via polo).
+              { polo: { regiao: scope.regiao } },
+              // Monitores da região (a região fica no cadastro do monitor).
+              { regiao: scope.regiao },
+              // Sempre inclui o próprio monitor, mesmo com polo inconsistente.
+              { id: scope.selfId }
+            ]
+          };
+    return prisma.user.findMany({ where, orderBy: { name: "asc" }, select: membroSelect });
   },
   findMembro(id: string) {
     return prisma.user.findFirst({
