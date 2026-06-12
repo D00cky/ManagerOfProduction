@@ -346,6 +346,28 @@ describe("getDashboardResumo", () => {
     ]);
   });
 
+  it("computes fixed today and month progress independent of the filter period", async () => {
+    const now = new Date("2026-06-12T20:00:00.000Z");
+    const hoje = new Date("2026-06-12T09:00:00.000Z");
+    const inicioMes = new Date("2026-06-03T09:00:00.000Z");
+    const mesPassado = new Date("2026-05-20T09:00:00.000Z");
+    const ordens = [
+      os({ id: "1", status: "Concluida", concluidaEm: hoje, createdAt: hoje }),
+      os({ id: "2", status: "Concluida", concluidaEm: inicioMes, createdAt: inicioMes }),
+      os({ id: "3", status: "Concluida", concluidaEm: mesPassado, createdAt: mesPassado })
+    ];
+    const repo = repository(ordens);
+
+    // Filtro restrito ao mês passado — os cards fixos de hoje/mês devem ignorá-lo.
+    const resumo = await getDashboardResumo(repo, { id: "s1", perfil: "supervisor" }, now, {
+      from: new Date("2026-05-01T00:00:00.000Z"),
+      to: new Date("2026-05-31T23:59:59.000Z")
+    });
+
+    expect(resumo.progressoHoje).toEqual({ entradas: 1, analisadas: 0, concluidas: 1 });
+    expect(resumo.progressoMes).toEqual({ entradas: 2, analisadas: 0, concluidas: 2 });
+  });
+
   it("returns stalled OS older than the threshold and not terminal", async () => {
     const repo = repository([
       os({ id: "old", numero: "1001", status: "Pendente", updatedAt: new Date("2026-06-05T10:00:00.000Z") }),

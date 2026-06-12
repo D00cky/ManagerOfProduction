@@ -269,6 +269,74 @@ describe("updateOrdemStatus", () => {
       )
     ).rejects.toThrow("Finalizacao exige tabulacao salva");
   });
+
+  it("self-assigns an unassigned OS to a monitor when they start it", async () => {
+    const repository = repo(
+      os({ status: "NaFila", fiscalId: null, regiaoAdministrativa: "Campinas" }),
+      false
+    );
+
+    const updated = await updateOrdemStatus(
+      repository,
+      { id: "m1", perfil: "monitor", poloId: "p1", regiao: "Campinas" },
+      "os1",
+      "EmExecucao"
+    );
+
+    expect(updated.fiscalId).toBe("m1");
+    expect(repository.updateStatus).toHaveBeenCalledWith(
+      "os1",
+      expect.objectContaining({ status: "EmExecucao", fiscalId: "m1" })
+    );
+    expect(repository.log).toHaveBeenCalledWith({
+      evento: "atribuicao",
+      descricao: "OS 1001 atribuida automaticamente ao monitor m1",
+      userId: "m1",
+      ordemServicoId: "os1",
+      metadata: { fiscalId: "m1", ordemServicoId: "os1" }
+    });
+  });
+
+  it("does not steal an OS already owned by a fiscal when a monitor starts it", async () => {
+    const repository = repo(
+      os({ status: "NaFila", fiscalId: "f1", regiaoAdministrativa: "Campinas" }),
+      false
+    );
+
+    await updateOrdemStatus(
+      repository,
+      { id: "m1", perfil: "monitor", poloId: "p1", regiao: "Campinas" },
+      "os1",
+      "EmExecucao"
+    );
+
+    expect(repository.updateStatus).toHaveBeenCalledWith(
+      "os1",
+      expect.not.objectContaining({ fiscalId: expect.anything() })
+    );
+    expect(repository.log).not.toHaveBeenCalledWith(
+      expect.objectContaining({ evento: "atribuicao" })
+    );
+  });
+
+  it("does not self-assign when a fiscal starts their own OS", async () => {
+    const repository = repo(os({ status: "NaFila", fiscalId: "f1" }), false);
+
+    await updateOrdemStatus(
+      repository,
+      { id: "f1", perfil: "fiscal", poloId: "p1" },
+      "os1",
+      "EmExecucao"
+    );
+
+    expect(repository.updateStatus).toHaveBeenCalledWith(
+      "os1",
+      expect.not.objectContaining({ fiscalId: expect.anything() })
+    );
+    expect(repository.log).not.toHaveBeenCalledWith(
+      expect.objectContaining({ evento: "atribuicao" })
+    );
+  });
 });
 
 describe("atribuirOrdem", () => {

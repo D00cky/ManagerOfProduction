@@ -3,7 +3,7 @@ import { canTransitionStatus, hasPermission } from "@/lib/permissions";
 import { buildOsScope, type SessionUserScope } from "@/lib/scope";
 
 export type OrdemStatusUpdate = Partial<
-  Pick<OrdemServico, "status" | "iniciadaEm" | "concluidaEm" | "canceladaEm">
+  Pick<OrdemServico, "status" | "iniciadaEm" | "concluidaEm" | "canceladaEm" | "fiscalId">
 >;
 
 export type LogInput = {
@@ -151,6 +151,11 @@ export async function updateOrdemStatus(
   if (status === "Concluida") data.concluidaEm = now;
   if (status === "Cancelada") data.canceladaEm = now;
 
+  // Ao iniciar uma OS sem fiscal, o monitor assume a responsabilidade por ela
+  // (vira o responsável). OS já atribuídas a um fiscal não são "roubadas".
+  const autoAtribui = status === "EmExecucao" && user.perfil === "monitor" && ordem.fiscalId == null;
+  if (autoAtribui) data.fiscalId = user.id;
+
   const updated = await repository.updateStatus(ordemServicoId, data);
   await repository.log({
     evento: "status",
@@ -159,6 +164,15 @@ export async function updateOrdemStatus(
     ordemServicoId,
     metadata: { from: ordem.status, to: status }
   });
+  if (autoAtribui) {
+    await repository.log({
+      evento: "atribuicao",
+      descricao: `OS ${ordem.numero} atribuida automaticamente ao monitor ${user.id}`,
+      userId: user.id,
+      ordemServicoId,
+      metadata: { fiscalId: user.id, ordemServicoId }
+    });
+  }
   return updated;
 }
 

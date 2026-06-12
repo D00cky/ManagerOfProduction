@@ -63,6 +63,11 @@ export default async function DashboardPage({
   const resumo = await getDashboardResumo(prismaDashboardRepository, user, now, filtros);
   const { metricas, funnel } = resumo;
 
+  const progressoFixo = [
+    { titulo: "Progresso de hoje", dados: resumo.progressoHoje },
+    { titulo: "Progresso do mes", dados: resumo.progressoMes }
+  ];
+
   const funnelCards = [
     { label: "Entraram", value: funnel.entradas },
     { label: "Analisadas", value: funnel.analisadas },
@@ -90,6 +95,30 @@ export default async function DashboardPage({
         regiao={resumo.filtros.regiao}
         municipio={resumo.filtros.municipio}
       />
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {progressoFixo.map((bloco) => (
+          <Card key={bloco.titulo}>
+            <CardHeader>
+              <CardTitle>{bloco.titulo}</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-3 gap-3 text-center">
+              <div>
+                <p className="text-xs uppercase text-[hsl(var(--muted-foreground))]">Entraram</p>
+                <p className="text-2xl font-semibold">{bloco.dados.entradas}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase text-[hsl(var(--muted-foreground))]">Analisadas</p>
+                <p className="text-2xl font-semibold">{bloco.dados.analisadas}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase text-[hsl(var(--muted-foreground))]">Concluidas</p>
+                <p className="text-2xl font-semibold">{bloco.dados.concluidas}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center gap-2">

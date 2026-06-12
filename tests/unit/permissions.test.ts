@@ -18,6 +18,12 @@ describe("permissions", () => {
     expect(hasPermission("monitor", "equipe:write")).toBe(true);
     expect(hasPermission("fiscal", "equipe:write")).toBe(false);
   });
+
+  it("grants the fiscal performance dashboard only to fiscais", () => {
+    expect(hasPermission("fiscal", "desempenho:read")).toBe(true);
+    expect(hasPermission("monitor", "desempenho:read")).toBe(false);
+    expect(hasPermission("supervisor", "desempenho:read")).toBe(false);
+  });
 });
 
 describe("canTransitionStatus", () => {
