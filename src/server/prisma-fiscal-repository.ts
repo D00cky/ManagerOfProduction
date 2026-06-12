@@ -16,5 +16,18 @@ export const prismaFiscalRepository: FiscalRepository = {
       orderBy: [{ dataProgramada: "asc" }, { createdAt: "asc" }],
       select: { id: true, numero: true }
     });
+  },
+  contarConcluidasNoPeriodo(fiscalId: string, from: Date, to: Date) {
+    return prisma.ordemServico.count({
+      where: { fiscalId, concluidaEm: { gte: from, lte: to } }
+    });
+  },
+  async contarConcluidasPorTipoNoPeriodo(fiscalId: string, from: Date, to: Date) {
+    const rows = await prisma.ordemServico.groupBy({
+      by: ["tipoServico"],
+      where: { fiscalId, concluidaEm: { gte: from, lte: to } },
+      _count: { _all: true }
+    });
+    return rows.map((row) => ({ tipoServico: row.tipoServico, count: row._count._all }));
   }
 };

@@ -21,7 +21,7 @@ export default async function TabulacaoIndexPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">Minhas OS</h1>
-      <FiscalResumoCards resumo={home.resumo} />
+      <FiscalResumoCards resumo={home.resumo} concluidasHoje={home.concluidasHoje} />
       <Card>
         <CardContent className="p-6 text-sm text-[hsl(var(--muted-foreground))]">
           Nenhuma OS pendente para tabular no momento. Bom trabalho!

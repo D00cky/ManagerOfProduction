@@ -2,11 +2,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import type { FiscalResumo } from "@/server/fiscal-service";
 
 /** Per-fiscal mini dashboard shown inside the tabulação flow. */
-export function FiscalResumoCards({ resumo }: { resumo: FiscalResumo }) {
+export function FiscalResumoCards({
+  resumo,
+  concluidasHoje
+}: {
+  resumo: FiscalResumo;
+  concluidasHoje: number;
+}) {
   const cards = [
     { label: "Importadas (atribuidas)", value: resumo.total },
-    { label: "Concluidas", value: resumo.concluidas },
-    { label: "Restantes", value: resumo.restantes }
+    { label: "Na fila", value: resumo.naFila },
+    { label: "Concluidas hoje", value: concluidasHoje }
   ];
   return (
     <div className="grid grid-cols-3 gap-3">
