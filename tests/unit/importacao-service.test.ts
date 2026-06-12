@@ -31,8 +31,12 @@ const rows: NormalizedImportRow[] = [
   }
 ];
 
-function repository(existingNumbers: string[] = []): ImportacaoRepository {
-  const existing = new Set(existingNumbers);
+type ExistingOrdem = { numero: string; codigoTss?: string | null; codigoTse?: string | null };
+
+function repository(existingNumbers: Array<string | ExistingOrdem> = []): ImportacaoRepository {
+  const existing = existingNumbers.map((entry) =>
+    typeof entry === "string" ? { numero: entry } : entry
+  );
   return {
     listPolos: vi.fn(async () => [{ id: "p1", nome: "Norte", codigo: "NRT", regiao: "São Paulo" }]),
     ensurePolos: vi.fn(async (values: string[]) =>
@@ -47,9 +51,17 @@ function repository(existingNumbers: string[] = []): ImportacaoRepository {
       { id: "f1", name: "Joao Fiscal", matricula: "2001" },
       { id: "f2", name: "Maria Fiscal", matricula: "2002" }
     ]),
-    findOrdensByNumero: vi.fn(async (numeros: string[]) =>
-      numeros.filter((numero) => existing.has(numero)).map((numero) => ({ id: `os-${numero}`, numero }))
-    ),
+    findOrdensByNumero: vi.fn(async (numeros: string[]) => {
+      const wanted = new Set(numeros);
+      return existing
+        .filter((ordem) => wanted.has(ordem.numero))
+        .map((ordem) => ({
+          id: `os-${ordem.numero}`,
+          numero: ordem.numero,
+          codigoTss: ordem.codigoTss ?? null,
+          codigoTse: ordem.codigoTse ?? null
+        }));
+    }),
     openWorkByFiscal: vi.fn(async () => []),
     createOrdens: vi.fn(async () => undefined),
     updateOrdem: vi.fn(async () => undefined),
@@ -187,6 +199,89 @@ describe("confirmarImportacao", () => {
     await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, [rows[0]], "atualizar");
 
     expect(repo.updateOrdem).toHaveBeenCalledWith("os-1001", expect.objectContaining({ fiscalId: "f1" }));
+  });
+
+  it("collapses an in-file duplicate numero into a single create (atualizar, last wins)", async () => {
+    const repo = repository();
+    const duplicadas: NormalizedImportRow[] = [
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "Outros", polo: "Norte" },
+      { numero: "1001", enderecoCompleto: "Rua A, 99 (baixa)", tipoServico: "Outros", polo: "Norte" }
+    ];
+
+    const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, duplicadas, "atualizar");
+
+    expect(result).toMatchObject({ criadas: 1, atualizadas: 0, ignoradas: 1, invalidas: 0 });
+    const created = vi.mocked(repo.createOrdens).mock.calls[0][0];
+    expect(created).toHaveLength(1);
+    // Last occurrence wins on atualizar.
+    expect(created[0]).toMatchObject({ numero: "1001", enderecoCompleto: "Rua A, 99 (baixa)" });
+  });
+
+  it("collapses an in-file duplicate numero into a single create (ignorar, first wins)", async () => {
+    const repo = repository();
+    const duplicadas: NormalizedImportRow[] = [
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "Outros", polo: "Norte" },
+      { numero: "1001", enderecoCompleto: "Rua A, 99 (baixa)", tipoServico: "Outros", polo: "Norte" }
+    ];
+
+    const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, duplicadas, "ignorar");
+
+    expect(result).toMatchObject({ criadas: 1, atualizadas: 0, ignoradas: 1, invalidas: 0 });
+    const created = vi.mocked(repo.createOrdens).mock.calls[0][0];
+    expect(created).toHaveLength(1);
+    expect(created[0]).toMatchObject({ numero: "1001", enderecoCompleto: "Rua A, 10" });
+  });
+
+  it("updates an existing numero only once when the file repeats it (atualizar)", async () => {
+    const repo = repository(["1001"]);
+    const duplicadas: NormalizedImportRow[] = [
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "Outros", polo: "Norte" },
+      { numero: "1001", enderecoCompleto: "Rua A, 99 (baixa)", tipoServico: "Outros", polo: "Norte" }
+    ];
+
+    const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, duplicadas, "atualizar");
+
+    expect(result).toMatchObject({ criadas: 0, atualizadas: 1, ignoradas: 1, invalidas: 0 });
+    expect(repo.createOrdens).not.toHaveBeenCalled();
+    expect(repo.updateOrdem).toHaveBeenCalledTimes(1);
+    expect(repo.updateOrdem).toHaveBeenCalledWith("os-1001", expect.objectContaining({ enderecoCompleto: "Rua A, 99 (baixa)" }));
+  });
+
+  it("treats same numero with different TSS/TSE as distinct OS (creates both)", async () => {
+    const repo = repository();
+    const mesmaOs: NormalizedImportRow[] = [
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "Outros", polo: "Norte", codigoTss: "100", codigoTse: "A" },
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "Outros", polo: "Norte", codigoTss: "200", codigoTse: "B" }
+    ];
+
+    const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, mesmaOs, "ignorar");
+
+    expect(result).toMatchObject({ criadas: 2, atualizadas: 0, ignoradas: 0, invalidas: 0 });
+    expect(vi.mocked(repo.createOrdens).mock.calls[0][0]).toHaveLength(2);
+  });
+
+  it("does not treat a same-numero row as duplicate of an existing OS with a different TSS/TSE", async () => {
+    const repo = repository([{ numero: "1001", codigoTss: "100", codigoTse: "A" }]);
+    const novaServico: NormalizedImportRow[] = [
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "Outros", polo: "Norte", codigoTss: "200", codigoTse: "B" }
+    ];
+
+    const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, novaServico, "ignorar");
+
+    expect(result).toMatchObject({ criadas: 1, atualizadas: 0, ignoradas: 0, invalidas: 0 });
+    expect(repo.updateOrdem).not.toHaveBeenCalled();
+  });
+
+  it("treats a same numero + same TSS + same TSE row as a duplicate of an existing OS", async () => {
+    const repo = repository([{ numero: "1001", codigoTss: "100", codigoTse: "A" }]);
+    const mesmoServico: NormalizedImportRow[] = [
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "Outros", polo: "Norte", codigoTss: "100", codigoTse: "A" }
+    ];
+
+    const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, mesmoServico, "ignorar");
+
+    expect(result).toMatchObject({ criadas: 0, atualizadas: 0, ignoradas: 1, invalidas: 0 });
+    expect(repo.createOrdens).not.toHaveBeenCalled();
   });
 
   it("logs the final import summary", async () => {

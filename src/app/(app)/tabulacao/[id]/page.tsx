@@ -35,7 +35,7 @@ export default async function TabulacaoPage({ params }: { params: Promise<{ id: 
         <h1 className="text-2xl font-semibold">Tabulacao — OS {ordem.numero}</h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))]">{ordem.tipoServico}</p>
       </div>
-      {home ? <FiscalResumoCards resumo={home.resumo} /> : null}
+      {home ? <FiscalResumoCards resumo={home.resumo} concluidasHoje={home.concluidasHoje} /> : null}
       <FormularioFiscalizacaoHeader ordem={ordem} fiscalNome={fiscalNome} />
       <TabulacaoForm
         ordemId={ordem.id}

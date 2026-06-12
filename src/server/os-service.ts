@@ -1,9 +1,9 @@
 import type { EventoLog, OrdemServico, Perfil, Prisma, StatusOS, TipoServico } from "@prisma/client";
 import { canTransitionStatus, hasPermission } from "@/lib/permissions";
-import { allowedPoloIds, buildOsScope, type SessionUserScope } from "@/lib/scope";
+import { buildOsScope, type SessionUserScope } from "@/lib/scope";
 
 export type OrdemStatusUpdate = Partial<
-  Pick<OrdemServico, "status" | "iniciadaEm" | "concluidaEm" | "canceladaEm">
+  Pick<OrdemServico, "status" | "iniciadaEm" | "concluidaEm" | "canceladaEm" | "fiscalId">
 >;
 
 export type LogInput = {
@@ -18,6 +18,11 @@ export type FiscalRef = {
   id: string;
   perfil: Perfil;
   poloId: string | null;
+  /**
+   * Região efetiva do responsável: a do próprio cadastro (monitores) ou, na
+   * falta dela, a do polo vinculado (fiscais herdam a região via o polo).
+   */
+  regiao: string | null;
 };
 
 export type ClaimedOrdem = Pick<OrdemServico, "id" | "numero" | "poloId" | "fiscalId">;
@@ -146,6 +151,11 @@ export async function updateOrdemStatus(
   if (status === "Concluida") data.concluidaEm = now;
   if (status === "Cancelada") data.canceladaEm = now;
 
+  // Ao iniciar uma OS sem fiscal, o monitor assume a responsabilidade por ela
+  // (vira o responsável). OS já atribuídas a um fiscal não são "roubadas".
+  const autoAtribui = status === "EmExecucao" && user.perfil === "monitor" && ordem.fiscalId == null;
+  if (autoAtribui) data.fiscalId = user.id;
+
   const updated = await repository.updateStatus(ordemServicoId, data);
   await repository.log({
     evento: "status",
@@ -154,6 +164,15 @@ export async function updateOrdemStatus(
     ordemServicoId,
     metadata: { from: ordem.status, to: status }
   });
+  if (autoAtribui) {
+    await repository.log({
+      evento: "atribuicao",
+      descricao: `OS ${ordem.numero} atribuida automaticamente ao monitor ${user.id}`,
+      userId: user.id,
+      ordemServicoId,
+      metadata: { fiscalId: user.id, ordemServicoId }
+    });
+  }
   return updated;
 }
 
@@ -178,8 +197,7 @@ export async function atribuirOrdem(
     throw new Error("Fiscal invalido");
   }
 
-  const polos = allowedPoloIds(user);
-  if (polos && (!fiscal.poloId || !polos.includes(fiscal.poloId))) {
+  if (!podeAtribuirResponsavel(user, fiscal)) {
     throw new Error("Fiscal fora do escopo do usuario");
   }
 
@@ -212,8 +230,7 @@ export async function atribuirOrdensLote(
     throw new Error("Fiscal invalido");
   }
 
-  const polos = allowedPoloIds(user);
-  if (polos && (!fiscal.poloId || !polos.includes(fiscal.poloId))) {
+  if (!podeAtribuirResponsavel(user, fiscal)) {
     throw new Error("Fiscal fora do escopo do usuario");
   }
 
@@ -264,6 +281,26 @@ export async function excluirOrdens(
 export function isOrdemInUserScope(ordem: OrdemServico, user: SessionUserScope) {
   if (user.perfil === "supervisor") return true;
   if (user.perfil === "fiscal") return ordem.fiscalId === user.id;
-  const polos = allowedPoloIds(user) ?? [];
-  return polos.includes(ordem.poloId);
+  // Monitor: região inteira, espelhando buildOsScope. OS importadas ficam em
+  // polos auto-criados (regiao:null) mas carregam regiaoAdministrativa resolvida,
+  // então o escopo é pela região da OS, não pelo polo.
+  return (
+    ordem.regiaoAdministrativa != null &&
+    user.regiao != null &&
+    ordem.regiaoAdministrativa === user.regiao
+  );
+}
+
+/**
+ * Pode o caller atribuir uma OS a este responsável? Supervisor não tem
+ * restrição; um monitor pode atribuir a si mesmo e a qualquer fiscal/monitor da
+ * sua região. (Fiscais não chegam aqui — não têm os:write.)
+ */
+function podeAtribuirResponsavel(user: SessionUserScope, fiscal: FiscalRef): boolean {
+  if (user.perfil === "supervisor") return true;
+  if (fiscal.id === user.id) return true;
+  if (user.perfil === "monitor") {
+    return user.regiao != null && fiscal.regiao === user.regiao;
+  }
+  return false;
 }

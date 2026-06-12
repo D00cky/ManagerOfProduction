@@ -71,7 +71,7 @@ export const prismaImportacaoRepository: ImportacaoRepository = {
     if (numeros.length === 0) return [];
     return prisma.ordemServico.findMany({
       where: { numero: { in: numeros } },
-      select: { id: true, numero: true }
+      select: { id: true, numero: true, codigoTss: true, codigoTse: true }
     });
   },
   async openWorkByFiscal(fiscalIds: string[]) {

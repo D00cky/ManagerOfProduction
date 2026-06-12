@@ -1,5 +1,5 @@
 import type { Prisma, StatusOS } from "@prisma/client";
-import { differenceInCalendarDays, startOfDay } from "date-fns";
+import { differenceInCalendarDays, startOfDay, startOfMonth } from "date-fns";
 import { buildOsScope, type SessionUserScope } from "@/lib/scope";
 import { REGIOES_SP } from "@/data/regioes-sp";
 
@@ -60,6 +60,9 @@ export type HierarquiaLinha = { chave: string | null; entradas: number; concluid
 /** Per-fiscal output within the time window. */
 export type FiscalDesempenhoRow = { fiscalId: string; concluidas: number; analisadas: number };
 
+/** Throughput totals over a single fixed window (today / this month). */
+export type ProgressoPeriodo = { entradas: number; analisadas: number; concluidas: number };
+
 export type DashboardRepository = {
   /** Current snapshot, not time-windowed: drives the status cards. */
   countByStatus(where: Prisma.OrdemServicoWhereInput): Promise<StatusCount[]>;
@@ -100,6 +103,10 @@ export type DashboardResumo = {
     concluidas: number;
     percentualConclusao: number;
   };
+  /** Progresso fixo de hoje, independente do filtro de período. */
+  progressoHoje: ProgressoPeriodo;
+  /** Progresso fixo do mês corrente, independente do filtro de período. */
+  progressoMes: ProgressoPeriodo;
   porRegiao: Array<{ regiao: string | null; entradas: number; concluidas: number }>;
   fiscaisAtivos: number;
   desempenhoFiscais: Array<{
@@ -164,6 +171,9 @@ export async function getDashboardResumo(
   const scope = buildOsScope(user);
   const where = mergeScopeAndGeo(scope, filtros);
   const periodo = resolvePeriodo(filtros, now);
+  // Janelas fixas independentes do filtro: progresso de hoje e do mês corrente.
+  const janelaHoje: DashboardPeriodo = { from: startOfDay(now), to: now };
+  const janelaMes: DashboardPeriodo = { from: startOfMonth(now), to: now };
   // "Parada" cutoff keeps the calendar-day semantics: stalled means the last
   // update was at least OS_PARADA_DIAS calendar days ago.
   const updatedBefore = startOfDay(subDaysCal(now, OS_PARADA_DIAS - 1));
@@ -178,7 +188,9 @@ export async function getDashboardResumo(
     regiaoRows,
     desempenhoRows,
     fiscaisAtivos,
-    facets
+    facets,
+    progressoHoje,
+    progressoMes
   ] = await Promise.all([
     repository.countByStatus(where),
     repository.progressoPorFiscal(where),
@@ -191,7 +203,9 @@ export async function getDashboardResumo(
     repository.contarFiscaisAtivos(where, periodo),
     // Geo filter options stay on the access scope (not narrowed by the geo filter)
     // so they don't collapse as the user narrows.
-    repository.findGeoFacets(scope)
+    repository.findGeoFacets(scope),
+    contarProgresso(repository, where, janelaHoje),
+    contarProgresso(repository, where, janelaMes)
   ]);
 
   // Resolve names once for every fiscal referenced by progress or performance.
@@ -236,6 +250,8 @@ export async function getDashboardResumo(
       concluidas,
       percentualConclusao: entradas > 0 ? concluidas / entradas : 0
     },
+    progressoHoje,
+    progressoMes,
     porRegiao: mapRegiao(regiaoRows),
     fiscaisAtivos,
     desempenhoFiscais,
@@ -250,6 +266,20 @@ export async function getDashboardResumo(
 
 function resolvePeriodo(filtros: DashboardFiltros, now: Date): DashboardPeriodo {
   return { from: filtros.from ?? startOfDay(now), to: filtros.to ?? now };
+}
+
+/** Throughput totals (entradas/analisadas/concluídas) over one fixed window. */
+async function contarProgresso(
+  repository: DashboardRepository,
+  where: Prisma.OrdemServicoWhereInput,
+  periodo: DashboardPeriodo
+): Promise<ProgressoPeriodo> {
+  const [entradas, analisadas, concluidas] = await Promise.all([
+    repository.contarEntradas(where, periodo),
+    repository.contarAnalisadas(where, periodo),
+    repository.contarConcluidas(where, periodo)
+  ]);
+  return { entradas, analisadas, concluidas };
 }
 
 function subDaysCal(date: Date, days: number): Date {

@@ -44,20 +44,28 @@ describe("listEquipe", () => {
 
     await listEquipe(repository, { id: "sup", perfil: "supervisor", poloId: null });
 
-    expect(repository.list).toHaveBeenCalledWith(undefined);
+    expect(repository.list).toHaveBeenCalledWith({ tipo: "todos" });
   });
 
-  it("scopes a monitor to their authorized polos", async () => {
+  it("scopes a monitor to their região and always includes themselves", async () => {
     const repository = repo();
 
     await listEquipe(repository, {
       id: "m1",
       perfil: "monitor",
       poloId: "p1",
-      polosPermitidos: ["p1", "p2"]
+      regiao: "Campinas"
     });
 
-    expect(repository.list).toHaveBeenCalledWith(["p1", "p2"]);
+    expect(repository.list).toHaveBeenCalledWith({ tipo: "regiao", regiao: "Campinas", selfId: "m1" });
+  });
+
+  it("uses an empty região but still includes self when the monitor has no região", async () => {
+    const repository = repo();
+
+    await listEquipe(repository, { id: "m1", perfil: "monitor", poloId: "p1", regiao: null });
+
+    expect(repository.list).toHaveBeenCalledWith({ tipo: "regiao", regiao: "", selfId: "m1" });
   });
 
   it("returns the members with presence info", async () => {

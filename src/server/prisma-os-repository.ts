@@ -89,11 +89,25 @@ export function createPrismaOrdemRepository(
     updateStatus(id: string, data: OrdemStatusUpdate) {
       return client.ordemServico.update({ where: { id }, data });
     },
-    findFiscalById(id: string) {
-      return client.user.findUnique({
+    async findFiscalById(id: string) {
+      const user = await client.user.findUnique({
         where: { id },
-        select: { id: true, perfil: true, poloId: true }
+        select: {
+          id: true,
+          perfil: true,
+          poloId: true,
+          regiao: true,
+          polo: { select: { regiao: true } }
+        }
       });
+      if (!user) return null;
+      // Região efetiva: a do cadastro (monitores) ou, na falta, a do polo.
+      return {
+        id: user.id,
+        perfil: user.perfil,
+        poloId: user.poloId,
+        regiao: user.regiao ?? user.polo?.regiao ?? null
+      };
     },
     updateFiscal(id: string, fiscalId: string) {
       return client.ordemServico.update({ where: { id }, data: { fiscalId } });

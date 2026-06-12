@@ -10,7 +10,10 @@ describe("PostgreSQL schema", () => {
   });
 
   it("indexes the fiscal open-work and polo queue access paths", () => {
-    expect(schema).toContain("@@index([fiscalId, status])");
+    // Open-work (fiscalId IN, status IN) is served by the composite below; the
+    // standalone [fiscalId, status] was dropped as a redundant prefix.
+    expect(schema).toContain("@@index([fiscalId, status, concluidaEm])");
+    expect(schema).not.toContain("@@index([fiscalId, status])");
     expect(schema).toContain("@@index([poloId, status, fiscalId, dataProgramada, createdAt])");
   });
 });
