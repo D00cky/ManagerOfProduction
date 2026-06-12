@@ -3,6 +3,7 @@ import { buildOsScope, type SessionUserScope } from "@/lib/scope";
 import { hasPermission } from "@/lib/permissions";
 import { buildListWhere, type OsListFilters } from "@/server/os-service";
 import {
+  chaveObsNaoConforme,
   gruposFfr,
   gruposParaOrdem,
   selecionarGrupoEspecificoId,
@@ -84,6 +85,24 @@ export function mapearResposta(valor: ValorResposta | undefined, item: FfrItem):
   return "";
 }
 
+/** Header prefix for the per-criteria "Não conforme" observation column. */
+export const PREFIXO_OBS_NAO_CONFORME = "Obs. Não conforme: ";
+
+/** Booleano criteria carry a paired observation column (texto items do not). */
+function temColunaObsNaoConforme(item: FfrItem): boolean {
+  return item.tipo !== "texto";
+}
+
+/** Observation a fiscal wrote for a criteria — only when it was marked "Não conforme". */
+export function observacaoNaoConforme(
+  respostas: Record<string, ValorResposta>,
+  item: FfrItem
+): string {
+  if (!temColunaObsNaoConforme(item) || respostas[item.id] !== "0") return "";
+  const obs = respostas[chaveObsNaoConforme(item.id)];
+  return typeof obs === "string" ? obs : "";
+}
+
 /** Excel sheet names: ≤31 chars, no :\/?*[], unique. Returns a sanitized unique name. */
 export function sanitizeSheetName(nome: string, usados: Set<string>): string {
   let base = nome.replace(/[:\\/?*[\]]/g, " ").trim().slice(0, 31) || "Planilha";
@@ -124,9 +143,15 @@ export async function buildExportDataset(
 
   for (const [grupoId, ordensDoGrupo] of grupos) {
     const itens = gruposParaOrdem(ordensDoGrupo[0]).flatMap((g) => g.itens);
+    // Cada critério booleano ganha, logo após sua coluna de resposta, uma coluna
+    // pareada com a observação de "Não conforme" daquele critério.
     const colunas = [
       ...colunasMetadados.map(([label]) => label),
-      ...itens.map((item) => item.texto),
+      ...itens.flatMap((item) =>
+        temColunaObsNaoConforme(item)
+          ? [item.texto, `${PREFIXO_OBS_NAO_CONFORME}${item.texto}`]
+          : [item.texto]
+      ),
       ...colunasScore,
       ...colunasAuditoria
     ];
@@ -136,7 +161,11 @@ export async function buildExportDataset(
       const tab = ordem.tabulacao;
       return [
         ...colunasMetadados.map(([, extrair]) => extrair(ordem)),
-        ...itens.map((item) => mapearResposta(respostas[item.id], item)),
+        ...itens.flatMap((item) =>
+          temColunaObsNaoConforme(item)
+            ? [mapearResposta(respostas[item.id], item), observacaoNaoConforme(respostas, item)]
+            : [mapearResposta(respostas[item.id], item)]
+        ),
         tab ? tab.somaObtida : "",
         tab ? tab.somaPossivel : "",
         tab ? tab.percentual : "",

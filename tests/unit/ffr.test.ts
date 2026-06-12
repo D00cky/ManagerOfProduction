@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { calcularConceito } from "@/lib/ffr";
-import { gruposParaTipo, gruposParaOrdem, selecionarGrupoEspecificoId } from "@/data/grupos-ffr";
+import {
+  chaveObsNaoConforme,
+  gruposParaTipo,
+  gruposParaOrdem,
+  selecionarGrupoEspecificoId
+} from "@/data/grupos-ffr";
 
 describe("calcularConceito", () => {
   it("sums obtained and possible points only for answers marked as 1 or 0", () => {
@@ -18,6 +23,22 @@ describe("calcularConceito", () => {
     expect(result.somaPossivel).toBe(8);
     expect(result.percentual).toBeCloseTo(6 / 8);
     expect(result.conceito).toBe("B");
+  });
+
+  it("ignores Não conforme observation keys stored alongside the answers", () => {
+    const semObs = calcularConceito({ tipoServico: "RedeRamalAgua" }, {
+      gerais_q1: "1", // peso 3
+      gerais_q2: "0" // peso 2
+    });
+    const comObs = calcularConceito({ tipoServico: "RedeRamalAgua" }, {
+      gerais_q1: "1",
+      gerais_q2: "0",
+      [chaveObsNaoConforme("gerais_q2")]: "faltou foto"
+    });
+
+    expect(comObs).toEqual(semObs);
+    expect(comObs.somaObtida).toBe(3);
+    expect(comObs.somaPossivel).toBe(5);
   });
 
   it("returns NaoAvaliado when no weighted item is applicable", () => {

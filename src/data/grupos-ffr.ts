@@ -3,6 +3,19 @@ import { normalizeHeader } from "@/lib/importacao";
 
 export type ValorResposta = "1" | "0" | "X" | null | string;
 
+/**
+ * Prefixo das chaves usadas para guardar, junto às respostas, a observação que o
+ * fiscal escreve quando marca um critério como "Não conforme" ("0"). Como o cálculo
+ * FFR e o export iteram pelos itens definidos em `gruposFfr`, essas chaves extras
+ * são naturalmente ignoradas pela pontuação.
+ */
+export const OBS_NAO_CONFORME_PREFIX = "__obs_nc__:";
+
+/** Chave em `respostas` que guarda a observação de "Não conforme" de um critério. */
+export function chaveObsNaoConforme(itemId: string): string {
+  return `${OBS_NAO_CONFORME_PREFIX}${itemId}`;
+}
+
 export type FfrItem = {
   id: string;
   texto: string;

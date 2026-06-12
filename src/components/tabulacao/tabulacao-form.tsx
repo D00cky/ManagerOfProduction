@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { gruposParaOrdem, type ValorResposta } from "@/data/grupos-ffr";
+import { chaveObsNaoConforme, gruposParaOrdem, type ValorResposta } from "@/data/grupos-ffr";
 import { calcularConceito, type RespostasFfr } from "@/lib/ffr";
 import { cn, formatPercent } from "@/lib/utils";
 
@@ -217,20 +217,33 @@ export function TabulacaoForm({
                     disabled={bloqueada}
                   />
                 ) : (
-                  <div className="flex gap-2">
-                    {opcoes.map((opcao) => (
-                      <Button
-                        key={opcao.value}
-                        type="button"
-                        size="sm"
-                        variant={respostas[item.id] === opcao.value ? "default" : "outline"}
+                  <>
+                    <div className="flex gap-2">
+                      {opcoes.map((opcao) => (
+                        <Button
+                          key={opcao.value}
+                          type="button"
+                          size="sm"
+                          variant={respostas[item.id] === opcao.value ? "default" : "outline"}
+                          disabled={bloqueada}
+                          onClick={() => setResposta(item.id, opcao.value)}
+                        >
+                          {opcao.label}
+                        </Button>
+                      ))}
+                    </div>
+                    {respostas[item.id] === "0" ? (
+                      <Textarea
+                        className="max-w-xl"
+                        rows={2}
+                        placeholder="Observacao da nao conformidade"
+                        aria-label={`Observacao Nao conforme: ${item.texto}`}
+                        value={(respostas[chaveObsNaoConforme(item.id)] as string) ?? ""}
+                        onChange={(event) => setResposta(chaveObsNaoConforme(item.id), event.target.value)}
                         disabled={bloqueada}
-                        onClick={() => setResposta(item.id, opcao.value)}
-                      >
-                        {opcao.label}
-                      </Button>
-                    ))}
-                  </div>
+                      />
+                    ) : null}
+                  </>
                 )}
               </div>
             ))}
