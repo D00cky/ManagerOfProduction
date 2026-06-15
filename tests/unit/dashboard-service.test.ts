@@ -39,8 +39,9 @@ function os(overrides: Partial<OrdemServico>): OrdemServico {
 }
 
 function matchesWhere(ordem: OrdemServico, where: Record<string, unknown>): boolean {
-  const polo = where.poloId as { in?: string[] } | undefined;
-  if (polo?.in && !polo.in.includes(ordem.poloId)) return false;
+  const polo = where.poloId as string | { in?: string[] } | undefined;
+  if (typeof polo === "string" && ordem.poloId !== polo) return false;
+  if (polo && typeof polo === "object" && polo.in && !polo.in.includes(ordem.poloId)) return false;
   if (where.fiscalId && ordem.fiscalId !== where.fiscalId) return false;
   const regiao = where.regiaoAdministrativa as string | { in?: string[] } | undefined;
   if (typeof regiao === "string" && ordem.regiaoAdministrativa !== regiao) return false;
@@ -141,12 +142,22 @@ function repository(ordens: OrdemServico[], tabulacoes: TabFixture[] = []): Dash
     }),
     findGeoFacets: vi.fn(async (where: Record<string, unknown>) => {
       const seen = new Set<string>();
-      const facets: Array<{ regiaoAdministrativa: string | null; cidade: string | null }> = [];
+      const facets: Array<{
+        regiaoAdministrativa: string | null;
+        poloId: string | null;
+        poloNome: string | null;
+        cidade: string | null;
+      }> = [];
       for (const ordem of scoped(where)) {
-        const key = `${ordem.regiaoAdministrativa}__${ordem.cidade}`;
+        const key = `${ordem.regiaoAdministrativa}__${ordem.poloId}__${ordem.cidade}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        facets.push({ regiaoAdministrativa: ordem.regiaoAdministrativa, cidade: ordem.cidade });
+        facets.push({
+          regiaoAdministrativa: ordem.regiaoAdministrativa,
+          poloId: ordem.poloId,
+          poloNome: `Polo ${ordem.poloId}`,
+          cidade: ordem.cidade
+        });
       }
       return facets;
     }),
@@ -223,8 +234,47 @@ describe("getDashboardResumo", () => {
     expect(resumo.filtros).toEqual({ regiao: "Registro" });
     // Options are built from the full scope, not the narrowed filter.
     expect(resumo.opcoesGeograficas).toEqual([
-      { regiao: "São Paulo", municipios: ["GUARULHOS"] },
-      { regiao: "Registro", municipios: ["MIRACATU", "REGISTRO"] }
+      { regiao: "São Paulo", polos: [{ id: "p1", nome: "Polo p1", municipios: ["GUARULHOS"] }] },
+      { regiao: "Registro", polos: [{ id: "p1", nome: "Polo p1", municipios: ["MIRACATU", "REGISTRO"] }] }
+    ]);
+  });
+
+  it("narrows by polo within the access scope", async () => {
+    const repo = repository([
+      os({ id: "1", poloId: "p1", regiaoAdministrativa: "Registro" }),
+      os({ id: "2", poloId: "p2", regiaoAdministrativa: "Registro" }),
+      os({ id: "3", poloId: "p1", regiaoAdministrativa: "Registro" })
+    ]);
+
+    const resumo = await getDashboardResumo(
+      repo,
+      { id: "s1", perfil: "supervisor" },
+      new Date("2026-06-07T10:00:00.000Z"),
+      { regiao: "Registro", polo: "p1" }
+    );
+
+    expect(repo.countByStatus).toHaveBeenCalledWith({ regiaoAdministrativa: "Registro", poloId: "p1" });
+    expect(resumo.metricas.total).toBe(2);
+    expect(resumo.filtros).toEqual({ regiao: "Registro", polo: "p1" });
+  });
+
+  it("groups municipalities per polo inside each região", async () => {
+    const repo = repository([
+      os({ id: "1", poloId: "p1", cidade: "MIRACATU", regiaoAdministrativa: "Registro" }),
+      os({ id: "2", poloId: "p2", cidade: "REGISTRO", regiaoAdministrativa: "Registro" }),
+      os({ id: "3", poloId: "p2", cidade: "IGUAPE", regiaoAdministrativa: "Registro" })
+    ]);
+
+    const resumo = await getDashboardResumo(repo, { id: "s1", perfil: "supervisor" });
+
+    expect(resumo.opcoesGeograficas).toEqual([
+      {
+        regiao: "Registro",
+        polos: [
+          { id: "p1", nome: "Polo p1", municipios: ["MIRACATU"] },
+          { id: "p2", nome: "Polo p2", municipios: ["IGUAPE", "REGISTRO"] }
+        ]
+      }
     ]);
   });
 

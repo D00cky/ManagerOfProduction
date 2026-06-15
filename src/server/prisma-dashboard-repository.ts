@@ -135,12 +135,18 @@ export const prismaDashboardRepository: DashboardRepository = {
     for (const row of analisaram) ativos.add(row.fiscalId);
     return ativos.size;
   },
-  findGeoFacets(where: Prisma.OrdemServicoWhereInput) {
-    return prisma.ordemServico.findMany({
+  async findGeoFacets(where: Prisma.OrdemServicoWhereInput) {
+    const rows = await prisma.ordemServico.findMany({
       where,
-      select: { regiaoAdministrativa: true, cidade: true },
-      distinct: ["regiaoAdministrativa", "cidade"]
+      select: { regiaoAdministrativa: true, cidade: true, poloId: true, polo: { select: { nome: true } } },
+      distinct: ["regiaoAdministrativa", "poloId", "cidade"]
     });
+    return rows.map((row) => ({
+      regiaoAdministrativa: row.regiaoAdministrativa,
+      cidade: row.cidade,
+      poloId: row.poloId,
+      poloNome: row.polo?.nome ?? null
+    }));
   },
   async findFiscais(ids: string[]) {
     if (ids.length === 0) return [];

@@ -16,6 +16,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const filtros: DashboardFiltros = {
     regiao: url.searchParams.get("regiao") ?? undefined,
+    polo: url.searchParams.get("polo") ?? undefined,
     municipio: url.searchParams.get("municipio") ?? undefined,
     from: parseDate(url.searchParams.get("from")),
     to: parseDate(url.searchParams.get("to"))

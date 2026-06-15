@@ -29,6 +29,7 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{
     regiao?: string | string[];
+    polo?: string | string[];
     municipio?: string | string[];
     from?: string | string[];
     to?: string | string[];
@@ -40,10 +41,11 @@ export default async function DashboardPage({
 
   const params = await searchParams;
   const regiao = firstParam(params.regiao);
+  const polo = firstParam(params.polo);
   const municipio = firstParam(params.municipio);
   const from = parseDate(firstParam(params.from));
   const to = parseDate(firstParam(params.to));
-  const filtros = { regiao, municipio, from, to };
+  const filtros = { regiao, polo, municipio, from, to };
 
   const now = new Date();
   const presets = [
@@ -53,6 +55,7 @@ export default async function DashboardPage({
   ].map((preset) => {
     const search = new URLSearchParams();
     if (regiao) search.set("regiao", regiao);
+    if (polo) search.set("polo", polo);
     if (municipio) search.set("municipio", municipio);
     if (preset.from) search.set("from", preset.from.toISOString());
     const href = search.toString() ? `/dashboard?${search.toString()}` : "/dashboard";
@@ -93,6 +96,7 @@ export default async function DashboardPage({
         estado={ESTADO}
         opcoes={resumo.opcoesGeograficas}
         regiao={resumo.filtros.regiao}
+        polo={resumo.filtros.polo}
         municipio={resumo.filtros.municipio}
       />
 

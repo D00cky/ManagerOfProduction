@@ -5,6 +5,8 @@ import { REGIOES_SP } from "@/data/regioes-sp";
 
 export type DashboardFiltros = {
   regiao?: string;
+  /** Polo id; narrows the OS set within the selected região. */
+  polo?: string;
   municipio?: string;
   /** Time window for the throughput funnel/series. Defaults to "today". */
   from?: Date;
@@ -15,6 +17,8 @@ export type DashboardPeriodo = { from: Date; to: Date };
 
 export type GeoFacet = {
   regiaoAdministrativa: string | null;
+  poloId: string | null;
+  poloNome: string | null;
   cidade: string | null;
 };
 
@@ -155,8 +159,11 @@ export type DashboardResumo = {
     fiscalId: string | null;
     poloId: string;
   }>;
-  filtros: { regiao?: string; municipio?: string };
-  opcoesGeograficas: Array<{ regiao: string; municipios: string[] }>;
+  filtros: { regiao?: string; polo?: string; municipio?: string };
+  opcoesGeograficas: Array<{
+    regiao: string;
+    polos: Array<{ id: string; nome: string; municipios: string[] }>;
+  }>;
 };
 
 const OS_PARADAS_LIMIT = 100;
@@ -259,7 +266,7 @@ export async function getDashboardResumo(
     metricas: calculateMetricas(statusCounts),
     progressoPorFiscal,
     osParadas: calculateOsParadas(parariasRows, now),
-    filtros: { regiao: filtros.regiao, municipio: filtros.municipio },
+    filtros: { regiao: filtros.regiao, polo: filtros.polo, municipio: filtros.municipio },
     opcoesGeograficas: buildOpcoesGeograficas(facets)
   };
 }
@@ -300,6 +307,9 @@ function mergeScopeAndGeo(
 ): Prisma.OrdemServicoWhereInput {
   const where: Prisma.OrdemServicoWhereInput = { ...scope };
   if (filtros.municipio) where.cidade = filtros.municipio;
+  // Polo only narrows within the access scope (additional AND), so it can never
+  // widen visibility beyond what `buildOsScope` already allows.
+  if (filtros.polo) where.poloId = filtros.polo;
   if (filtros.regiao) {
     const scoped = scope.regiaoAdministrativa as { in?: string[] } | undefined;
     const allowed = !scoped || (Array.isArray(scoped.in) ? scoped.in.includes(filtros.regiao) : true);
@@ -350,16 +360,26 @@ function mapRegiao(rows: HierarquiaLinha[]): DashboardResumo["porRegiao"] {
 }
 
 function buildOpcoesGeograficas(facets: GeoFacet[]): DashboardResumo["opcoesGeograficas"] {
-  const byRegiao = new Map<string, Set<string>>();
+  // Região → polo → municípios, montado a partir das OS reais: só aparecem polos
+  // (e municípios) que de fato têm OS naquela região.
+  const byRegiao = new Map<string, Map<string, { nome: string; municipios: Set<string> }>>();
   for (const facet of facets) {
-    if (!facet.regiaoAdministrativa) continue;
-    const municipios = byRegiao.get(facet.regiaoAdministrativa) ?? new Set<string>();
-    if (facet.cidade) municipios.add(facet.cidade);
-    byRegiao.set(facet.regiaoAdministrativa, municipios);
+    if (!facet.regiaoAdministrativa || !facet.poloId) continue;
+    const polos = byRegiao.get(facet.regiaoAdministrativa) ?? new Map();
+    const polo = polos.get(facet.poloId) ?? { nome: facet.poloNome ?? facet.poloId, municipios: new Set<string>() };
+    if (facet.cidade) polo.municipios.add(facet.cidade);
+    polos.set(facet.poloId, polo);
+    byRegiao.set(facet.regiaoAdministrativa, polos);
   }
   return REGIOES_SP.filter((regiao) => byRegiao.has(regiao)).map((regiao) => ({
     regiao,
-    municipios: [...(byRegiao.get(regiao) ?? new Set<string>())].sort((a, b) => a.localeCompare(b, "pt-BR"))
+    polos: [...(byRegiao.get(regiao) ?? new Map()).entries()]
+      .map(([id, polo]) => ({
+        id,
+        nome: polo.nome,
+        municipios: [...polo.municipios].sort((a, b) => a.localeCompare(b, "pt-BR"))
+      }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
   }));
 }
 

@@ -4,23 +4,27 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 
-type OpcaoRegiao = { regiao: string; municipios: string[] };
+type OpcaoPolo = { id: string; nome: string; municipios: string[] };
+type OpcaoRegiao = { regiao: string; polos: OpcaoPolo[] };
 
 type GeoFilterProps = {
   estado: string;
   opcoes: OpcaoRegiao[];
   regiao?: string;
+  polo?: string;
   municipio?: string;
 };
 
-export function GeoFilter({ estado, opcoes, regiao, municipio }: GeoFilterProps) {
+export function GeoFilter({ estado, opcoes, regiao, polo, municipio }: GeoFilterProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const regiaoAtual = opcoes.find((opcao) => opcao.regiao === regiao);
-  const municipiosDisponiveis = regiaoAtual?.municipios ?? [];
+  const polosDisponiveis = regiaoAtual?.polos ?? [];
+  const poloAtual = polosDisponiveis.find((opcao) => opcao.id === polo);
+  const municipiosDisponiveis = poloAtual?.municipios ?? [];
 
-  function updateParams(next: { regiao?: string; municipio?: string }) {
+  function updateParams(next: { regiao?: string; polo?: string; municipio?: string }) {
     const params = new URLSearchParams(searchParams.toString());
     for (const [key, value] of Object.entries(next)) {
       if (value) params.set(key, value);
@@ -37,7 +41,9 @@ export function GeoFilter({ estado, opcoes, regiao, municipio }: GeoFilterProps)
         <Select
           id="regiao"
           value={regiao ?? ""}
-          onChange={(event) => updateParams({ regiao: event.target.value, municipio: undefined })}
+          onChange={(event) =>
+            updateParams({ regiao: event.target.value, polo: undefined, municipio: undefined })
+          }
           className="min-w-56"
         >
           <option value="">Todas as regiões</option>
@@ -50,15 +56,33 @@ export function GeoFilter({ estado, opcoes, regiao, municipio }: GeoFilterProps)
       </div>
 
       <div className="flex flex-col gap-1.5">
+        <Label htmlFor="polo">Polo</Label>
+        <Select
+          id="polo"
+          value={polo ?? ""}
+          disabled={!regiaoAtual}
+          onChange={(event) => updateParams({ regiao, polo: event.target.value, municipio: undefined })}
+          className="min-w-56"
+        >
+          <option value="">{regiaoAtual ? "Todos os polos" : "Selecione uma região"}</option>
+          {polosDisponiveis.map((opcao) => (
+            <option key={opcao.id} value={opcao.id}>
+              {opcao.nome}
+            </option>
+          ))}
+        </Select>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="municipio">Município</Label>
         <Select
           id="municipio"
           value={municipio ?? ""}
-          disabled={!regiaoAtual}
-          onChange={(event) => updateParams({ regiao, municipio: event.target.value })}
+          disabled={!poloAtual}
+          onChange={(event) => updateParams({ regiao, polo, municipio: event.target.value })}
           className="min-w-56"
         >
-          <option value="">{regiaoAtual ? "Todos os municípios" : "Selecione uma região"}</option>
+          <option value="">{poloAtual ? "Todos os municípios" : "Selecione um polo"}</option>
           {municipiosDisponiveis.map((nome) => (
             <option key={nome} value={nome}>
               {nome}
@@ -67,10 +91,10 @@ export function GeoFilter({ estado, opcoes, regiao, municipio }: GeoFilterProps)
         </Select>
       </div>
 
-      {regiao || municipio ? (
+      {regiao || polo || municipio ? (
         <button
           type="button"
-          onClick={() => updateParams({ regiao: undefined, municipio: undefined })}
+          onClick={() => updateParams({ regiao: undefined, polo: undefined, municipio: undefined })}
           className="h-10 text-sm text-[hsl(var(--muted-foreground))] underline-offset-4 hover:underline"
         >
           Limpar filtro
