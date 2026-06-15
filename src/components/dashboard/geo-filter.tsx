@@ -30,6 +30,8 @@ export function GeoFilter({ estado, opcoes, regiao, polo, municipio }: GeoFilter
       if (value) params.set(key, value);
       else params.delete(key);
     }
+    // Any geo change resets the backlog detail pagination.
+    params.delete("page");
     const query = params.toString();
     router.push(query ? `?${query}` : "?");
   }

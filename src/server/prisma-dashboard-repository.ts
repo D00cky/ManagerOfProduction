@@ -7,6 +7,22 @@ import type {
   HierarquiaLinha
 } from "@/server/dashboard-service";
 
+/**
+ * "Backlog parado": OS com execução concluída (dataFimExecucao preenchida) que
+ * ainda não foi Concluída/Cancelada e está sem movimento (updatedAt) há 2+ dias.
+ */
+function paradaWhere(
+  where: Prisma.OrdemServicoWhereInput,
+  updatedBefore: Date
+): Prisma.OrdemServicoWhereInput {
+  return {
+    ...where,
+    dataFimExecucao: { not: null },
+    status: { notIn: ["Concluida", "Cancelada"] },
+    updatedAt: { lt: updatedBefore }
+  };
+}
+
 export const prismaDashboardRepository: DashboardRepository = {
   async countByStatus(where: Prisma.OrdemServicoWhereInput) {
     const rows = await prisma.ordemServico.groupBy({
@@ -37,17 +53,42 @@ export const prismaDashboardRepository: DashboardRepository = {
     }
     return [...byFiscal.values()];
   },
-  findOsParadas(where: Prisma.OrdemServicoWhereInput, updatedBefore: Date, limit: number) {
-    return prisma.ordemServico.findMany({
-      where: {
-        ...where,
-        status: { notIn: ["Concluida", "Cancelada"] },
-        updatedAt: { lt: updatedBefore }
-      },
-      orderBy: { updatedAt: "asc" },
-      take: limit,
-      select: { id: true, numero: true, status: true, updatedAt: true, fiscalId: true, poloId: true }
+  async paradasPorPolo(where: Prisma.OrdemServicoWhereInput, updatedBefore: Date) {
+    const rows = await prisma.ordemServico.groupBy({
+      by: ["regiaoAdministrativa", "poloId"],
+      where: paradaWhere(where, updatedBefore),
+      _count: { _all: true },
+      _min: { updatedAt: true }
     });
+    return rows.map((row) => ({
+      regiao: row.regiaoAdministrativa,
+      poloId: row.poloId,
+      total: row._count._all,
+      // _min.updatedAt is non-null because the group has at least one matching row.
+      oldestUpdatedAt: row._min.updatedAt ?? updatedBefore
+    }));
+  },
+  async paradasDetalhe(
+    where: Prisma.OrdemServicoWhereInput,
+    updatedBefore: Date,
+    pagination: { skip: number; take: number }
+  ) {
+    const paradas = paradaWhere(where, updatedBefore);
+    const [rows, total] = await prisma.$transaction([
+      prisma.ordemServico.findMany({
+        where: paradas,
+        orderBy: { updatedAt: "asc" },
+        skip: pagination.skip,
+        take: pagination.take,
+        select: { id: true, numero: true, status: true, updatedAt: true, dataFimExecucao: true }
+      }),
+      prisma.ordemServico.count({ where: paradas })
+    ]);
+    return { rows, total };
+  },
+  findPolos(ids: string[]) {
+    if (ids.length === 0) return Promise.resolve([]);
+    return prisma.polo.findMany({ where: { id: { in: ids } }, select: { id: true, nome: true } });
   },
   contarEntradas(where: Prisma.OrdemServicoWhereInput, periodo: DashboardPeriodo) {
     return prisma.ordemServico.count({

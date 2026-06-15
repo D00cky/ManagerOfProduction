@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { startOfDay, startOfMonth, subDays } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GeoFilter } from "@/components/dashboard/geo-filter";
+import { ParadasPaginacao } from "@/components/dashboard/paradas-paginacao";
 import { ESTADO } from "@/data/regioes-sp";
 import { defaultRedirect, hasPermission } from "@/lib/permissions";
 import { cn, formatPercent } from "@/lib/utils";
@@ -24,6 +25,10 @@ function parseDate(value: string | undefined) {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
+function formatData(value: Date | null) {
+  return value ? value.toLocaleDateString("pt-BR") : "—";
+}
+
 export default async function DashboardPage({
   searchParams
 }: {
@@ -31,6 +36,7 @@ export default async function DashboardPage({
     regiao?: string | string[];
     polo?: string | string[];
     municipio?: string | string[];
+    page?: string | string[];
     from?: string | string[];
     to?: string | string[];
   }>;
@@ -43,9 +49,10 @@ export default async function DashboardPage({
   const regiao = firstParam(params.regiao);
   const polo = firstParam(params.polo);
   const municipio = firstParam(params.municipio);
+  const page = Math.max(1, Number(firstParam(params.page)) || 1);
   const from = parseDate(firstParam(params.from));
   const to = parseDate(firstParam(params.to));
-  const filtros = { regiao, polo, municipio, from, to };
+  const filtros = { regiao, polo, municipio, page, from, to };
 
   const now = new Date();
   const presets = [
@@ -65,6 +72,18 @@ export default async function DashboardPage({
 
   const resumo = await getDashboardResumo(prismaDashboardRepository, user, now, filtros);
   const { metricas, funnel } = resumo;
+  const paradas = resumo.paradas;
+
+  // Drill-in link from a backlog polo row: filter the dashboard to that
+  // região + polo (which reveals the paginated OS list). Period is preserved.
+  function paradaHref(regiaoDoPolo: string | null, poloId: string) {
+    const search = new URLSearchParams();
+    if (regiaoDoPolo) search.set("regiao", regiaoDoPolo);
+    search.set("polo", poloId);
+    if (from) search.set("from", from.toISOString());
+    if (to) search.set("to", to.toISOString());
+    return `/dashboard?${search.toString()}`;
+  }
 
   const progressoFixo = [
     { titulo: "Progresso de hoje", dados: resumo.progressoHoje },
@@ -255,17 +274,55 @@ export default async function DashboardPage({
 
         <Card>
           <CardHeader>
-            <CardTitle>OS paradas (2+ dias)</CardTitle>
+            <CardTitle>
+              {paradas.detalhe ? "OS paradas do polo (2+ dias)" : "OS paradas por polo (2+ dias)"}
+            </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            {resumo.osParadas.length === 0 ? (
+            {paradas.detalhe ? (
+              paradas.detalhe.total === 0 ? (
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">Nenhuma OS parada.</p>
+              ) : (
+                <>
+                  {paradas.detalhe.rows.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between gap-2 text-sm">
+                      <span>
+                        OS {item.numero}
+                        <span className="ml-1 text-xs text-[hsl(var(--muted-foreground))]">
+                          Fim exec. {formatData(item.dataFimExecucao)}
+                        </span>
+                      </span>
+                      <span className="whitespace-nowrap text-[hsl(var(--muted-foreground))]">
+                        {item.diasParada} dias
+                      </span>
+                    </div>
+                  ))}
+                  <ParadasPaginacao
+                    total={paradas.detalhe.total}
+                    page={paradas.detalhe.page}
+                    pageSize={paradas.detalhe.pageSize}
+                  />
+                </>
+              )
+            ) : paradas.porPolo.length === 0 ? (
               <p className="text-sm text-[hsl(var(--muted-foreground))]">Nenhuma OS parada.</p>
             ) : (
-              resumo.osParadas.map((item) => (
-                <div key={item.id} className="flex items-center justify-between text-sm">
-                  <span>OS {item.numero}</span>
-                  <span className="text-[hsl(var(--muted-foreground))]">{item.diasParada} dias</span>
-                </div>
+              paradas.porPolo.map((linha) => (
+                <Link
+                  key={linha.poloId}
+                  href={paradaHref(linha.regiao, linha.poloId)}
+                  className="flex items-center justify-between gap-2 text-sm underline-offset-4 hover:underline"
+                >
+                  <span>
+                    {linha.poloNome}
+                    {linha.regiao ? (
+                      <span className="ml-1 text-xs text-[hsl(var(--muted-foreground))]">{linha.regiao}</span>
+                    ) : null}
+                  </span>
+                  <span className="whitespace-nowrap text-[hsl(var(--muted-foreground))]">
+                    {linha.total} OS · até {linha.maxDias} dias
+                  </span>
+                </Link>
               ))
             )}
           </CardContent>

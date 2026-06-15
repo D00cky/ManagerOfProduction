@@ -18,6 +18,7 @@ export async function GET(request: Request) {
     regiao: url.searchParams.get("regiao") ?? undefined,
     polo: url.searchParams.get("polo") ?? undefined,
     municipio: url.searchParams.get("municipio") ?? undefined,
+    page: Math.max(1, Number(url.searchParams.get("page")) || 1),
     from: parseDate(url.searchParams.get("from")),
     to: parseDate(url.searchParams.get("to"))
   };

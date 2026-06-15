@@ -29,7 +29,7 @@ function os(overrides: Partial<OrdemServico>): OrdemServico {
     observacao: null,
     dataProgramada: null,
     dataInicioExecucao: null,
-    dataFimExecucao: null,
+    dataFimExecucao: overrides.dataFimExecucao ?? null,
     iniciadaEm: null,
     concluidaEm: overrides.concluidaEm ?? null,
     canceladaEm: null,
@@ -57,6 +57,17 @@ function inWindow(date: Date | null, periodo: Periodo) {
   return date !== null && date >= periodo.from && date <= periodo.to;
 }
 
+/** Backlog "parada": execução concluída, não terminal e sem movimento 2+ dias. */
+function paradas(ordens: OrdemServico[], updatedBefore: Date) {
+  return ordens.filter(
+    (o) =>
+      o.dataFimExecucao !== null &&
+      o.status !== "Concluida" &&
+      o.status !== "Cancelada" &&
+      o.updatedAt < updatedBefore
+  );
+}
+
 /** Tabulação fixture for the "analisadas" funnel: createdAt + the OS it scores. */
 type TabFixture = { createdAt: Date; ordem: OrdemServico };
 
@@ -81,13 +92,39 @@ function repository(ordens: OrdemServico[], tabulacoes: TabFixture[] = []): Dash
       }
       return [...byFiscal.values()];
     }),
-    findOsParadas: vi.fn(async (where: Record<string, unknown>, updatedBefore: Date, limit: number) =>
-      scoped(where)
-        .filter((o) => o.status !== "Concluida" && o.status !== "Cancelada" && o.updatedAt < updatedBefore)
-        .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime())
-        .slice(0, limit)
-        .map((o) => ({ id: o.id, numero: o.numero, status: o.status, updatedAt: o.updatedAt, fiscalId: o.fiscalId, poloId: o.poloId }))
+    paradasPorPolo: vi.fn(async (where: Record<string, unknown>, updatedBefore: Date) => {
+      const byPolo = new Map<string, { regiao: string | null; poloId: string; total: number; oldestUpdatedAt: Date }>();
+      for (const o of paradas(scoped(where), updatedBefore)) {
+        const cur = byPolo.get(o.poloId) ?? {
+          regiao: o.regiaoAdministrativa,
+          poloId: o.poloId,
+          total: 0,
+          oldestUpdatedAt: o.updatedAt
+        };
+        cur.total += 1;
+        if (o.updatedAt < cur.oldestUpdatedAt) cur.oldestUpdatedAt = o.updatedAt;
+        byPolo.set(o.poloId, cur);
+      }
+      return [...byPolo.values()];
+    }),
+    paradasDetalhe: vi.fn(
+      async (where: Record<string, unknown>, updatedBefore: Date, pagination: { skip: number; take: number }) => {
+        const all = paradas(scoped(where), updatedBefore).sort(
+          (a, b) => a.updatedAt.getTime() - b.updatedAt.getTime()
+        );
+        const rows = all
+          .slice(pagination.skip, pagination.skip + pagination.take)
+          .map((o) => ({
+            id: o.id,
+            numero: o.numero,
+            status: o.status,
+            updatedAt: o.updatedAt,
+            dataFimExecucao: o.dataFimExecucao
+          }));
+        return { rows, total: all.length };
+      }
     ),
+    findPolos: vi.fn(async (ids: string[]) => ids.map((id) => ({ id, nome: `Polo ${id}` }))),
     contarEntradas: vi.fn(async (where: Record<string, unknown>, periodo: Periodo) =>
       scoped(where).filter((o) => inWindow(o.createdAt, periodo)).length
     ),
@@ -418,17 +455,61 @@ describe("getDashboardResumo", () => {
     expect(resumo.progressoMes).toEqual({ entradas: 2, analisadas: 0, concluidas: 2 });
   });
 
-  it("returns stalled OS older than the threshold and not terminal", async () => {
+  it("summarises the backlog per polo (count + oldest dias) without a polo filter", async () => {
+    const fim = new Date("2026-06-04T10:00:00.000Z");
     const repo = repository([
-      os({ id: "old", numero: "1001", status: "Pendente", updatedAt: new Date("2026-06-05T10:00:00.000Z") }),
-      os({ id: "new", numero: "1002", status: "Pendente", updatedAt: new Date("2026-06-07T09:00:00.000Z") }),
-      os({ id: "done", numero: "1003", status: "Concluida", updatedAt: new Date("2026-06-01T09:00:00.000Z") })
+      // p1: two stalled (oldest 2 dias), one terminal (ignored), one recent (ignored)
+      os({ id: "a", poloId: "p1", regiaoAdministrativa: "Registro", status: "Pendente", dataFimExecucao: fim, updatedAt: new Date("2026-06-05T10:00:00.000Z") }),
+      os({ id: "b", poloId: "p1", regiaoAdministrativa: "Registro", status: "EmExecucao", dataFimExecucao: fim, updatedAt: new Date("2026-06-05T08:00:00.000Z") }),
+      os({ id: "c", poloId: "p1", regiaoAdministrativa: "Registro", status: "Concluida", dataFimExecucao: fim, updatedAt: new Date("2026-06-01T09:00:00.000Z") }),
+      os({ id: "d", poloId: "p1", regiaoAdministrativa: "Registro", status: "Pendente", dataFimExecucao: fim, updatedAt: new Date("2026-06-07T09:00:00.000Z") }),
+      // p2: one stalled (3 dias); also an OS with no fim execução (ignored)
+      os({ id: "e", poloId: "p2", regiaoAdministrativa: "Santos", status: "Pendente", dataFimExecucao: fim, updatedAt: new Date("2026-06-04T08:00:00.000Z") }),
+      os({ id: "f", poloId: "p2", regiaoAdministrativa: "Santos", status: "Pendente", dataFimExecucao: null, updatedAt: new Date("2026-06-04T08:00:00.000Z") })
     ]);
 
     const resumo = await getDashboardResumo(repo, { id: "s1", perfil: "supervisor" }, new Date("2026-06-07T10:00:00.000Z"));
 
-    expect(resumo.osParadas).toEqual([
-      { id: "old", numero: "1001", status: "Pendente", diasParada: 2, fiscalId: null, poloId: "p1" }
+    // Sorted by maxDias desc: p2 (3 dias) before p1 (2 dias).
+    expect(resumo.paradas.porPolo).toEqual([
+      { regiao: "Santos", poloId: "p2", poloNome: "Polo p2", total: 1, maxDias: 3 },
+      { regiao: "Registro", poloId: "p1", poloNome: "Polo p1", total: 2, maxDias: 2 }
     ]);
+    expect(resumo.paradas.detalhe).toBeNull();
+  });
+
+  it("lists the paginated stalled OS for the selected polo, with the fim-execução date", async () => {
+    const fim = new Date("2026-06-04T10:00:00.000Z");
+    const ordens = Array.from({ length: 12 }, (_, i) =>
+      os({
+        id: `os${i}`,
+        numero: `10${String(i).padStart(2, "0")}`,
+        poloId: "p1",
+        regiaoAdministrativa: "Registro",
+        status: "Pendente",
+        dataFimExecucao: fim,
+        updatedAt: new Date(`2026-06-05T${String(i).padStart(2, "0")}:00:00.000Z`)
+      })
+    );
+    const repo = repository(ordens);
+
+    const resumo = await getDashboardResumo(
+      repo,
+      { id: "s1", perfil: "supervisor" },
+      new Date("2026-06-07T10:00:00.000Z"),
+      { regiao: "Registro", polo: "p1", page: 2 }
+    );
+
+    expect(resumo.paradas.detalhe).not.toBeNull();
+    expect(resumo.paradas.detalhe!.total).toBe(12);
+    expect(resumo.paradas.detalhe!.page).toBe(2);
+    expect(resumo.paradas.detalhe!.pageSize).toBe(10);
+    // Page 2 holds the remaining 2 rows.
+    expect(resumo.paradas.detalhe!.rows).toHaveLength(2);
+    expect(resumo.paradas.detalhe!.rows[0]).toMatchObject({
+      dataFimExecucao: fim,
+      diasParada: 2,
+      status: "Pendente"
+    });
   });
 });
