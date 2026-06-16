@@ -267,7 +267,7 @@ export function FilaTable({
         </label>
 
         <label className="flex flex-col gap-1 text-xs uppercase text-[hsl(var(--muted-foreground))]">
-          Fim exec. (de)
+          Data da OS (de)
           <Input
             type="date"
             className="h-9 w-40"
@@ -278,7 +278,7 @@ export function FilaTable({
         </label>
 
         <label className="flex flex-col gap-1 text-xs uppercase text-[hsl(var(--muted-foreground))]">
-          Fim exec. (ate)
+          Data da OS (ate)
           <Input
             type="date"
             className="h-9 w-40"
@@ -388,7 +388,7 @@ export function FilaTable({
               <th className="px-4 py-3">Tipo</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Fiscal</th>
-              <th className="px-4 py-3">Fim execucao</th>
+              <th className="px-4 py-3">Data da OS</th>
               <th className="px-4 py-3">Acoes</th>
             </tr>
           </thead>
