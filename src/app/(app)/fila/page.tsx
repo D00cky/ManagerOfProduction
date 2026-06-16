@@ -23,6 +23,8 @@ type FilaSearchParams = {
   tipoServico?: string | string[];
   status?: string | string[];
   busca?: string | string[];
+  fimDe?: string | string[];
+  fimAte?: string | string[];
   page?: string | string[];
 };
 
@@ -44,7 +46,9 @@ export default async function FilaPage({
     fiscalId: firstParam(params.fiscalId),
     tipoServico: firstParam(params.tipoServico),
     status: firstParam(params.status),
-    busca: firstParam(params.busca)
+    busca: firstParam(params.busca),
+    fimDe: firstParam(params.fimDe),
+    fimAte: firstParam(params.fimAte)
   };
   const page = Math.max(1, Number(firstParam(params.page)) || 1);
 
@@ -72,7 +76,7 @@ export default async function FilaPage({
     poloNome: poloNome.get(ordem.poloId) ?? null,
     fiscalId: ordem.fiscalId,
     fiscalNome: ordem.fiscalId ? fiscalNome.get(ordem.fiscalId) ?? null : null,
-    dataProgramada: ordem.dataProgramada ? ordem.dataProgramada.toLocaleDateString("pt-BR") : null
+    dataFimExecucao: ordem.dataFimExecucao ? ordem.dataFimExecucao.toLocaleDateString("pt-BR") : null
   }));
 
   return (

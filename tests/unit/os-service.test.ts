@@ -170,6 +170,15 @@ describe("buildListWhere", () => {
       ]
     });
   });
+
+  it("maps a fim-execução range to a dataFimExecucao gte/lte clause", () => {
+    const fimDe = new Date(2026, 5, 1, 0, 0, 0, 0);
+    const fimAte = new Date(2026, 5, 30, 23, 59, 59, 999);
+    expect(buildListWhere({}, { fimDe, fimAte })).toEqual({
+      dataFimExecucao: { gte: fimDe, lte: fimAte }
+    });
+    expect(buildListWhere({}, { fimDe })).toEqual({ dataFimExecucao: { gte: fimDe } });
+  });
 });
 
 describe("updateOrdemStatus", () => {

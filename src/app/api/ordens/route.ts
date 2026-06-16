@@ -16,7 +16,9 @@ export async function GET(request: Request) {
     fiscalId: url.searchParams.get("fiscalId"),
     tipoServico: url.searchParams.get("tipoServico") as TipoServico | null,
     status: url.searchParams.get("status") as StatusOS | null,
-    busca: url.searchParams.get("busca")
+    busca: url.searchParams.get("busca"),
+    fimDe: url.searchParams.get("fimDe"),
+    fimAte: url.searchParams.get("fimAte")
   });
 
   const result = await listOrdens(prismaOrdemRepository, user, {

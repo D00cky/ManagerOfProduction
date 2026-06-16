@@ -21,7 +21,9 @@ export async function GET(request: Request) {
       fiscalId: url.searchParams.get("fiscalId"),
       tipoServico: url.searchParams.get("tipoServico"),
       status: url.searchParams.get("status"),
-      busca: url.searchParams.get("busca")
+      busca: url.searchParams.get("busca"),
+      fimDe: url.searchParams.get("fimDe"),
+      fimAte: url.searchParams.get("fimAte")
     });
     const formato = url.searchParams.get("formato") === "csv" ? "csv" : "xlsx";
 

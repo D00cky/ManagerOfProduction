@@ -14,7 +14,14 @@ export function createPrismaOrdemRepository(
       const [rows, total] = await client.$transaction([
         client.ordemServico.findMany({
           where,
-          orderBy: [{ dataProgramada: "asc" }, { createdAt: "desc" }],
+          // Status enum is declared NaFila → … → Concluida → Cancelada, so "asc"
+          // keeps the queue first and pushes concluded/cancelled OS to the end;
+          // within a status, the most recent fim de execução comes first.
+          orderBy: [
+            { status: "asc" },
+            { dataFimExecucao: { sort: "desc", nulls: "last" } },
+            { createdAt: "desc" }
+          ],
           skip: pagination.skip,
           take: pagination.take
         }),
