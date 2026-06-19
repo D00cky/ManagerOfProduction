@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { startOfDay, startOfMonth, subDays } from "date-fns";
+import { endOfMonth, startOfDay, startOfMonth, subDays } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GeoFilter } from "@/components/dashboard/geo-filter";
+import { MesSelect } from "@/components/dashboard/mes-select";
 import { ParadasPaginacao } from "@/components/dashboard/paradas-paginacao";
 import { ESTADO } from "@/data/regioes-sp";
 import { defaultRedirect, hasPermission } from "@/lib/permissions";
@@ -39,6 +40,7 @@ export default async function DashboardPage({
     page?: string | string[];
     from?: string | string[];
     to?: string | string[];
+    mes?: string | string[];
   }>;
 }) {
   const user = await getCurrentUser();
@@ -50,15 +52,19 @@ export default async function DashboardPage({
   const polo = firstParam(params.polo);
   const municipio = firstParam(params.municipio);
   const page = Math.max(1, Number(firstParam(params.page)) || 1);
-  const from = parseDate(firstParam(params.from));
-  const to = parseDate(firstParam(params.to));
+  // O seletor mensal escolhe um mês importado (`mes=YYYY-MM`), que aqui vira a
+  // janela from/to. Os atalhos Hoje/7 dias continuam usando `from` diretamente.
+  const mesParam = firstParam(params.mes);
+  const mes = mesParam && /^\d{4}-\d{2}$/.test(mesParam) ? mesParam : undefined;
+  const mesData = mes ? new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)) - 1, 1) : undefined;
+  const from = mesData ? startOfMonth(mesData) : parseDate(firstParam(params.from));
+  const to = mesData ? endOfMonth(mesData) : parseDate(firstParam(params.to));
   const filtros = { regiao, polo, municipio, page, from, to };
 
   const now = new Date();
   const presets = [
     { label: "Hoje", from: undefined },
-    { label: "7 dias", from: startOfDay(subDays(now, 6)) },
-    { label: "Mês", from: startOfMonth(now) }
+    { label: "7 dias", from: startOfDay(subDays(now, 6)) }
   ].map((preset) => {
     const search = new URLSearchParams();
     if (regiao) search.set("regiao", regiao);
@@ -66,7 +72,9 @@ export default async function DashboardPage({
     if (municipio) search.set("municipio", municipio);
     if (preset.from) search.set("from", preset.from.toISOString());
     const href = search.toString() ? `/dashboard?${search.toString()}` : "/dashboard";
-    const active = (preset.from?.toISOString() ?? undefined) === (from?.toISOString() ?? undefined);
+    // Um mês selecionado nunca marca Hoje/7 dias como ativo.
+    const active =
+      !mes && (preset.from?.toISOString() ?? undefined) === (from?.toISOString() ?? undefined);
     return { ...preset, href, active };
   });
 
@@ -80,8 +88,12 @@ export default async function DashboardPage({
     const search = new URLSearchParams();
     if (regiaoDoPolo) search.set("regiao", regiaoDoPolo);
     search.set("polo", poloId);
-    if (from) search.set("from", from.toISOString());
-    if (to) search.set("to", to.toISOString());
+    if (mes) {
+      search.set("mes", mes);
+    } else {
+      if (from) search.set("from", from.toISOString());
+      if (to) search.set("to", to.toISOString());
+    }
     return `/dashboard?${search.toString()}`;
   }
 
@@ -160,6 +172,7 @@ export default async function DashboardPage({
               {preset.label}
             </Link>
           ))}
+          <MesSelect opcoes={resumo.mesesDisponiveis} selecionado={mes ?? ""} />
         </div>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
           {funnelCards.map((card) => (

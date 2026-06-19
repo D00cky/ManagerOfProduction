@@ -17,6 +17,28 @@ export type DashboardFiltros = {
 
 export type DashboardPeriodo = { from: Date; to: Date };
 
+/** Um mês importado, identificado por `YYYY-MM` e rotulado como `MM/YY`. */
+export type MesDisponivel = { value: string; label: string };
+
+/**
+ * Lista os meses presentes nos dados importados (a partir do `createdAt` de cada
+ * OS), do mais recente para o mais antigo, no formato `MM/YY` exibido no filtro.
+ */
+export function mesesDisponiveisDe(datas: Date[]): MesDisponivel[] {
+  const valores = new Set<string>();
+  for (const data of datas) {
+    const ano = data.getFullYear();
+    const mes = String(data.getMonth() + 1).padStart(2, "0");
+    valores.add(`${ano}-${mes}`);
+  }
+  return [...valores]
+    .sort((a, b) => b.localeCompare(a))
+    .map((value) => {
+      const [ano, mes] = value.split("-");
+      return { value, label: `${mes}/${ano.slice(2)}` };
+    });
+}
+
 export type GeoFacet = {
   regiaoAdministrativa: string | null;
   poloId: string | null;
@@ -116,6 +138,8 @@ export type DashboardRepository = {
     periodo: DashboardPeriodo
   ): Promise<number>;
   findGeoFacets(where: Prisma.OrdemServicoWhereInput): Promise<GeoFacet[]>;
+  /** `createdAt` de cada OS no escopo, para listar os meses importados. */
+  mesesDisponiveis(where: Prisma.OrdemServicoWhereInput): Promise<Date[]>;
   findFiscais(ids: string[]): Promise<DashboardFiscal[]>;
   /** All monitors (with the região each oversees) for the Monitor→Fiscal tree. */
   findMonitores(): Promise<DashboardMonitor[]>;
@@ -200,6 +224,8 @@ export type DashboardResumo = {
     } | null;
   };
   filtros: { regiao?: string; polo?: string; municipio?: string };
+  /** Meses importados (MM/YY) para o seletor mensal do período. */
+  mesesDisponiveis: MesDisponivel[];
   opcoesGeograficas: Array<{
     regiao: string;
     polos: Array<{ id: string; nome: string; municipios: string[] }>;
@@ -241,6 +267,7 @@ export async function getDashboardResumo(
     desempenhoRows,
     fiscaisAtivos,
     facets,
+    mesesRaw,
     progressoHoje,
     progressoMes
   ] = await Promise.all([
@@ -262,6 +289,9 @@ export async function getDashboardResumo(
     // Geo filter options stay on the access scope (not narrowed by the geo filter)
     // so they don't collapse as the user narrows.
     repository.findGeoFacets(scope),
+    // Meses ficam no escopo de acesso (não estreitados pelo filtro geo) para que
+    // as opções não colapsem conforme o usuário filtra.
+    repository.mesesDisponiveis(scope),
     contarProgresso(repository, where, janelaHoje),
     contarProgresso(repository, where, janelaMes)
   ]);
@@ -323,6 +353,7 @@ export async function getDashboardResumo(
     progressoPorFiscal,
     paradas,
     filtros: { regiao: filtros.regiao, polo: filtros.polo, municipio: filtros.municipio },
+    mesesDisponiveis: mesesDisponiveisDe(mesesRaw),
     opcoesGeograficas: buildOpcoesGeograficas(facets)
   };
 }

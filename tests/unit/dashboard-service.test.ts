@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { OrdemServico } from "@prisma/client";
-import { getDashboardResumo, type DashboardRepository } from "@/server/dashboard-service";
+import {
+  getDashboardResumo,
+  mesesDisponiveisDe,
+  type DashboardRepository
+} from "@/server/dashboard-service";
 
 function os(overrides: Partial<OrdemServico>): OrdemServico {
   const now = new Date("2026-06-07T10:00:00.000Z");
@@ -198,6 +202,9 @@ function repository(ordens: OrdemServico[], tabulacoes: TabFixture[] = []): Dash
       }
       return facets;
     }),
+    mesesDisponiveis: vi.fn(async (where: Record<string, unknown>) =>
+      scoped(where).map((o) => o.createdAt)
+    ),
     findFiscais: vi.fn(async (ids: string[]) =>
       ids.map((id) => ({ id, name: `Fiscal ${id}`, matricula: id.toUpperCase(), regiao: null }))
     ),
@@ -511,5 +518,39 @@ describe("getDashboardResumo", () => {
       diasParada: 2,
       status: "Pendente"
     });
+  });
+
+  it("lista os meses importados (MM/YY) do mais recente ao mais antigo", async () => {
+    const repo = repository([
+      os({ id: "a", createdAt: new Date("2026-06-07T10:00:00.000Z") }),
+      os({ id: "b", createdAt: new Date("2026-06-20T10:00:00.000Z") }),
+      os({ id: "c", createdAt: new Date("2026-04-01T10:00:00.000Z") })
+    ]);
+
+    const resumo = await getDashboardResumo(repo, { id: "s1", perfil: "supervisor" });
+
+    expect(resumo.mesesDisponiveis).toEqual([
+      { value: "2026-06", label: "06/26" },
+      { value: "2026-04", label: "04/26" }
+    ]);
+  });
+});
+
+describe("mesesDisponiveisDe", () => {
+  it("deduplica meses e os formata como MM/YY, do mais recente ao mais antigo", () => {
+    expect(
+      mesesDisponiveisDe([
+        new Date(2025, 11, 31, 12),
+        new Date(2026, 0, 15, 9),
+        new Date(2026, 0, 2, 9)
+      ])
+    ).toEqual([
+      { value: "2026-01", label: "01/26" },
+      { value: "2025-12", label: "12/25" }
+    ]);
+  });
+
+  it("retorna vazio quando não há datas", () => {
+    expect(mesesDisponiveisDe([])).toEqual([]);
   });
 });
