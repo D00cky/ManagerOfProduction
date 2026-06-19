@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { createLogAtividade } from "@/server/log";
 import type {
   ImportacaoLogInput,
+  ImportacaoOrdemExistente,
   ImportacaoOrdemInput,
   ImportacaoPolo,
   ImportacaoRepository
@@ -69,10 +70,17 @@ export const prismaImportacaoRepository: ImportacaoRepository = {
   },
   async findOrdensByNumero(numeros: string[]) {
     if (numeros.length === 0) return [];
-    return prisma.ordemServico.findMany({
-      where: { numero: { in: numeros } },
-      select: { id: true, numero: true, codigoTss: true, codigoTse: true }
-    });
+    // Split large lists into 500-item batches to avoid oversized IN clauses.
+    const CHUNK = 500;
+    const results: ImportacaoOrdemExistente[] = [];
+    for (let i = 0; i < numeros.length; i += CHUNK) {
+      const rows = await prisma.ordemServico.findMany({
+        where: { numero: { in: numeros.slice(i, i + CHUNK) } },
+        select: { id: true, numero: true, codigoTss: true, codigoTse: true }
+      });
+      results.push(...rows);
+    }
+    return results;
   },
   async openWorkByFiscal(fiscalIds: string[]) {
     if (fiscalIds.length === 0) return [];
@@ -91,17 +99,23 @@ export const prismaImportacaoRepository: ImportacaoRepository = {
   },
   async createOrdens(inputs: ImportacaoOrdemInput[]) {
     if (inputs.length === 0) return;
-    try {
-      await prisma.ordemServico.createMany({ data: inputs });
-    } catch (error) {
-      // The service already guarantees ≤1 open OS per fiscal; a P2002 here means a
-      // concurrent claim raced us. Fall back to per-row creates so the rest of the
-      // batch still lands, dropping the fiscal on the conflicting row.
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        for (const input of inputs) await createOrdemComFallback(input);
-        return;
+    // Send 500 rows per INSERT to keep individual SQL statements small and
+    // avoid Prisma serializing a single multi-MB query for large imports.
+    const CHUNK = 500;
+    for (let i = 0; i < inputs.length; i += CHUNK) {
+      const chunk = inputs.slice(i, i + CHUNK);
+      try {
+        await prisma.ordemServico.createMany({ data: chunk });
+      } catch (error) {
+        // The service already guarantees ≤1 open OS per fiscal; a P2002 here means a
+        // concurrent claim raced us. Fall back to per-row creates so the rest of the
+        // batch still lands, dropping the fiscal on the conflicting row.
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          for (const input of chunk) await createOrdemComFallback(input);
+          continue;
+        }
+        throw error;
       }
-      throw error;
     }
   },
   async updateOrdem(id: string, input: ImportacaoOrdemInput) {
