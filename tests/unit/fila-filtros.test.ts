@@ -30,4 +30,14 @@ describe("parseFilaFilters", () => {
   it("maps the SEM_FISCAL sentinel to a null fiscal (unassigned)", () => {
     expect(parseFilaFilters({ fiscalId: SEM_FISCAL })).toEqual({ fiscalId: null });
   });
+
+  it("parses a fim-execução date range into inclusive local day bounds", () => {
+    const filters = parseFilaFilters({ fimDe: "2026-06-01", fimAte: "2026-06-30" });
+    expect(filters.fimDe).toEqual(new Date(2026, 5, 1, 0, 0, 0, 0));
+    expect(filters.fimAte).toEqual(new Date(2026, 5, 30, 23, 59, 59, 999));
+  });
+
+  it("ignores blank or malformed dates", () => {
+    expect(parseFilaFilters({ fimDe: "", fimAte: "not-a-date" })).toEqual({});
+  });
 });

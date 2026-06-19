@@ -18,7 +18,11 @@ app.prepare().then(async () => {
   });
 
   const io = new IOServer(server, {
-    cors: { origin: process.env.NEXTAUTH_URL ?? "*" }
+    cors: { origin: process.env.NEXTAUTH_URL ?? "*" },
+    maxHttpBufferSize: 1e6,
+    connectTimeout: 10000,
+    pingTimeout: 20000,
+    pingInterval: 25000
   });
   const redis = await configureSocketRedis(io);
   if (redis.enabled) console.log("> Socket.IO Redis adapter connected");

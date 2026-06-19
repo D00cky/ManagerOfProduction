@@ -5,7 +5,11 @@ import { REGIOES_SP } from "@/data/regioes-sp";
 
 export type DashboardFiltros = {
   regiao?: string;
+  /** Polo id; narrows the OS set within the selected região. */
+  polo?: string;
   municipio?: string;
+  /** 1-based page for the backlog detail list (only used when `polo` is set). */
+  page?: number;
   /** Time window for the throughput funnel/series. Defaults to "today". */
   from?: Date;
   to?: Date;
@@ -15,6 +19,8 @@ export type DashboardPeriodo = { from: Date; to: Date };
 
 export type GeoFacet = {
   regiaoAdministrativa: string | null;
+  poloId: string | null;
+  poloNome: string | null;
   cidade: string | null;
 };
 
@@ -44,14 +50,26 @@ export type FiscalProgressRow = {
   emExecucao: number;
 };
 
-/** Stalled-OS row (SQL already filtered to non-terminal + older than the cutoff). */
-export type OsParadaRow = {
+/**
+ * Backlog agregado por (região, polo). "Parada" = OS com execução concluída
+ * (dataFimExecucao preenchida) que ainda não foi Concluída/Cancelada e está sem
+ * movimento há OS_PARADA_DIAS+ dias. A SQL já aplica esse filtro.
+ */
+export type ParadaPoloRow = {
+  regiao: string | null;
+  poloId: string;
+  total: number;
+  /** updatedAt mais antigo do grupo → maior número de dias parada. */
+  oldestUpdatedAt: Date;
+};
+
+/** Uma OS do backlog, para a lista paginada exibida quando um polo é filtrado. */
+export type ParadaDetalheRow = {
   id: string;
   numero: string;
   status: StatusOS;
   updatedAt: Date;
-  fiscalId: string | null;
-  poloId: string;
+  dataFimExecucao: Date | null;
 };
 
 /** Throughput roll-up for one hierarchy key (região / polo / município). */
@@ -67,11 +85,19 @@ export type DashboardRepository = {
   /** Current snapshot, not time-windowed: drives the status cards. */
   countByStatus(where: Prisma.OrdemServicoWhereInput): Promise<StatusCount[]>;
   progressoPorFiscal(where: Prisma.OrdemServicoWhereInput): Promise<FiscalProgressRow[]>;
-  findOsParadas(
+  /** Backlog agrupado por (região, polo): contagem + updatedAt mais antigo. */
+  paradasPorPolo(
+    where: Prisma.OrdemServicoWhereInput,
+    updatedBefore: Date
+  ): Promise<ParadaPoloRow[]>;
+  /** Página do backlog de um escopo já filtrado (geralmente por polo). */
+  paradasDetalhe(
     where: Prisma.OrdemServicoWhereInput,
     updatedBefore: Date,
-    limit: number
-  ): Promise<OsParadaRow[]>;
+    pagination: { skip: number; take: number }
+  ): Promise<{ rows: ParadaDetalheRow[]; total: number }>;
+  /** Nome dos polos por id, para rotular o backlog. */
+  findPolos(ids: string[]): Promise<Array<{ id: string; nome: string }>>;
   // Time-windowed throughput funnel (scoped).
   contarEntradas(where: Prisma.OrdemServicoWhereInput, periodo: DashboardPeriodo): Promise<number>;
   contarConcluidas(where: Prisma.OrdemServicoWhereInput, periodo: DashboardPeriodo): Promise<number>;
@@ -147,20 +173,42 @@ export type DashboardResumo = {
     emExecucao: number;
     percentualConclusao: number;
   }>;
-  osParadas: Array<{
-    id: string;
-    numero: string;
-    status: StatusOS;
-    diasParada: number;
-    fiscalId: string | null;
-    poloId: string;
+  /**
+   * Backlog de OS paradas (2+ dias). Visão padrão: resumo por região → polo.
+   * `detalhe` só vem preenchido quando um polo é filtrado — aí lista as OS
+   * paginadas com a data de fim de execução.
+   */
+  paradas: {
+    porPolo: Array<{
+      regiao: string | null;
+      poloId: string;
+      poloNome: string;
+      total: number;
+      maxDias: number;
+    }>;
+    detalhe: {
+      rows: Array<{
+        id: string;
+        numero: string;
+        status: StatusOS;
+        dataFimExecucao: Date | null;
+        diasParada: number;
+      }>;
+      total: number;
+      page: number;
+      pageSize: number;
+    } | null;
+  };
+  filtros: { regiao?: string; polo?: string; municipio?: string };
+  opcoesGeograficas: Array<{
+    regiao: string;
+    polos: Array<{ id: string; nome: string; municipios: string[] }>;
   }>;
-  filtros: { regiao?: string; municipio?: string };
-  opcoesGeograficas: Array<{ regiao: string; municipios: string[] }>;
 };
 
-const OS_PARADAS_LIMIT = 100;
 const OS_PARADA_DIAS = 2;
+/** Page size for the backlog detail list (shown when a polo is filtered). */
+export const PARADAS_PAGE_SIZE = 10;
 
 export async function getDashboardResumo(
   repository: DashboardRepository,
@@ -177,11 +225,15 @@ export async function getDashboardResumo(
   // "Parada" cutoff keeps the calendar-day semantics: stalled means the last
   // update was at least OS_PARADA_DIAS calendar days ago.
   const updatedBefore = startOfDay(subDaysCal(now, OS_PARADA_DIAS - 1));
+  // The detail list only matters once a polo is picked (`where.poloId` is set).
+  const paradaPage = Math.max(1, filtros.page ?? 1);
+  const pageSize = PARADAS_PAGE_SIZE;
 
   const [
     statusCounts,
     progressoBase,
-    parariasRows,
+    paradasRows,
+    paradasDetalhe,
     entradas,
     concluidas,
     analisadas,
@@ -194,7 +246,13 @@ export async function getDashboardResumo(
   ] = await Promise.all([
     repository.countByStatus(where),
     repository.progressoPorFiscal(where),
-    repository.findOsParadas(where, updatedBefore, OS_PARADAS_LIMIT),
+    repository.paradasPorPolo(where, updatedBefore),
+    filtros.polo
+      ? repository.paradasDetalhe(where, updatedBefore, {
+          skip: (paradaPage - 1) * pageSize,
+          take: pageSize
+        })
+      : Promise.resolve(null),
     repository.contarEntradas(where, periodo),
     repository.contarConcluidas(where, periodo),
     repository.contarAnalisadas(where, periodo),
@@ -207,6 +265,11 @@ export async function getDashboardResumo(
     contarProgresso(repository, where, janelaHoje),
     contarProgresso(repository, where, janelaMes)
   ]);
+
+  // Resolve polo names for the backlog summary labels.
+  const polos = await repository.findPolos(paradasRows.map((row) => row.poloId));
+  const poloNomePorId = new Map(polos.map((polo) => [polo.id, polo.nome]));
+  const paradas = buildParadas(paradasRows, paradasDetalhe, poloNomePorId, paradaPage, pageSize, now);
 
   // Resolve names once for every fiscal referenced by progress or performance.
   const fiscalIds = [
@@ -258,8 +321,8 @@ export async function getDashboardResumo(
     arvoreDesempenho,
     metricas: calculateMetricas(statusCounts),
     progressoPorFiscal,
-    osParadas: calculateOsParadas(parariasRows, now),
-    filtros: { regiao: filtros.regiao, municipio: filtros.municipio },
+    paradas,
+    filtros: { regiao: filtros.regiao, polo: filtros.polo, municipio: filtros.municipio },
     opcoesGeograficas: buildOpcoesGeograficas(facets)
   };
 }
@@ -300,6 +363,9 @@ function mergeScopeAndGeo(
 ): Prisma.OrdemServicoWhereInput {
   const where: Prisma.OrdemServicoWhereInput = { ...scope };
   if (filtros.municipio) where.cidade = filtros.municipio;
+  // Polo only narrows within the access scope (additional AND), so it can never
+  // widen visibility beyond what `buildOsScope` already allows.
+  if (filtros.polo) where.poloId = filtros.polo;
   if (filtros.regiao) {
     const scoped = scope.regiaoAdministrativa as { in?: string[] } | undefined;
     const allowed = !scoped || (Array.isArray(scoped.in) ? scoped.in.includes(filtros.regiao) : true);
@@ -350,16 +416,26 @@ function mapRegiao(rows: HierarquiaLinha[]): DashboardResumo["porRegiao"] {
 }
 
 function buildOpcoesGeograficas(facets: GeoFacet[]): DashboardResumo["opcoesGeograficas"] {
-  const byRegiao = new Map<string, Set<string>>();
+  // Região → polo → municípios, montado a partir das OS reais: só aparecem polos
+  // (e municípios) que de fato têm OS naquela região.
+  const byRegiao = new Map<string, Map<string, { nome: string; municipios: Set<string> }>>();
   for (const facet of facets) {
-    if (!facet.regiaoAdministrativa) continue;
-    const municipios = byRegiao.get(facet.regiaoAdministrativa) ?? new Set<string>();
-    if (facet.cidade) municipios.add(facet.cidade);
-    byRegiao.set(facet.regiaoAdministrativa, municipios);
+    if (!facet.regiaoAdministrativa || !facet.poloId) continue;
+    const polos = byRegiao.get(facet.regiaoAdministrativa) ?? new Map();
+    const polo = polos.get(facet.poloId) ?? { nome: facet.poloNome ?? facet.poloId, municipios: new Set<string>() };
+    if (facet.cidade) polo.municipios.add(facet.cidade);
+    polos.set(facet.poloId, polo);
+    byRegiao.set(facet.regiaoAdministrativa, polos);
   }
   return REGIOES_SP.filter((regiao) => byRegiao.has(regiao)).map((regiao) => ({
     regiao,
-    municipios: [...(byRegiao.get(regiao) ?? new Set<string>())].sort((a, b) => a.localeCompare(b, "pt-BR"))
+    polos: [...(byRegiao.get(regiao) ?? new Map()).entries()]
+      .map(([id, polo]) => ({
+        id,
+        nome: polo.nome,
+        municipios: [...polo.municipios].sort((a, b) => a.localeCompare(b, "pt-BR"))
+      }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
   }));
 }
 
@@ -381,16 +457,38 @@ function calculateMetricas(statusCounts: StatusCount[]): DashboardResumo["metric
   };
 }
 
-function calculateOsParadas(rows: OsParadaRow[], now: Date): DashboardResumo["osParadas"] {
-  return rows
-    .map((row) => ({
-      id: row.id,
-      numero: row.numero,
-      status: row.status,
-      diasParada: differenceInCalendarDays(now, row.updatedAt),
-      fiscalId: row.fiscalId,
-      poloId: row.poloId
-    }))
-    .filter((row) => row.diasParada >= OS_PARADA_DIAS)
-    .sort((a, b) => b.diasParada - a.diasParada);
+function buildParadas(
+  porPolo: ParadaPoloRow[],
+  detalhe: { rows: ParadaDetalheRow[]; total: number } | null,
+  poloNomePorId: Map<string, string>,
+  page: number,
+  pageSize: number,
+  now: Date
+): DashboardResumo["paradas"] {
+  return {
+    // Resumo por polo: contagem + pior caso (OS mais antiga sem movimento).
+    porPolo: porPolo
+      .map((row) => ({
+        regiao: row.regiao,
+        poloId: row.poloId,
+        poloNome: poloNomePorId.get(row.poloId) ?? row.poloId,
+        total: row.total,
+        maxDias: differenceInCalendarDays(now, row.oldestUpdatedAt)
+      }))
+      .sort((a, b) => b.maxDias - a.maxDias || b.total - a.total),
+    detalhe: detalhe
+      ? {
+          rows: detalhe.rows.map((row) => ({
+            id: row.id,
+            numero: row.numero,
+            status: row.status,
+            dataFimExecucao: row.dataFimExecucao,
+            diasParada: differenceInCalendarDays(now, row.updatedAt)
+          })),
+          total: detalhe.total,
+          page,
+          pageSize
+        }
+      : null
+  };
 }

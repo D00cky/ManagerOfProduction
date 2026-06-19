@@ -22,7 +22,9 @@ export async function POST(request: Request) {
     fiscalId: body.filtros?.fiscalId,
     tipoServico: body.filtros?.tipoServico as TipoServico | undefined,
     status: body.filtros?.status as StatusOS | undefined,
-    busca: body.filtros?.busca
+    busca: body.filtros?.busca,
+    fimDe: body.filtros?.fimDe,
+    fimAte: body.filtros?.fimAte
   });
 
   try {

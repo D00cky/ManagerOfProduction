@@ -34,6 +34,9 @@ export type OsListFilters = {
   tipoServico?: TipoServico;
   status?: StatusOS;
   busca?: string;
+  /** Inclusive range on Data Fim Execução. */
+  fimDe?: Date;
+  fimAte?: Date;
 };
 
 export type OsListParams = {
@@ -89,6 +92,12 @@ export function buildListWhere(
       { numero: { contains: filters.busca, mode: "insensitive" } },
       { enderecoCompleto: { contains: filters.busca, mode: "insensitive" } }
     ];
+  }
+  if (filters.fimDe || filters.fimAte) {
+    where.dataFimExecucao = {
+      ...(filters.fimDe ? { gte: filters.fimDe } : {}),
+      ...(filters.fimAte ? { lte: filters.fimAte } : {})
+    };
   }
   return where;
 }

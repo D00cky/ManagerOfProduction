@@ -16,6 +16,9 @@ export type FilaFiltros = {
   tipoServico: string;
   status: string;
   busca: string;
+  /** Range on Data Fim Execução (yyyy-mm-dd from <input type="date">). */
+  fimDe: string;
+  fimAte: string;
 };
 
 export const FILTROS_VAZIOS: FilaFiltros = {
@@ -23,7 +26,9 @@ export const FILTROS_VAZIOS: FilaFiltros = {
   fiscalId: "",
   tipoServico: "",
   status: "",
-  busca: ""
+  busca: "",
+  fimDe: "",
+  fimAte: ""
 };
 
 type RawFiltros = {
@@ -32,11 +37,34 @@ type RawFiltros = {
   tipoServico?: string | null;
   status?: string | null;
   busca?: string | null;
+  fimDe?: string | null;
+  fimAte?: string | null;
 };
 
 function clean(value: string | null | undefined) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+/**
+ * Parse a `yyyy-mm-dd` date input into a *local* day boundary. `endOfDay` gives
+ * the inclusive upper bound (23:59:59.999) so a range covers whole days.
+ */
+function parseInputDate(value: string | null | undefined, endOfDay: boolean): Date | undefined {
+  const raw = clean(value);
+  const match = raw ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw) : null;
+  if (!match) return undefined;
+  const [, year, month, day] = match;
+  const date = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    endOfDay ? 23 : 0,
+    endOfDay ? 59 : 0,
+    endOfDay ? 59 : 0,
+    endOfDay ? 999 : 0
+  );
+  return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
 /** Convert raw query/URL values into the service's typed filter object. */
@@ -57,6 +85,12 @@ export function parseFilaFilters(raw: RawFiltros): OsListFilters {
 
   const busca = clean(raw.busca);
   if (busca) filters.busca = busca;
+
+  const fimDe = parseInputDate(raw.fimDe, false);
+  if (fimDe) filters.fimDe = fimDe;
+
+  const fimAte = parseInputDate(raw.fimAte, true);
+  if (fimAte) filters.fimAte = fimAte;
 
   return filters;
 }

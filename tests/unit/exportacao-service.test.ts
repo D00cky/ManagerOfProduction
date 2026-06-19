@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Prisma } from "@prisma/client";
+import { chaveObsNaoConforme } from "@/data/grupos-ffr";
 import {
   buildExportDataset,
   sanitizeSheetName,
+  PREFIXO_OBS_NAO_CONFORME,
   type ExportacaoRepository,
   type OrdemExport
 } from "@/server/exportacao-service";
@@ -169,6 +171,38 @@ describe("buildExportDataset", () => {
     expect(linha[idx("O REGISTRO FOTOGRÁFICO DO SERVIÇO FOI EXECUTADO?")]).toBe("");
     expect(linha[idx("Soma obtida")]).toBe("");
     expect(linha[idx("Conceito")]).toBe("");
+  });
+
+  it("pairs each booleano criteria with a Não conforme observation column", async () => {
+    const q1 = "O REGISTRO FOTOGRÁFICO DO SERVIÇO FOI EXECUTADO?";
+    const q2 = "A QUALIDADE DAS FOTOS ESTÁ FAVORECENDO A FISCALIZAÇÃO (NÍTIDAS/BEM ENQUADRADAS)?";
+    const textoQ4 = "SERVIÇO DECORRENTE DE DANOS DE TERCEIROS?";
+    const { repository } = repo([
+      os({
+        descricaoTss: "LIGAÇÃO DE ÁGUA",
+        tabulacao: tab({
+          respostas: {
+            gerais_q1: "1", // conforme → observação fica em branco
+            gerais_q2: "0", // não conforme → observação preenchida
+            [chaveObsNaoConforme("gerais_q2")]: "faltou registro fotografico",
+            gerais_q4: "dano de terceiro" // item texto → sem coluna de observação
+          }
+        })
+      })
+    ]);
+
+    const { sheets } = await buildExportDataset(repository, supervisor, {});
+    const sheet = sheets[0];
+    const idx = (label: string) => sheet.colunas.indexOf(label);
+    const linha = sheet.linhas[0];
+
+    // A coluna de observação fica imediatamente após a coluna do critério.
+    expect(idx(`${PREFIXO_OBS_NAO_CONFORME}${q2}`)).toBe(idx(q2) + 1);
+    expect(linha[idx(`${PREFIXO_OBS_NAO_CONFORME}${q2}`)]).toBe("faltou registro fotografico");
+    // Critério Conforme: sem observação.
+    expect(linha[idx(`${PREFIXO_OBS_NAO_CONFORME}${q1}`)]).toBe("");
+    // Itens do tipo texto não recebem coluna de observação de Não conforme.
+    expect(idx(`${PREFIXO_OBS_NAO_CONFORME}${textoQ4}`)).toBe(-1);
   });
 
   it("builds the query where from the user's row scope", async () => {

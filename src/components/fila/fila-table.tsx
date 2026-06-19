@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { StatusOS, TipoServico } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { FILTROS_VAZIOS, SEM_FISCAL, type FilaFiltros } from "@/lib/fila-filtros";
@@ -21,11 +22,14 @@ export type FilaRow = {
   poloNome: string | null;
   fiscalId: string | null;
   fiscalNome: string | null;
-  dataProgramada: string | null;
+  dataFimExecucao: string | null;
 };
 
 export type FiscalOption = { id: string; name: string };
 export type PoloOption = { id: string; nome: string };
+
+/** Per-browser key for remembering the last-used fila filters. */
+const FILTROS_STORAGE_KEY = "fila:filtros";
 
 const TIPOS: TipoServico[] = [
   "RedeRamalAgua",
@@ -110,8 +114,24 @@ export function FilaTable({
 
   const totalPaginas = Math.max(1, Math.ceil(total / pageSize));
   const algumFiltroAtivo = Boolean(
-    filtros.poloId || filtros.fiscalId || filtros.tipoServico || filtros.status || filtros.busca
+    filtros.poloId ||
+      filtros.fiscalId ||
+      filtros.tipoServico ||
+      filtros.status ||
+      filtros.busca ||
+      filtros.fimDe ||
+      filtros.fimAte
   );
+
+  // Auto-remember: when the queue is opened with no query string, restore the
+  // last-used filters saved in this browser. Runs once on mount; clearing the
+  // filters stores an empty set so nothing is restored next time.
+  useEffect(() => {
+    if (typeof window === "undefined" || window.location.search) return;
+    const saved = window.localStorage.getItem(FILTROS_STORAGE_KEY);
+    if (saved) router.replace(`/fila?${saved}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // All filtering/pagination is server-side via the URL so the table never loads
   // the whole (potentially huge) queue into the browser.
@@ -120,6 +140,10 @@ export function FilaTable({
     const search = new URLSearchParams();
     for (const [key, value] of Object.entries(merged)) {
       if (value) search.set(key, value);
+    }
+    // Persist the filter set (without pagination) for the next visit.
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(FILTROS_STORAGE_KEY, search.toString());
     }
     if (paginaDestino > 1) search.set("page", String(paginaDestino));
     const qs = search.toString();
@@ -242,6 +266,28 @@ export function FilaTable({
           </Select>
         </label>
 
+        <label className="flex flex-col gap-1 text-xs uppercase text-[hsl(var(--muted-foreground))]">
+          Data da OS (de)
+          <Input
+            type="date"
+            className="h-9 w-40"
+            value={filtros.fimDe}
+            max={filtros.fimAte || undefined}
+            onChange={(event) => navegar({ fimDe: event.target.value })}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-xs uppercase text-[hsl(var(--muted-foreground))]">
+          Data da OS (ate)
+          <Input
+            type="date"
+            className="h-9 w-40"
+            value={filtros.fimAte}
+            min={filtros.fimDe || undefined}
+            onChange={(event) => navegar({ fimAte: event.target.value })}
+          />
+        </label>
+
         {algumFiltroAtivo ? (
           <Button variant="outline" size="sm" onClick={() => navegar(FILTROS_VAZIOS)}>
             Limpar filtros
@@ -342,7 +388,7 @@ export function FilaTable({
               <th className="px-4 py-3">Tipo</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Fiscal</th>
-              <th className="px-4 py-3">Programada</th>
+              <th className="px-4 py-3">Data da OS</th>
               <th className="px-4 py-3">Acoes</th>
             </tr>
           </thead>
@@ -378,7 +424,7 @@ export function FilaTable({
                   <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
                     {ordem.fiscalNome ?? (ordem.fiscalId ? "Atribuida" : "Sem fiscal")}
                   </td>
-                  <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">{ordem.dataProgramada ?? "-"}</td>
+                  <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">{ordem.dataFimExecucao ?? "-"}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap items-center gap-2">
                       {ordem.status === "NaFila" ? (
