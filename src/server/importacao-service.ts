@@ -205,6 +205,9 @@ export async function confirmarImportacao(
     }
   }
   const unicas = [...porChave.values()].sort((a, b) => a.linha - b.linha);
+  // Free intermediate collections — unicas is the only reference needed now.
+  preparadas.length = 0;
+  porChave.clear();
 
   // Open work per referenced fiscal, in one query.
   const openWork = new Map(
