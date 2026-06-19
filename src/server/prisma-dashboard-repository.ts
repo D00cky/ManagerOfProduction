@@ -189,6 +189,10 @@ export const prismaDashboardRepository: DashboardRepository = {
       poloNome: row.polo?.nome ?? null
     }));
   },
+  async mesesDisponiveis(where: Prisma.OrdemServicoWhereInput) {
+    const rows = await prisma.ordemServico.findMany({ where, select: { createdAt: true } });
+    return rows.map((row) => row.createdAt);
+  },
   async findFiscais(ids: string[]) {
     if (ids.length === 0) return [];
     const rows = await prisma.user.findMany({
