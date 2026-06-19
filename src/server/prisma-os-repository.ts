@@ -127,24 +127,34 @@ export function createPrismaOrdemRepository(
       return result.count;
     },
     async deleteOrdens(where) {
-      return client.$transaction(async (transaction) => {
-        const ordens = await transaction.ordemServico.findMany({ where, select: { id: true } });
+      let totalDeleted = 0;
+      // Process 500 OS per round-trip so each transaction completes well within
+      // the 5-second interactive timeout. The outer loop keeps fetching until no
+      // rows remain — deleting the batch each time advances the cursor naturally.
+      while (true) {
+        const ordens = await client.ordemServico.findMany({ where, select: { id: true }, take: 500 });
+        if (ordens.length === 0) break;
         const ids = ordens.map((ordem) => ordem.id);
-        if (ids.length === 0) return 0;
-        const tabs = await transaction.tabulacao.findMany({
-          where: { ordemServicoId: { in: ids } },
-          select: { id: true }
-        });
-        const tabIds = tabs.map((tab) => tab.id);
-        // Required FKs default to Restrict: clear avaliações then tabulações
-        // before the OS. LogAtividade.ordemServicoId is optional (SetNull).
-        if (tabIds.length > 0) {
-          await transaction.avaliacao.deleteMany({ where: { tabulacaoId: { in: tabIds } } });
-          await transaction.tabulacao.deleteMany({ where: { id: { in: tabIds } } });
-        }
-        const deleted = await transaction.ordemServico.deleteMany({ where: { id: { in: ids } } });
-        return deleted.count;
-      });
+
+        const deleted = await client.$transaction(async (transaction) => {
+          const tabs = await transaction.tabulacao.findMany({
+            where: { ordemServicoId: { in: ids } },
+            select: { id: true }
+          });
+          const tabIds = tabs.map((tab) => tab.id);
+          // Required FKs default to Restrict: clear avaliações then tabulações
+          // before the OS. LogAtividade.ordemServicoId is optional (SetNull).
+          if (tabIds.length > 0) {
+            await transaction.avaliacao.deleteMany({ where: { tabulacaoId: { in: tabIds } } });
+            await transaction.tabulacao.deleteMany({ where: { id: { in: tabIds } } });
+          }
+          const result = await transaction.ordemServico.deleteMany({ where: { id: { in: ids } } });
+          return result.count;
+        }, { timeout: 15000 });
+
+        totalDeleted += deleted;
+      }
+      return totalDeleted;
     },
     async log(input: LogInput) {
       await logWriter(input);
