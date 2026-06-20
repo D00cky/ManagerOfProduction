@@ -115,7 +115,7 @@ describe("criarUsuario", () => {
     );
   });
 
-  it("stores a região for monitors and ignores it for other roles", async () => {
+  it("stores a região for monitors and fiscais but ignores it for supervisors", async () => {
     const repository = repo({ existing: null });
 
     await criarUsuario(repository, supervisor, {
@@ -129,6 +129,8 @@ describe("criarUsuario", () => {
       expect.objectContaining({ perfil: "monitor", regiao: "Campinas" })
     );
 
+    // Fiscais agora carregam região (é o que torna o fiscal visível ao monitor
+    // da mesma região na Equipe / atribuição da Fila).
     await criarUsuario(repository, supervisor, {
       ...validInput,
       perfil: "fiscal",
@@ -137,7 +139,19 @@ describe("criarUsuario", () => {
       regiao: "Campinas"
     });
     expect(repository.create).toHaveBeenLastCalledWith(
-      expect.objectContaining({ perfil: "fiscal", regiao: null })
+      expect.objectContaining({ perfil: "fiscal", regiao: "Campinas" })
+    );
+
+    // Supervisores enxergam tudo; nunca recebem região.
+    await criarUsuario(repository, supervisor, {
+      ...validInput,
+      perfil: "supervisor",
+      matricula: "S0009",
+      email: "sup9@example.com",
+      regiao: "Campinas"
+    });
+    expect(repository.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ perfil: "supervisor", regiao: null })
     );
   });
 });
@@ -179,6 +193,22 @@ describe("atualizarUsuario", () => {
 
     expect(updated.perfil).toBe("monitor");
     expect(repository.update).toHaveBeenCalledWith("u1", { perfil: "monitor" });
+  });
+
+  it("persists a região when updating a fiscal", async () => {
+    const repository = repo();
+
+    await atualizarUsuario(repository, supervisor, "u1", { perfil: "fiscal", regiao: "Campinas" });
+
+    expect(repository.update).toHaveBeenCalledWith("u1", { perfil: "fiscal", regiao: "Campinas" });
+  });
+
+  it("clears any região when the user becomes a supervisor", async () => {
+    const repository = repo();
+
+    await atualizarUsuario(repository, supervisor, "u1", { perfil: "supervisor", regiao: "Campinas" });
+
+    expect(repository.update).toHaveBeenCalledWith("u1", { perfil: "supervisor", regiao: null });
   });
 
   it("resets the password when provided and keeps it out of the log", async () => {
