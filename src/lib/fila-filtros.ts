@@ -11,7 +11,9 @@ export const SEM_FISCAL = "__sem_fiscal__";
 
 /** String-shaped filters as held by the UI selects / URL query. */
 export type FilaFiltros = {
+  regiao: string;
   poloId: string;
+  municipio: string;
   fiscalId: string;
   tipoServico: string;
   status: string;
@@ -22,7 +24,9 @@ export type FilaFiltros = {
 };
 
 export const FILTROS_VAZIOS: FilaFiltros = {
+  regiao: "",
   poloId: "",
+  municipio: "",
   fiscalId: "",
   tipoServico: "",
   status: "",
@@ -32,7 +36,9 @@ export const FILTROS_VAZIOS: FilaFiltros = {
 };
 
 type RawFiltros = {
+  regiao?: string | null;
   poloId?: string | null;
+  municipio?: string | null;
   fiscalId?: string | null;
   tipoServico?: string | null;
   status?: string | null;
@@ -70,8 +76,14 @@ function parseInputDate(value: string | null | undefined, endOfDay: boolean): Da
 /** Convert raw query/URL values into the service's typed filter object. */
 export function parseFilaFilters(raw: RawFiltros): OsListFilters {
   const filters: OsListFilters = {};
+  const regiao = clean(raw.regiao);
+  if (regiao) filters.regiao = regiao;
+
   const poloId = clean(raw.poloId);
   if (poloId) filters.poloId = poloId;
+
+  const municipio = clean(raw.municipio);
+  if (municipio) filters.municipio = municipio;
 
   const fiscalId = clean(raw.fiscalId);
   if (fiscalId === SEM_FISCAL) filters.fiscalId = null;

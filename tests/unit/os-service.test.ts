@@ -171,6 +171,20 @@ describe("buildListWhere", () => {
     });
   });
 
+  it("ANDs região/município so they narrow within scope instead of overwriting it", () => {
+    // Monitor scope is região-bound; an out-of-scope região filter must collapse
+    // to nothing (both the scope `in` and the AND clause have to hold).
+    expect(
+      buildListWhere(
+        { regiaoAdministrativa: { in: ["Campinas"] } },
+        { regiao: "Santos", municipio: "Sumare" }
+      )
+    ).toEqual({
+      regiaoAdministrativa: { in: ["Campinas"] },
+      AND: [{ regiaoAdministrativa: "Santos" }, { cidade: "Sumare" }]
+    });
+  });
+
   it("maps a fim-execução range to a dataFimExecucao gte/lte clause", () => {
     const fimDe = new Date(2026, 5, 1, 0, 0, 0, 0);
     const fimAte = new Date(2026, 5, 30, 23, 59, 59, 999);

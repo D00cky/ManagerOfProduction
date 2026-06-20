@@ -30,6 +30,10 @@ export type ClaimedOrdem = Pick<OrdemServico, "id" | "numero" | "poloId" | "fisc
 /** `null` fiscalId means "sem fiscal" (unassigned); omit to not filter by fiscal. */
 export type OsListFilters = {
   poloId?: string;
+  /** Administrative região (denormalized on the OS as `regiaoAdministrativa`). */
+  regiao?: string;
+  /** Município (`cidade` on the OS). */
+  municipio?: string;
   fiscalId?: string | null;
   tipoServico?: TipoServico;
   status?: StatusOS;
@@ -83,6 +87,12 @@ export function buildListWhere(
 ): Prisma.OrdemServicoWhereInput {
   const where: Prisma.OrdemServicoWhereInput = { ...scope };
   if (filters.poloId) where.poloId = filters.poloId;
+  // Região/município são ANDados (não sobrescrevem) para nunca escapar do escopo:
+  // um monitor já é limitado por `regiaoAdministrativa` no `scope`.
+  const geo: Prisma.OrdemServicoWhereInput[] = [];
+  if (filters.regiao) geo.push({ regiaoAdministrativa: filters.regiao });
+  if (filters.municipio) geo.push({ cidade: filters.municipio });
+  if (geo.length > 0) where.AND = geo;
   if (filters.tipoServico) where.tipoServico = filters.tipoServico;
   if (filters.status) where.status = filters.status;
   if (filters.fiscalId === null) where.fiscalId = null;

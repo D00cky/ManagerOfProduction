@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { FILTROS_VAZIOS, SEM_FISCAL, type FilaFiltros } from "@/lib/fila-filtros";
 import { statusLabel, tipoServicoLabel } from "@/lib/os-labels";
+import type { OpcoesGeograficas } from "@/server/dashboard-service";
 
 export type FilaRow = {
   id: string;
@@ -26,7 +27,6 @@ export type FilaRow = {
 };
 
 export type FiscalOption = { id: string; name: string };
-export type PoloOption = { id: string; nome: string };
 
 /** Per-browser key for remembering the last-used fila filters. */
 const FILTROS_STORAGE_KEY = "fila:filtros";
@@ -45,7 +45,7 @@ const STATUS: StatusOS[] = ["NaFila", "EmExecucao", "Pendente", "Concluida", "Ca
 export function FilaTable({
   ordens,
   fiscais,
-  polos,
+  opcoesGeo,
   canAssign,
   canDelete,
   filtros,
@@ -55,7 +55,7 @@ export function FilaTable({
 }: {
   ordens: FilaRow[];
   fiscais: FiscalOption[];
-  polos: PoloOption[];
+  opcoesGeo: OpcoesGeograficas;
   canAssign: boolean;
   canDelete: boolean;
   filtros: FilaFiltros;
@@ -114,7 +114,9 @@ export function FilaTable({
 
   const totalPaginas = Math.max(1, Math.ceil(total / pageSize));
   const algumFiltroAtivo = Boolean(
-    filtros.poloId ||
+    filtros.regiao ||
+      filtros.poloId ||
+      filtros.municipio ||
       filtros.fiscalId ||
       filtros.tipoServico ||
       filtros.status ||
@@ -122,6 +124,19 @@ export function FilaTable({
       filtros.fimDe ||
       filtros.fimAte
   );
+
+  // Cascata geográfica: o Polo lista apenas polos da Região escolhida; o Município,
+  // apenas os do Polo escolhido. Trocar a Região zera Polo+Município; trocar o Polo
+  // zera o Município. Se a URL trouxer só `poloId` (filtro salvo antigo / deep link),
+  // derivamos a Região do polo para a cascata exibir corretamente.
+  const regiaoDoPolo = filtros.poloId
+    ? opcoesGeo.find((opcao) => opcao.polos.some((polo) => polo.id === filtros.poloId))?.regiao
+    : undefined;
+  const regiaoEfetiva = filtros.regiao || regiaoDoPolo || "";
+  const regiaoAtual = opcoesGeo.find((opcao) => opcao.regiao === regiaoEfetiva);
+  const polosDisponiveis = regiaoAtual?.polos ?? [];
+  const poloAtual = polosDisponiveis.find((opcao) => opcao.id === filtros.poloId);
+  const municipiosDisponiveis = poloAtual?.municipios ?? [];
 
   // Auto-remember: when the queue is opened with no query string, restore the
   // last-used filters saved in this browser. Runs once on mount; clearing the
@@ -202,16 +217,52 @@ export function FilaTable({
 
       <Card className="flex flex-wrap items-end gap-3 p-4">
         <label className="flex flex-col gap-1 text-xs uppercase text-[hsl(var(--muted-foreground))]">
+          Regiao
+          <Select
+            className="h-9 w-44"
+            value={regiaoEfetiva}
+            onChange={(event) =>
+              navegar({ regiao: event.target.value, poloId: "", municipio: "" })
+            }
+          >
+            <option value="">Todas</option>
+            {opcoesGeo.map((opcao) => (
+              <option key={opcao.regiao} value={opcao.regiao}>
+                {opcao.regiao}
+              </option>
+            ))}
+          </Select>
+        </label>
+
+        <label className="flex flex-col gap-1 text-xs uppercase text-[hsl(var(--muted-foreground))]">
           Polo
           <Select
             className="h-9 w-44"
             value={filtros.poloId}
-            onChange={(event) => navegar({ poloId: event.target.value })}
+            disabled={!regiaoAtual}
+            onChange={(event) => navegar({ poloId: event.target.value, municipio: "" })}
           >
-            <option value="">Todos</option>
-            {polos.map((polo) => (
+            <option value="">{regiaoAtual ? "Todos" : "Selecione a regiao"}</option>
+            {polosDisponiveis.map((polo) => (
               <option key={polo.id} value={polo.id}>
                 {polo.nome}
+              </option>
+            ))}
+          </Select>
+        </label>
+
+        <label className="flex flex-col gap-1 text-xs uppercase text-[hsl(var(--muted-foreground))]">
+          Municipio
+          <Select
+            className="h-9 w-44"
+            value={filtros.municipio}
+            disabled={!poloAtual}
+            onChange={(event) => navegar({ municipio: event.target.value })}
+          >
+            <option value="">{poloAtual ? "Todos" : "Selecione o polo"}</option>
+            {municipiosDisponiveis.map((municipio) => (
+              <option key={municipio} value={municipio}>
+                {municipio}
               </option>
             ))}
           </Select>

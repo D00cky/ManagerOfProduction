@@ -17,7 +17,9 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const filters = parseFilaFilters({
+      regiao: url.searchParams.get("regiao"),
       poloId: url.searchParams.get("poloId"),
+      municipio: url.searchParams.get("municipio"),
       fiscalId: url.searchParams.get("fiscalId"),
       tipoServico: url.searchParams.get("tipoServico"),
       status: url.searchParams.get("status"),

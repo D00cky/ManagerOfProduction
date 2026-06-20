@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { FilaTable, type FilaRow, type FiscalOption } from "@/components/fila/fila-table";
 import { parseFilaFilters, type FilaFiltros } from "@/lib/fila-filtros";
 import { defaultRedirect, hasPermission } from "@/lib/permissions";
+import { getOpcoesGeograficas } from "@/server/dashboard-service";
+import { prismaDashboardRepository } from "@/server/prisma-dashboard-repository";
 import { listEquipe } from "@/server/equipe-service";
 import { prismaEquipeRepository } from "@/server/prisma-equipe-repository";
 import { listOrdens } from "@/server/os-service";
@@ -18,7 +20,9 @@ function firstParam(value: string | string[] | undefined) {
 }
 
 type FilaSearchParams = {
+  regiao?: string | string[];
   poloId?: string | string[];
+  municipio?: string | string[];
   fiscalId?: string | string[];
   tipoServico?: string | string[];
   status?: string | string[];
@@ -42,7 +46,9 @@ export default async function FilaPage({
   const params = await searchParams;
 
   const filtros: FilaFiltros = {
+    regiao: firstParam(params.regiao),
     poloId: firstParam(params.poloId),
+    municipio: firstParam(params.municipio),
     fiscalId: firstParam(params.fiscalId),
     tipoServico: firstParam(params.tipoServico),
     status: firstParam(params.status),
@@ -52,10 +58,11 @@ export default async function FilaPage({
   };
   const page = Math.max(1, Number(firstParam(params.page)) || 1);
 
-  const [pagina, equipe, polos] = await Promise.all([
+  const [pagina, equipe, polos, opcoesGeo] = await Promise.all([
     listOrdens(prismaOrdemRepository, user, { filters: parseFilaFilters(filtros), page }),
     canAssign ? listEquipe(prismaEquipeRepository, user) : Promise.resolve([]),
-    listPolos(prismaPoloRepository, user)
+    listPolos(prismaPoloRepository, user),
+    getOpcoesGeograficas(prismaDashboardRepository, user)
   ]);
 
   // Responsáveis atribuíveis: fiscais e monitores (um monitor pode atribuir OS a
@@ -85,7 +92,7 @@ export default async function FilaPage({
       <FilaTable
         ordens={rows}
         fiscais={fiscais}
-        polos={polos.map((polo) => ({ id: polo.id, nome: polo.nome }))}
+        opcoesGeo={opcoesGeo}
         canAssign={canAssign}
         canDelete={canDelete}
         filtros={filtros}
