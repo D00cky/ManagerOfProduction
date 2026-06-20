@@ -226,11 +226,25 @@ export type DashboardResumo = {
   filtros: { regiao?: string; polo?: string; municipio?: string };
   /** Meses importados (MM/YY) para o seletor mensal do período. */
   mesesDisponiveis: MesDisponivel[];
-  opcoesGeograficas: Array<{
-    regiao: string;
-    polos: Array<{ id: string; nome: string; municipios: string[] }>;
-  }>;
+  opcoesGeograficas: OpcoesGeograficas;
 };
+
+/** Árvore Região → Polo → Municípios derivada das OS reais (facets). */
+export type OpcoesGeograficas = Array<{
+  regiao: string;
+  polos: Array<{ id: string; nome: string; municipios: string[] }>;
+}>;
+
+/**
+ * Monta as opções do filtro geográfico (Região → Polo → Municípios) a partir dos
+ * facets escopados do usuário. Reutilizável por qualquer tela com filtro geo.
+ */
+export async function getOpcoesGeograficas(
+  repository: Pick<DashboardRepository, "findGeoFacets">,
+  user: SessionUserScope
+): Promise<OpcoesGeograficas> {
+  return buildOpcoesGeograficas(await repository.findGeoFacets(buildOsScope(user)));
+}
 
 const OS_PARADA_DIAS = 2;
 /** Page size for the backlog detail list (shown when a polo is filtered). */
@@ -446,7 +460,7 @@ function mapRegiao(rows: HierarquiaLinha[]): DashboardResumo["porRegiao"] {
     .sort((a, b) => b.entradas - a.entradas);
 }
 
-function buildOpcoesGeograficas(facets: GeoFacet[]): DashboardResumo["opcoesGeograficas"] {
+function buildOpcoesGeograficas(facets: GeoFacet[]): OpcoesGeograficas {
   // Região → polo → municípios, montado a partir das OS reais: só aparecem polos
   // (e municípios) que de fato têm OS naquela região.
   const byRegiao = new Map<string, Map<string, { nome: string; municipios: Set<string> }>>();

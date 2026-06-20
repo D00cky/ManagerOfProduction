@@ -10,13 +10,17 @@ describe("parseFilaFilters", () => {
   it("maps populated query values to typed filters", () => {
     expect(
       parseFilaFilters({
+        regiao: "Campinas",
         poloId: "polo-2",
+        municipio: " Sumare ",
         tipoServico: "CavaleteHidrometro",
         status: "Concluida",
         busca: " 1001 "
       })
     ).toEqual({
+      regiao: "Campinas",
       poloId: "polo-2",
+      municipio: "Sumare",
       tipoServico: "CavaleteHidrometro",
       status: "Concluida",
       busca: "1001"
