@@ -36,6 +36,11 @@ export function Sidebar({
             <Link
               key={item.href}
               href={item.href}
+              // Sidebar routes are all `force-dynamic`, so viewport prefetch can't
+              // cache page data — it just fires 7 slow origin round-trips per render
+              // (heavy on the single free-tier instance) for empty RSC stubs. Fetch
+              // on click instead.
+              prefetch={false}
               className={cn(
                 "rounded-md px-3 py-2 text-sm transition-colors",
                 active
