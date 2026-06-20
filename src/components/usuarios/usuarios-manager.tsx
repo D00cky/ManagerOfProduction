@@ -78,7 +78,7 @@ export function UsuariosManager({
         matricula: editForm.matricula,
         perfil: editForm.perfil,
         poloId: editForm.poloId || null,
-        regiao: editForm.perfil === "monitor" ? editForm.regiao || null : null,
+        regiao: editForm.perfil !== "supervisor" ? editForm.regiao || null : null,
         // Senha só vai quando preenchida (reset opcional).
         ...(editForm.password ? { password: editForm.password } : {})
       })
@@ -104,7 +104,7 @@ export function UsuariosManager({
       body: JSON.stringify({
         ...form,
         poloId: form.poloId || undefined,
-        regiao: form.perfil === "monitor" ? form.regiao || undefined : undefined
+        regiao: form.perfil !== "supervisor" ? form.regiao || undefined : undefined
       })
     });
 
@@ -234,9 +234,9 @@ export function UsuariosManager({
                 ))}
               </Select>
             </div>
-            {form.perfil === "monitor" ? (
+            {form.perfil !== "supervisor" ? (
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="regiao">Regiao (monitor)</Label>
+                <Label htmlFor="regiao">Regiao</Label>
                 <Select
                   id="regiao"
                   value={form.regiao}
@@ -339,9 +339,9 @@ export function UsuariosManager({
                   ))}
                 </Select>
               </div>
-              {editForm.perfil === "monitor" ? (
+              {editForm.perfil !== "supervisor" ? (
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="edit-regiao">Regiao (monitor)</Label>
+                  <Label htmlFor="edit-regiao">Regiao</Label>
                   <Select
                     id="edit-regiao"
                     value={editForm.regiao}
