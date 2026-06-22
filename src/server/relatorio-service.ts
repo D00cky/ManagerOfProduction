@@ -3,6 +3,7 @@ import { endOfMonth, startOfMonth } from "date-fns";
 import { contarConformidade, iqesPercentual, type RespostasFfr } from "@/lib/ffr";
 import { hasPermission } from "@/lib/permissions";
 import { buildOsScope, mergeScopeAndGeo, type GeoFiltros, type SessionUserScope } from "@/lib/scope";
+import { mesesDisponiveisDe, type MesDisponivel } from "@/server/dashboard-service";
 
 export type RelatorioOverall = { total: number; mediaPercentual: number };
 export type ConceitoCount = { conceito: Conceito; count: number };
@@ -28,6 +29,8 @@ export type RelatorioRepository = {
   mediaPorFiscal(scope: Prisma.OrdemServicoWhereInput): Promise<FiscalQualidade[]>;
   findFiscais(ids: string[]): Promise<FiscalInfo[]>;
   listTabulacoesParaBreakdown(scope: Prisma.OrdemServicoWhereInput): Promise<TabulacaoBreakdownRow[]>;
+  /** Datas de fim de execução das OS no escopo (para montar o seletor de mês). */
+  mesesComExecucao(scope: Prisma.OrdemServicoWhereInput): Promise<Date[]>;
 };
 
 /** Um nível de desempenho (região / polo / contratada) com Tabulações, Média FFR e IQES. */
@@ -68,14 +71,9 @@ const SEM_CONTRATADA = "Sem contratada";
 
 const conceitos: Conceito[] = ["A", "B", "C", "D", "NaoAvaliado"];
 
-/** Base de data do filtro de período: por conclusão (`concluidaEm`) ou importação (`createdAt`). */
-export type BaseData = "conclusao" | "importacao";
-
 export type RelatorioFiltros = GeoFiltros & {
   from?: Date;
   to?: Date;
-  /** Default: "conclusao" (serviços concluídos no período). */
-  baseData?: BaseData;
 };
 
 /** Converte `YYYY-MM` na janela [início, fim] do mês; `{}` para vazio/ inválido. */
@@ -86,7 +84,11 @@ export function mesParaIntervalo(mes?: string): { from?: Date; to?: Date } {
   return { from: startOfMonth(base), to: endOfMonth(base) };
 }
 
-/** Aplica o período (por conclusão ou importação) ao filtro de OS, mantendo escopo/geo. */
+/**
+ * Aplica o período ao filtro de OS pela DATA DE FIM DE EXECUÇÃO importada (`dataFimExecucao`),
+ * que é a data real em que o serviço foi executado — e não quando a OS foi importada/criada.
+ * OS sem fim de execução ficam de fora (ainda não executadas).
+ */
 function aplicarPeriodo(
   where: Prisma.OrdemServicoWhereInput,
   filtros: RelatorioFiltros
@@ -96,8 +98,15 @@ function aplicarPeriodo(
     ...(filtros.from && { gte: filtros.from }),
     ...(filtros.to && { lte: filtros.to })
   };
-  const campo = filtros.baseData === "importacao" ? "createdAt" : "concluidaEm";
-  return { ...where, [campo]: intervalo };
+  return { ...where, dataFimExecucao: intervalo };
+}
+
+/** Meses (MM/YY) com serviços executados no escopo do usuário, para o seletor de mês. */
+export async function getMesesRelatorio(
+  repository: Pick<RelatorioRepository, "mesesComExecucao">,
+  user: SessionUserScope
+): Promise<MesDisponivel[]> {
+  return mesesDisponiveisDe(await repository.mesesComExecucao(buildOsScope(user)));
 }
 
 export async function getRelatorio(
@@ -110,7 +119,7 @@ export async function getRelatorio(
   }
 
   // A região/polo filter only narrows within the user's access scope (scope always wins);
-  // the period further narrows by conclusion or import date on the same OS filter.
+  // the period further narrows by the imported execution-end date on the same OS filter.
   const where = aplicarPeriodo(mergeScopeAndGeo(buildOsScope(user), filtros), filtros);
   const [overall, conceitoCounts, porFiscalRows, breakdownRows] = await Promise.all([
     repository.overall(where),

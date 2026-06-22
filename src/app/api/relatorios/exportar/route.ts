@@ -14,8 +14,7 @@ export async function GET(request: NextRequest) {
     polo: searchParams.get("polo") ?? undefined,
     municipio: searchParams.get("municipio") ?? undefined,
     from,
-    to,
-    baseData: searchParams.get("base") === "importacao" ? ("importacao" as const) : ("conclusao" as const)
+    to
   };
 
   try {
