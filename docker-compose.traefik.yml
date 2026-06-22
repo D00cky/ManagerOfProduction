@@ -1,0 +1,95 @@
+services:
+  traefik:
+    container_name: manager-of-production-traefik
+    image: traefik:v3.3
+    restart: unless-stopped
+    command:
+      # Entrypoints
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Redirect all HTTP to HTTPS
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      # Docker provider (only expose containers that opt in via labels)
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      # Let's Encrypt (HTTP-01 challenge)
+      - "--certificatesresolvers.le.acme.httpchallenge=true"
+      - "--certificatesresolvers.le.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.le.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+    depends_on:
+      - app
+
+  postgres:
+    container_name: manager-of-production-postgres
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: manager_of_production
+      POSTGRES_USER: manager
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - mop_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U manager -d manager_of_production"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    container_name: manager-of-production-redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - mop_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    container_name: manager-of-production-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgresql://manager:${POSTGRES_PASSWORD}@postgres:5432/manager_of_production?schema=public
+      REDIS_URL: redis://redis:6379
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      BACKUP_LOCAL_DIR: /backups
+      DEMO_AUTH_ENABLED: ${DEMO_AUTH_ENABLED:-false}
+      DEMO_AUTH_PASSWORD: ${DEMO_AUTH_PASSWORD:-}
+    volumes:
+      - mop_backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mop.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.mop.entrypoints=websecure"
+      - "traefik.http.routers.mop.tls.certresolver=le"
+      - "traefik.http.services.mop.loadbalancer.server.port=3000"
+
+volumes:
+  mop_postgres_data:
+  mop_redis_data:
+  mop_backups:
+  traefik_letsencrypt:
