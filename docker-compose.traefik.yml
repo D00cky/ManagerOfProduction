@@ -3,6 +3,11 @@ services:
     container_name: manager-of-production-traefik
     image: traefik:v3.3
     restart: unless-stopped
+    environment:
+      # The host's Docker daemon rejects the API version the client defaults
+      # to during negotiation; pin a version the daemon supports so the docker
+      # provider can read containers/labels.
+      DOCKER_API_VERSION: "1.44"
     command:
       # Entrypoints
       - "--entrypoints.web.address=:80"
