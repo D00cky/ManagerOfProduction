@@ -69,5 +69,12 @@ export const prismaRelatorioRepository: RelatorioRepository = {
       codigoContrato: row.ordemServico.codigoContrato,
       descricaoContrato: row.ordemServico.descricaoContrato
     }));
+  },
+  async mesesComExecucao(scope: Prisma.OrdemServicoWhereInput) {
+    const rows = await prisma.ordemServico.findMany({
+      where: { ...scope, dataFimExecucao: { not: null } },
+      select: { dataFimExecucao: true }
+    });
+    return rows.map((row) => row.dataFimExecucao).filter((data): data is Date => data != null);
   }
 };

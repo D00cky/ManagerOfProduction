@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Conceito } from "@prisma/client";
 import {
   exportRelatorioCsv,
+  getMesesRelatorio,
   getRelatorio,
   mesParaIntervalo,
   type ConceitoCount,
@@ -18,13 +19,15 @@ function repo(options: {
   porFiscal?: FiscalQualidade[];
   fiscais?: FiscalInfo[];
   breakdown?: TabulacaoBreakdownRow[];
+  meses?: Date[];
 }): RelatorioRepository {
   return {
     overall: vi.fn(async () => options.overall ?? { total: 0, mediaPercentual: 0 }),
     countByConceito: vi.fn(async () => options.conceitos ?? []),
     mediaPorFiscal: vi.fn(async () => options.porFiscal ?? []),
     findFiscais: vi.fn(async () => options.fiscais ?? []),
-    listTabulacoesParaBreakdown: vi.fn(async () => options.breakdown ?? [])
+    listTabulacoesParaBreakdown: vi.fn(async () => options.breakdown ?? []),
+    mesesComExecucao: vi.fn(async () => options.meses ?? [])
   };
 }
 
@@ -79,7 +82,7 @@ describe("getRelatorio", () => {
     expect(repository.listTabulacoesParaBreakdown).toHaveBeenCalledWith(expected);
   });
 
-  it("filters by conclusion date by default and combines with the geo filter", async () => {
+  it("filters by the imported execution-end date and combines with the geo filter", async () => {
     const repository = repo({});
     const from = new Date("2026-05-01T00:00:00.000Z");
     const to = new Date("2026-05-31T23:59:59.999Z");
@@ -92,25 +95,11 @@ describe("getRelatorio", () => {
 
     const expected = {
       regiaoAdministrativa: "METROPOLITANA",
-      concluidaEm: { gte: from, lte: to }
+      dataFimExecucao: { gte: from, lte: to }
     };
     expect(repository.overall).toHaveBeenCalledWith(expected);
     expect(repository.mediaPorFiscal).toHaveBeenCalledWith(expected);
     expect(repository.listTabulacoesParaBreakdown).toHaveBeenCalledWith(expected);
-  });
-
-  it("filters by import date when baseData is 'importacao'", async () => {
-    const repository = repo({});
-    const from = new Date("2026-05-01T00:00:00.000Z");
-    const to = new Date("2026-05-31T23:59:59.999Z");
-
-    await getRelatorio(
-      repository,
-      { id: "sup", perfil: "supervisor", poloId: null },
-      { from, to, baseData: "importacao" }
-    );
-
-    expect(repository.overall).toHaveBeenCalledWith({ createdAt: { gte: from, lte: to } });
   });
 
   it("returns zeros when there are no tabulations", async () => {
@@ -256,5 +245,25 @@ describe("mesParaIntervalo", () => {
     expect(mesParaIntervalo("")).toEqual({});
     expect(mesParaIntervalo("2026-5")).toEqual({});
     expect(mesParaIntervalo("not-a-month")).toEqual({});
+  });
+});
+
+describe("getMesesRelatorio", () => {
+  it("lists the execution-end months (MM/YY) newest first, deduplicated", async () => {
+    const repository = repo({
+      meses: [
+        new Date(2026, 4, 12), // mai/2026
+        new Date(2026, 4, 28), // mai/2026 (dup)
+        new Date(2026, 5, 3) // jun/2026
+      ]
+    });
+
+    const meses = await getMesesRelatorio(repository, { id: "sup", perfil: "supervisor", poloId: null });
+
+    expect(meses).toEqual([
+      { value: "2026-06", label: "06/26" },
+      { value: "2026-05", label: "05/26" }
+    ]);
+    expect(repository.mesesComExecucao).toHaveBeenCalledWith({});
   });
 });

@@ -35,7 +35,7 @@ describe("GET /api/relatorios/exportar", () => {
     const { GET } = await import("@/app/api/relatorios/exportar/route");
 
     const response = await GET(
-      request("http://localhost/api/relatorios/exportar?regiao=METROPOLITANA&polo=p1&mes=2026-05&base=importacao")
+      request("http://localhost/api/relatorios/exportar?regiao=METROPOLITANA&polo=p1&mes=2026-05")
     );
 
     expect(response.status).toBe(200);
@@ -46,13 +46,12 @@ describe("GET /api/relatorios/exportar", () => {
       polo: "p1",
       municipio: undefined,
       from: new Date(2026, 4, 1, 0, 0, 0, 0),
-      to: new Date(2026, 4, 31, 23, 59, 59, 999),
-      baseData: "importacao"
+      to: new Date(2026, 4, 31, 23, 59, 59, 999)
     });
     await expect(response.text()).resolves.toContain("Fiscal,Tabulacoes,Media FFR");
   });
 
-  it("defaults the period base to conclusao when not provided", async () => {
+  it("sends an empty period window when no month is provided", async () => {
     const user = { id: "m1", perfil: "monitor" };
     getCurrentUser.mockResolvedValue(user);
     exportRelatorioCsv.mockResolvedValue("");
@@ -65,8 +64,7 @@ describe("GET /api/relatorios/exportar", () => {
       polo: undefined,
       municipio: undefined,
       from: undefined,
-      to: undefined,
-      baseData: "conclusao"
+      to: undefined
     });
   });
 
