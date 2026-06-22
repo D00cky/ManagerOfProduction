@@ -90,8 +90,9 @@ export async function criarUsuario(
     password,
     perfil: input.perfil,
     poloId: input.poloId ?? null,
-    // Only monitors oversee a região; ignore it for other roles.
-    regiao: input.perfil === "monitor" ? input.regiao?.trim() || null : null
+    // Supervisores enxergam tudo, então nunca têm região. Monitores e fiscais
+    // carregam região: é por ela que o monitor enxerga os fiscais da sua região.
+    regiao: input.perfil === "supervisor" ? null : input.regiao?.trim() || null
   });
   await repository.log({
     evento: "usuario",
@@ -118,6 +119,10 @@ export async function atualizarUsuario(
   if (sanitized.email !== undefined) sanitized.email = sanitized.email.trim().toLowerCase();
   if (sanitized.matricula !== undefined) sanitized.matricula = sanitized.matricula.trim();
   if (sanitized.regiao !== undefined) sanitized.regiao = sanitized.regiao?.trim() || null;
+  // Servidor é a autoridade: um supervisor nunca mantém região, mesmo que o
+  // perfil seja alterado para supervisor nesta mesma edição.
+  const perfilEfetivo = sanitized.perfil ?? target.perfil;
+  if (perfilEfetivo === "supervisor") sanitized.regiao = null;
 
   if (sanitized.name !== undefined && !sanitized.name) throw new Error("Nome obrigatorio");
   if (sanitized.email !== undefined && !sanitized.email) throw new Error("E-mail obrigatorio");

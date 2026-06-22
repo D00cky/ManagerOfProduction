@@ -1,13 +1,9 @@
 import type { Prisma, StatusOS } from "@prisma/client";
 import { differenceInCalendarDays, startOfDay, startOfMonth } from "date-fns";
-import { buildOsScope, type SessionUserScope } from "@/lib/scope";
+import { buildOsScope, mergeScopeAndGeo, type GeoFiltros, type SessionUserScope } from "@/lib/scope";
 import { REGIOES_SP } from "@/data/regioes-sp";
 
-export type DashboardFiltros = {
-  regiao?: string;
-  /** Polo id; narrows the OS set within the selected região. */
-  polo?: string;
-  municipio?: string;
+export type DashboardFiltros = GeoFiltros & {
   /** 1-based page for the backlog detail list (only used when `polo` is set). */
   page?: number;
   /** Time window for the throughput funnel/series. Defaults to "today". */
@@ -16,6 +12,28 @@ export type DashboardFiltros = {
 };
 
 export type DashboardPeriodo = { from: Date; to: Date };
+
+/** Um mês importado, identificado por `YYYY-MM` e rotulado como `MM/YY`. */
+export type MesDisponivel = { value: string; label: string };
+
+/**
+ * Lista os meses presentes nos dados importados (a partir do `createdAt` de cada
+ * OS), do mais recente para o mais antigo, no formato `MM/YY` exibido no filtro.
+ */
+export function mesesDisponiveisDe(datas: Date[]): MesDisponivel[] {
+  const valores = new Set<string>();
+  for (const data of datas) {
+    const ano = data.getFullYear();
+    const mes = String(data.getMonth() + 1).padStart(2, "0");
+    valores.add(`${ano}-${mes}`);
+  }
+  return [...valores]
+    .sort((a, b) => b.localeCompare(a))
+    .map((value) => {
+      const [ano, mes] = value.split("-");
+      return { value, label: `${mes}/${ano.slice(2)}` };
+    });
+}
 
 export type GeoFacet = {
   regiaoAdministrativa: string | null;
@@ -116,6 +134,8 @@ export type DashboardRepository = {
     periodo: DashboardPeriodo
   ): Promise<number>;
   findGeoFacets(where: Prisma.OrdemServicoWhereInput): Promise<GeoFacet[]>;
+  /** `createdAt` de cada OS no escopo, para listar os meses importados. */
+  mesesDisponiveis(where: Prisma.OrdemServicoWhereInput): Promise<Date[]>;
   findFiscais(ids: string[]): Promise<DashboardFiscal[]>;
   /** All monitors (with the região each oversees) for the Monitor→Fiscal tree. */
   findMonitores(): Promise<DashboardMonitor[]>;
@@ -200,11 +220,38 @@ export type DashboardResumo = {
     } | null;
   };
   filtros: { regiao?: string; polo?: string; municipio?: string };
-  opcoesGeograficas: Array<{
-    regiao: string;
-    polos: Array<{ id: string; nome: string; municipios: string[] }>;
-  }>;
+  /** Meses importados (MM/YY) para o seletor mensal do período. */
+  mesesDisponiveis: MesDisponivel[];
+  opcoesGeograficas: OpcoesGeograficas;
 };
+
+/** Árvore Região → Polo → Municípios derivada das OS reais (facets). */
+export type OpcoesGeograficas = Array<{
+  regiao: string;
+  polos: Array<{ id: string; nome: string; municipios: string[] }>;
+}>;
+
+/**
+ * Monta as opções do filtro geográfico (Região → Polo → Municípios) a partir dos
+ * facets escopados do usuário. Reutilizável por qualquer tela com filtro geo.
+ */
+export async function getOpcoesGeograficas(
+  repository: Pick<DashboardRepository, "findGeoFacets">,
+  user: SessionUserScope
+): Promise<OpcoesGeograficas> {
+  return buildOpcoesGeograficas(await repository.findGeoFacets(buildOsScope(user)));
+}
+
+/**
+ * Lista os meses (MM/YY) presentes nos dados importados do usuário, do mais recente ao mais
+ * antigo. Reutilizável por qualquer tela com filtro mensal (dashboard e relatórios).
+ */
+export async function getMesesDisponiveis(
+  repository: Pick<DashboardRepository, "mesesDisponiveis">,
+  user: SessionUserScope
+): Promise<MesDisponivel[]> {
+  return mesesDisponiveisDe(await repository.mesesDisponiveis(buildOsScope(user)));
+}
 
 const OS_PARADA_DIAS = 2;
 /** Page size for the backlog detail list (shown when a polo is filtered). */
@@ -241,6 +288,7 @@ export async function getDashboardResumo(
     desempenhoRows,
     fiscaisAtivos,
     facets,
+    mesesRaw,
     progressoHoje,
     progressoMes
   ] = await Promise.all([
@@ -262,6 +310,9 @@ export async function getDashboardResumo(
     // Geo filter options stay on the access scope (not narrowed by the geo filter)
     // so they don't collapse as the user narrows.
     repository.findGeoFacets(scope),
+    // Meses ficam no escopo de acesso (não estreitados pelo filtro geo) para que
+    // as opções não colapsem conforme o usuário filtra.
+    repository.mesesDisponiveis(scope),
     contarProgresso(repository, where, janelaHoje),
     contarProgresso(repository, where, janelaMes)
   ]);
@@ -323,6 +374,7 @@ export async function getDashboardResumo(
     progressoPorFiscal,
     paradas,
     filtros: { regiao: filtros.regiao, polo: filtros.polo, municipio: filtros.municipio },
+    mesesDisponiveis: mesesDisponiveisDe(mesesRaw),
     opcoesGeograficas: buildOpcoesGeograficas(facets)
   };
 }
@@ -349,29 +401,6 @@ function subDaysCal(date: Date, days: number): Date {
   const copy = new Date(date);
   copy.setDate(copy.getDate() - days);
   return copy;
-}
-
-/**
- * Combine the role access scope with the dashboard geo filter so the scope always
- * wins. A monitor is restricted to a single região (`{ regiaoAdministrativa: { in } }`);
- * a região filter may only narrow *within* that scope — never escape it — and an
- * out-of-scope região collapses to "nothing".
- */
-function mergeScopeAndGeo(
-  scope: Prisma.OrdemServicoWhereInput,
-  filtros: DashboardFiltros
-): Prisma.OrdemServicoWhereInput {
-  const where: Prisma.OrdemServicoWhereInput = { ...scope };
-  if (filtros.municipio) where.cidade = filtros.municipio;
-  // Polo only narrows within the access scope (additional AND), so it can never
-  // widen visibility beyond what `buildOsScope` already allows.
-  if (filtros.polo) where.poloId = filtros.polo;
-  if (filtros.regiao) {
-    const scoped = scope.regiaoAdministrativa as { in?: string[] } | undefined;
-    const allowed = !scoped || (Array.isArray(scoped.in) ? scoped.in.includes(filtros.regiao) : true);
-    where.regiaoAdministrativa = allowed ? filtros.regiao : { in: [] };
-  }
-  return where;
 }
 
 /**
@@ -415,7 +444,7 @@ function mapRegiao(rows: HierarquiaLinha[]): DashboardResumo["porRegiao"] {
     .sort((a, b) => b.entradas - a.entradas);
 }
 
-function buildOpcoesGeograficas(facets: GeoFacet[]): DashboardResumo["opcoesGeograficas"] {
+function buildOpcoesGeograficas(facets: GeoFacet[]): OpcoesGeograficas {
   // Região → polo → municípios, montado a partir das OS reais: só aparecem polos
   // (e municípios) que de fato têm OS naquela região.
   const byRegiao = new Map<string, Map<string, { nome: string; municipios: Set<string> }>>();

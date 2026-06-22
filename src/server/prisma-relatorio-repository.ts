@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import type { RespostasFfr } from "@/lib/ffr";
 import { prisma } from "@/lib/prisma";
 import type { RelatorioRepository } from "@/server/relatorio-service";
 
@@ -38,5 +39,42 @@ export const prismaRelatorioRepository: RelatorioRepository = {
       where: { id: { in: ids } },
       select: { id: true, name: true, matricula: true }
     });
+  },
+  async listTabulacoesParaBreakdown(scope: Prisma.OrdemServicoWhereInput) {
+    const rows = await prisma.tabulacao.findMany({
+      where: { ordemServico: scope },
+      select: {
+        percentual: true,
+        respostas: true,
+        ordemServico: {
+          select: {
+            regiaoAdministrativa: true,
+            codigoContrato: true,
+            descricaoContrato: true,
+            tipoServico: true,
+            descricaoTss: true,
+            polo: { select: { nome: true, codigo: true } }
+          }
+        }
+      }
+    });
+    return rows.map((row) => ({
+      percentual: row.percentual,
+      respostas: (row.respostas ?? {}) as RespostasFfr,
+      tipoServico: row.ordemServico.tipoServico,
+      descricaoTss: row.ordemServico.descricaoTss,
+      regiaoAdministrativa: row.ordemServico.regiaoAdministrativa,
+      poloNome: row.ordemServico.polo?.nome ?? null,
+      poloCodigo: row.ordemServico.polo?.codigo ?? null,
+      codigoContrato: row.ordemServico.codigoContrato,
+      descricaoContrato: row.ordemServico.descricaoContrato
+    }));
+  },
+  async mesesComExecucao(scope: Prisma.OrdemServicoWhereInput) {
+    const rows = await prisma.ordemServico.findMany({
+      where: { ...scope, dataFimExecucao: { not: null } },
+      select: { dataFimExecucao: true }
+    });
+    return rows.map((row) => row.dataFimExecucao).filter((data): data is Date => data != null);
   }
 };
