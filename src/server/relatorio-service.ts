@@ -1,7 +1,7 @@
 import type { Conceito, Prisma, TipoServico } from "@prisma/client";
 import { contarConformidade, iqesPercentual, type RespostasFfr } from "@/lib/ffr";
 import { hasPermission } from "@/lib/permissions";
-import { buildOsScope, type SessionUserScope } from "@/lib/scope";
+import { buildOsScope, mergeScopeAndGeo, type GeoFiltros, type SessionUserScope } from "@/lib/scope";
 
 export type RelatorioOverall = { total: number; mediaPercentual: number };
 export type ConceitoCount = { conceito: Conceito; count: number };
@@ -29,8 +29,8 @@ export type RelatorioRepository = {
   listTabulacoesParaBreakdown(scope: Prisma.OrdemServicoWhereInput): Promise<TabulacaoBreakdownRow[]>;
 };
 
-/** Entrada de um recorte de desempenho (por região / polo / contratada) com o IQES. */
-export type RelatorioBreakdownEntry = {
+/** Um nível de desempenho (região / polo / contratada) com Tabulações, Média FFR e IQES. */
+export type NivelDesempenho = {
   chave: string;
   nome: string;
   total: number;
@@ -38,7 +38,12 @@ export type RelatorioBreakdownEntry = {
   iqes: number;
 };
 
-export type RelatorioContratadaEntry = RelatorioBreakdownEntry & { regiao: string };
+/** Árvore Região → Polo → Contratada: cada contratada agrupada sob o polo onde executou. */
+export type RelatorioArvore = Array<
+  NivelDesempenho & {
+    polos: Array<NivelDesempenho & { contratadas: NivelDesempenho[] }>;
+  }
+>;
 
 export type RelatorioResumo = {
   totalAvaliadas: number;
@@ -51,9 +56,9 @@ export type RelatorioResumo = {
     total: number;
     mediaPercentual: number;
   }>;
-  porRegiao: RelatorioBreakdownEntry[];
-  porPolo: RelatorioBreakdownEntry[];
-  porContratada: RelatorioContratadaEntry[];
+  porRegiao: NivelDesempenho[];
+  porPolo: NivelDesempenho[];
+  arvore: RelatorioArvore;
 };
 
 const SEM_REGIAO = "Sem regiao";
@@ -64,18 +69,20 @@ const conceitos: Conceito[] = ["A", "B", "C", "D", "NaoAvaliado"];
 
 export async function getRelatorio(
   repository: RelatorioRepository,
-  user: SessionUserScope
+  user: SessionUserScope,
+  filtros: GeoFiltros = {}
 ): Promise<RelatorioResumo> {
   if (!hasPermission(user.perfil, "relatorios:read")) {
     throw new Error("Sem permissao para ver relatorios");
   }
 
-  const scope = buildOsScope(user);
+  // A região/polo filter only narrows within the user's access scope (scope always wins).
+  const where = mergeScopeAndGeo(buildOsScope(user), filtros);
   const [overall, conceitoCounts, porFiscalRows, breakdownRows] = await Promise.all([
-    repository.overall(scope),
-    repository.countByConceito(scope),
-    repository.mediaPorFiscal(scope),
-    repository.listTabulacoesParaBreakdown(scope)
+    repository.overall(where),
+    repository.countByConceito(where),
+    repository.mediaPorFiscal(where),
+    repository.listTabulacoesParaBreakdown(where)
   ]);
 
   // Resolve fiscal ids to human-readable name + matrícula (the table used to show
@@ -83,7 +90,7 @@ export async function getRelatorio(
   const fiscais = await repository.findFiscais(porFiscalRows.map((row) => row.fiscalId));
   const fiscalPorId = new Map(fiscais.map((fiscal) => [fiscal.id, fiscal]));
 
-  const { porRegiao, porPolo, porContratada } = agruparBreakdown(breakdownRows);
+  const { porRegiao, porPolo, arvore } = agruparBreakdown(breakdownRows);
 
   return {
     totalAvaliadas: overall.total,
@@ -100,37 +107,53 @@ export async function getRelatorio(
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
     porRegiao,
     porPolo,
-    porContratada
+    arvore
   };
 }
 
-type Acumulador = {
-  nome: string;
-  regiao?: string;
-  total: number;
-  somaPercentual: number;
-  conforme: number;
-  naoConforme: number;
-};
+type Acc = { total: number; somaPercentual: number; conforme: number; naoConforme: number };
+type Contagem = { conforme: number; naoConforme: number };
+type NodoPolo = { nome: string; acc: Acc; contratadas: Map<string, { nome: string; acc: Acc }> };
+type NodoRegiao = { nome: string; acc: Acc; polos: Map<string, NodoPolo> };
+
+function novoAcc(): Acc {
+  return { total: 0, somaPercentual: 0, conforme: 0, naoConforme: 0 };
+}
+
+function somar(acc: Acc, percentual: number, contagem: Contagem) {
+  acc.total += 1;
+  acc.somaPercentual += percentual;
+  acc.conforme += contagem.conforme;
+  acc.naoConforme += contagem.naoConforme;
+}
+
+function nivel(chave: string, nome: string, acc: Acc): NivelDesempenho {
+  return {
+    chave,
+    nome,
+    total: acc.total,
+    mediaPercentual: acc.total > 0 ? acc.somaPercentual / acc.total : 0,
+    iqes: iqesPercentual({ conforme: acc.conforme, naoConforme: acc.naoConforme })
+  };
+}
+
+const porNome = (a: { nome: string }, b: { nome: string }) => a.nome.localeCompare(b.nome, "pt-BR");
 
 /**
- * Recortes de desempenho por região, polo e contratada. Para cada tabulação contamos os
- * itens "Conforme"/"Não conforme" (IQES) e somamos o percentual FFR; o IQES de um grupo é a
- * razão agregada conforme / (conforme + não-conforme). A contratada é chaveada por
- * região + nome, para separar a mesma contratada atuando em regiões diferentes.
+ * Recortes de desempenho. Para cada tabulação contamos os itens "Conforme"/"Não conforme" (IQES)
+ * e somamos o percentual FFR; o IQES de um grupo é a razão agregada conforme / (conforme +
+ * não-conforme). Além das tabelas planas por região e por polo, monta a árvore
+ * Região → Polo → Contratada, agrupando cada contratada sob o polo onde executou os serviços.
  */
 function agruparBreakdown(rows: TabulacaoBreakdownRow[]) {
-  const regioes = new Map<string, Acumulador>();
-  const polos = new Map<string, Acumulador>();
-  const contratadas = new Map<string, Acumulador>();
+  const regioes = new Map<string, { nome: string; acc: Acc }>();
+  const polos = new Map<string, { nome: string; acc: Acc }>();
+  const arvore = new Map<string, NodoRegiao>();
 
-  const acumular = (mapa: Map<string, Acumulador>, chave: string, nome: string, row: TabulacaoBreakdownRow, contagem: { conforme: number; naoConforme: number }, regiao?: string) => {
-    const atual = mapa.get(chave) ?? { nome, regiao, total: 0, somaPercentual: 0, conforme: 0, naoConforme: 0 };
-    atual.total += 1;
-    atual.somaPercentual += row.percentual;
-    atual.conforme += contagem.conforme;
-    atual.naoConforme += contagem.naoConforme;
-    mapa.set(chave, atual);
+  const planar = (mapa: Map<string, { nome: string; acc: Acc }>, chave: string, nome: string, percentual: number, contagem: Contagem) => {
+    const item = mapa.get(chave) ?? { nome, acc: novoAcc() };
+    somar(item.acc, percentual, contagem);
+    mapa.set(chave, item);
   };
 
   for (const row of rows) {
@@ -142,39 +165,38 @@ function agruparBreakdown(rows: TabulacaoBreakdownRow[]) {
     const polo = row.poloNome?.trim() || row.poloCodigo?.trim() || SEM_POLO;
     const contratada = row.descricaoContrato?.trim() || row.codigoContrato?.trim() || SEM_CONTRATADA;
 
-    acumular(regioes, regiao, regiao, row, contagem);
-    acumular(polos, polo, polo, row, contagem);
-    acumular(contratadas, `${regiao}__${contratada}`, contratada, row, contagem, regiao);
+    planar(regioes, regiao, regiao, row.percentual, contagem);
+    planar(polos, polo, polo, row.percentual, contagem);
+
+    const nodoR = arvore.get(regiao) ?? { nome: regiao, acc: novoAcc(), polos: new Map() };
+    somar(nodoR.acc, row.percentual, contagem);
+    const nodoP = nodoR.polos.get(polo) ?? { nome: polo, acc: novoAcc(), contratadas: new Map() };
+    somar(nodoP.acc, row.percentual, contagem);
+    const nodoC = nodoP.contratadas.get(contratada) ?? { nome: contratada, acc: novoAcc() };
+    somar(nodoC.acc, row.percentual, contagem);
+    nodoP.contratadas.set(contratada, nodoC);
+    nodoR.polos.set(polo, nodoP);
+    arvore.set(regiao, nodoR);
   }
 
-  const porContratada: RelatorioContratadaEntry[] = [...contratadas.entries()]
-    .map(([chave, acc]) => ({
-      ...entrada(chave, acc),
-      regiao: acc.regiao ?? SEM_REGIAO
+  const porRegiao = [...regioes.entries()].map(([chave, r]) => nivel(chave, r.nome, r.acc)).sort(porNome);
+  const porPolo = [...polos.entries()].map(([chave, p]) => nivel(chave, p.nome, p.acc)).sort(porNome);
+
+  const arvoreOut: RelatorioArvore = [...arvore.values()]
+    .map((r) => ({
+      ...nivel(r.nome, r.nome, r.acc),
+      polos: [...r.polos.values()]
+        .map((p) => ({
+          ...nivel(`${r.nome}__${p.nome}`, p.nome, p.acc),
+          contratadas: [...p.contratadas.values()]
+            .map((c) => nivel(`${r.nome}__${p.nome}__${c.nome}`, c.nome, c.acc))
+            .sort(porNome)
+        }))
+        .sort(porNome)
     }))
-    .sort((a, b) => a.regiao.localeCompare(b.regiao, "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR"));
+    .sort(porNome);
 
-  return {
-    porRegiao: finalizar(regioes),
-    porPolo: finalizar(polos),
-    porContratada
-  };
-}
-
-function entrada(chave: string, acc: Acumulador): RelatorioBreakdownEntry {
-  return {
-    chave,
-    nome: acc.nome,
-    total: acc.total,
-    mediaPercentual: acc.total > 0 ? acc.somaPercentual / acc.total : 0,
-    iqes: iqesPercentual({ conforme: acc.conforme, naoConforme: acc.naoConforme })
-  };
-}
-
-function finalizar(mapa: Map<string, Acumulador>): RelatorioBreakdownEntry[] {
-  return [...mapa.entries()]
-    .map(([chave, acc]) => entrada(chave, acc))
-    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  return { porRegiao, porPolo, arvore: arvoreOut };
 }
 
 function zeroFillConceitos(counts: ConceitoCount[]): Record<Conceito, number> {
@@ -183,8 +205,24 @@ function zeroFillConceitos(counts: ConceitoCount[]): Record<Conceito, number> {
   return base;
 }
 
-export async function exportRelatorioCsv(repository: RelatorioRepository, user: SessionUserScope) {
-  const relatorio = await getRelatorio(repository, user);
+export async function exportRelatorioCsv(
+  repository: RelatorioRepository,
+  user: SessionUserScope,
+  filtros: GeoFiltros = {}
+) {
+  const relatorio = await getRelatorio(repository, user, filtros);
+  const arvoreRows = relatorio.arvore.flatMap((regiao) =>
+    regiao.polos.flatMap((polo) =>
+      polo.contratadas.map((contratada) => [
+        regiao.nome,
+        polo.nome,
+        contratada.nome,
+        String(contratada.total),
+        pct(contratada.mediaPercentual),
+        pct(contratada.iqes)
+      ])
+    )
+  );
   const rows = [
     ["Fiscal", "Matricula", "Tabulacoes", "Media FFR"],
     ...relatorio.porFiscal.map((item) => [
@@ -194,14 +232,8 @@ export async function exportRelatorioCsv(repository: RelatorioRepository, user: 
       pct(item.mediaPercentual)
     ]),
     [],
-    ["Regiao", "Contratada", "Tabulacoes", "Media FFR", "IQES"],
-    ...relatorio.porContratada.map((item) => [
-      item.regiao,
-      item.nome,
-      String(item.total),
-      pct(item.mediaPercentual),
-      pct(item.iqes)
-    ])
+    ["Regiao", "Polo", "Contratada", "Tabulacoes", "Media FFR", "IQES"],
+    ...arvoreRows
   ];
 
   return rows.map((row) => row.map(csvCell).join(",")).join("\n");

@@ -64,10 +64,38 @@ describe("getRelatorio", () => {
     expect(repository.listTabulacoesParaBreakdown).toHaveBeenCalledWith(expected);
   });
 
-  it("groups performance and IQES by região, polo and contratada", async () => {
+  it("applies the região/polo filter on top of the access scope", async () => {
+    const repository = repo({});
+
+    await getRelatorio(
+      repository,
+      { id: "sup", perfil: "supervisor", poloId: null },
+      { regiao: "METROPOLITANA", polo: "p1" }
+    );
+
+    const expected = { regiaoAdministrativa: "METROPOLITANA", poloId: "p1" };
+    expect(repository.overall).toHaveBeenCalledWith(expected);
+    expect(repository.listTabulacoesParaBreakdown).toHaveBeenCalledWith(expected);
+  });
+
+  it("returns zeros when there are no tabulations", async () => {
+    const repository = repo({});
+
+    const resumo = await getRelatorio(repository, { id: "sup", perfil: "supervisor", poloId: null });
+
+    expect(resumo.totalAvaliadas).toBe(0);
+    expect(resumo.mediaPercentual).toBe(0);
+    expect(resumo.conceitos).toEqual({ A: 0, B: 0, C: 0, D: 0, NaoAvaliado: 0 });
+    expect(resumo.porFiscal).toEqual([]);
+    expect(resumo.porRegiao).toEqual([]);
+    expect(resumo.porPolo).toEqual([]);
+    expect(resumo.arvore).toEqual([]);
+  });
+
+  it("clusters contratada under polo as a Região → Polo → Contratada tree with IQES", async () => {
     const repository = repo({
       breakdown: [
-        // METROPOLITANA / Polo Leste / Contratada A: 3 conforme, 1 não conforme -> IQES 75%
+        // METROPOLITANA / Polo Leste / Contratada A: 3 conforme, 1 não conforme
         breakdownRow({
           percentual: 0.8,
           regiaoAdministrativa: "METROPOLITANA",
@@ -83,12 +111,12 @@ describe("getRelatorio", () => {
           descricaoContrato: "Contratada A",
           respostas: { gerais_q1: "1", gerais_q2: "0" }
         }),
-        // BAIXADA / Polo Sul / Contratada A (same name, other região -> separate row)
+        // METROPOLITANA / Polo Oeste / Contratada B: 2 conforme, 0 não conforme
         breakdownRow({
           percentual: 1,
-          regiaoAdministrativa: "BAIXADA SANTISTA",
-          poloNome: "Polo Sul",
-          descricaoContrato: "Contratada A",
+          regiaoAdministrativa: "METROPOLITANA",
+          poloNome: "Polo Oeste",
+          descricaoContrato: "Contratada B",
           respostas: { gerais_q1: "1", gerais_q2: "1" }
         })
       ]
@@ -96,35 +124,30 @@ describe("getRelatorio", () => {
 
     const resumo = await getRelatorio(repository, { id: "sup", perfil: "supervisor", poloId: null });
 
-    // Região: METROPOLITANA aggregates 4 conforme + 2 não-conforme -> 4/6
-    const metro = resumo.porRegiao.find((r) => r.nome === "METROPOLITANA");
-    expect(metro).toMatchObject({ total: 2, mediaPercentual: 0.7 });
-    expect(metro?.iqes).toBeCloseTo(4 / 6, 5);
+    // Flat summaries
+    const metroRegiao = resumo.porRegiao.find((r) => r.nome === "METROPOLITANA");
+    expect(metroRegiao).toMatchObject({ total: 3 });
+    expect(metroRegiao?.iqes).toBeCloseTo(6 / 8, 5); // 6 conforme / 8 evaluated
+    expect(resumo.porPolo.map((p) => p.nome)).toEqual(["Polo Leste", "Polo Oeste"]);
 
-    // Polo Leste mirrors METROPOLITANA here
-    const leste = resumo.porPolo.find((p) => p.nome === "Polo Leste");
+    // Tree: single região, two polos, contratada nested under its polo
+    expect(resumo.arvore).toHaveLength(1);
+    const metro = resumo.arvore[0];
+    expect(metro.nome).toBe("METROPOLITANA");
+    expect(metro.total).toBe(3);
+    expect(metro.iqes).toBeCloseTo(6 / 8, 5);
+    expect(metro.polos.map((p) => p.nome)).toEqual(["Polo Leste", "Polo Oeste"]);
+
+    const leste = metro.polos[0];
     expect(leste).toMatchObject({ total: 2 });
-    expect(leste?.iqes).toBeCloseTo(4 / 6, 5);
+    expect(leste.mediaPercentual).toBeCloseTo(0.7, 5);
+    expect(leste.iqes).toBeCloseTo(4 / 6, 5);
+    expect(leste.contratadas).toHaveLength(1);
+    expect(leste.contratadas[0]).toMatchObject({ nome: "Contratada A", total: 2 });
+    expect(leste.contratadas[0].iqes).toBeCloseTo(4 / 6, 5);
 
-    // Contratada A split per região: two distinct rows
-    const contratadaA = resumo.porContratada.filter((c) => c.nome === "Contratada A");
-    expect(contratadaA).toHaveLength(2);
-    const metroA = contratadaA.find((c) => c.regiao === "METROPOLITANA");
-    expect(metroA).toMatchObject({ total: 2 });
-    expect(metroA?.iqes).toBeCloseTo(4 / 6, 5);
-    const baixadaA = contratadaA.find((c) => c.regiao === "BAIXADA SANTISTA");
-    expect(baixadaA).toMatchObject({ total: 1, iqes: 1 });
-  });
-
-  it("returns zeros when there are no tabulations", async () => {
-    const repository = repo({});
-
-    const resumo = await getRelatorio(repository, { id: "sup", perfil: "supervisor", poloId: null });
-
-    expect(resumo.totalAvaliadas).toBe(0);
-    expect(resumo.mediaPercentual).toBe(0);
-    expect(resumo.conceitos).toEqual({ A: 0, B: 0, C: 0, D: 0, NaoAvaliado: 0 });
-    expect(resumo.porFiscal).toEqual([]);
+    const oeste = metro.polos[1];
+    expect(oeste.contratadas[0]).toMatchObject({ nome: "Contratada B", total: 1, iqes: 1 });
   });
 
   it("zero-fills the concept distribution and sorts per-fiscal quality", async () => {
@@ -151,14 +174,13 @@ describe("getRelatorio", () => {
     expect(resumo.totalAvaliadas).toBe(4);
     expect(resumo.conceitos).toEqual({ A: 1, B: 1, C: 1, D: 0, NaoAvaliado: 1 });
     expect(resumo.mediaPercentual).toBeCloseTo(0.575, 5);
-    // Resolved to name + matrícula and sorted by name (Ana before Bruno).
     expect(resumo.porFiscal).toEqual([
       { fiscalId: "f1", name: "Ana", matricula: "F0001", total: 2, mediaPercentual: 0.75 },
       { fiscalId: "f2", name: "Bruno", matricula: "F0002", total: 2, mediaPercentual: 0.4 }
     ]);
   });
 
-  it("exports scoped report rows as CSV with name + matrícula and a contratada/IQES section", async () => {
+  it("exports per-fiscal rows and a flattened Região/Polo/Contratada IQES section as CSV", async () => {
     const repository = repo({
       porFiscal: [{ fiscalId: "f1", total: 2, mediaPercentual: 0.75 }],
       fiscais: [{ id: "f1", name: "Ana", matricula: "F0001" }],
@@ -166,6 +188,7 @@ describe("getRelatorio", () => {
         breakdownRow({
           percentual: 0.75,
           regiaoAdministrativa: "METROPOLITANA",
+          poloNome: "Polo Leste",
           descricaoContrato: "Contratada A",
           respostas: { gerais_q1: "1", gerais_q3: "1", ramal_agua_q3: "1", gerais_q2: "0" }
         })
@@ -179,8 +202,8 @@ describe("getRelatorio", () => {
         "Fiscal,Matricula,Tabulacoes,Media FFR",
         "Ana,F0001,2,75.00%",
         "",
-        "Regiao,Contratada,Tabulacoes,Media FFR,IQES",
-        "METROPOLITANA,Contratada A,1,75.00%,75.00%"
+        "Regiao,Polo,Contratada,Tabulacoes,Media FFR,IQES",
+        "METROPOLITANA,Polo Leste,Contratada A,1,75.00%,75.00%"
       ].join("\n")
     );
   });

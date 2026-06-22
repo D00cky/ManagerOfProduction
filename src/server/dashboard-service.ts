@@ -1,13 +1,9 @@
 import type { Prisma, StatusOS } from "@prisma/client";
 import { differenceInCalendarDays, startOfDay, startOfMonth } from "date-fns";
-import { buildOsScope, type SessionUserScope } from "@/lib/scope";
+import { buildOsScope, mergeScopeAndGeo, type GeoFiltros, type SessionUserScope } from "@/lib/scope";
 import { REGIOES_SP } from "@/data/regioes-sp";
 
-export type DashboardFiltros = {
-  regiao?: string;
-  /** Polo id; narrows the OS set within the selected região. */
-  polo?: string;
-  municipio?: string;
+export type DashboardFiltros = GeoFiltros & {
   /** 1-based page for the backlog detail list (only used when `polo` is set). */
   page?: number;
   /** Time window for the throughput funnel/series. Defaults to "today". */
@@ -394,29 +390,6 @@ function subDaysCal(date: Date, days: number): Date {
   const copy = new Date(date);
   copy.setDate(copy.getDate() - days);
   return copy;
-}
-
-/**
- * Combine the role access scope with the dashboard geo filter so the scope always
- * wins. A monitor is restricted to a single região (`{ regiaoAdministrativa: { in } }`);
- * a região filter may only narrow *within* that scope — never escape it — and an
- * out-of-scope região collapses to "nothing".
- */
-function mergeScopeAndGeo(
-  scope: Prisma.OrdemServicoWhereInput,
-  filtros: DashboardFiltros
-): Prisma.OrdemServicoWhereInput {
-  const where: Prisma.OrdemServicoWhereInput = { ...scope };
-  if (filtros.municipio) where.cidade = filtros.municipio;
-  // Polo only narrows within the access scope (additional AND), so it can never
-  // widen visibility beyond what `buildOsScope` already allows.
-  if (filtros.polo) where.poloId = filtros.polo;
-  if (filtros.regiao) {
-    const scoped = scope.regiaoAdministrativa as { in?: string[] } | undefined;
-    const allowed = !scoped || (Array.isArray(scoped.in) ? scoped.in.includes(filtros.regiao) : true);
-    where.regiaoAdministrativa = allowed ? filtros.regiao : { in: [] };
-  }
-  return where;
 }
 
 /**
