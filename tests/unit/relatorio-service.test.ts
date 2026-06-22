@@ -7,7 +7,8 @@ import {
   type FiscalInfo,
   type FiscalQualidade,
   type RelatorioOverall,
-  type RelatorioRepository
+  type RelatorioRepository,
+  type TabulacaoBreakdownRow
 } from "@/server/relatorio-service";
 
 function repo(options: {
@@ -15,12 +16,29 @@ function repo(options: {
   conceitos?: ConceitoCount[];
   porFiscal?: FiscalQualidade[];
   fiscais?: FiscalInfo[];
+  breakdown?: TabulacaoBreakdownRow[];
 }): RelatorioRepository {
   return {
     overall: vi.fn(async () => options.overall ?? { total: 0, mediaPercentual: 0 }),
     countByConceito: vi.fn(async () => options.conceitos ?? []),
     mediaPorFiscal: vi.fn(async () => options.porFiscal ?? []),
-    findFiscais: vi.fn(async () => options.fiscais ?? [])
+    findFiscais: vi.fn(async () => options.fiscais ?? []),
+    listTabulacoesParaBreakdown: vi.fn(async () => options.breakdown ?? [])
+  };
+}
+
+function breakdownRow(over: Partial<TabulacaoBreakdownRow>): TabulacaoBreakdownRow {
+  return {
+    percentual: 0,
+    respostas: {},
+    tipoServico: "RedeRamalAgua",
+    descricaoTss: null,
+    regiaoAdministrativa: null,
+    poloNome: null,
+    poloCodigo: null,
+    codigoContrato: null,
+    descricaoContrato: null,
+    ...over
   };
 }
 
@@ -43,6 +61,59 @@ describe("getRelatorio", () => {
     expect(repository.overall).toHaveBeenCalledWith(expected);
     expect(repository.countByConceito).toHaveBeenCalledWith(expected);
     expect(repository.mediaPorFiscal).toHaveBeenCalledWith(expected);
+    expect(repository.listTabulacoesParaBreakdown).toHaveBeenCalledWith(expected);
+  });
+
+  it("groups performance and IQES by região, polo and contratada", async () => {
+    const repository = repo({
+      breakdown: [
+        // METROPOLITANA / Polo Leste / Contratada A: 3 conforme, 1 não conforme -> IQES 75%
+        breakdownRow({
+          percentual: 0.8,
+          regiaoAdministrativa: "METROPOLITANA",
+          poloNome: "Polo Leste",
+          descricaoContrato: "Contratada A",
+          respostas: { gerais_q1: "1", gerais_q3: "1", ramal_agua_q3: "1", gerais_q2: "0" }
+        }),
+        // METROPOLITANA / Polo Leste / Contratada A again: 1 conforme, 1 não conforme
+        breakdownRow({
+          percentual: 0.6,
+          regiaoAdministrativa: "METROPOLITANA",
+          poloNome: "Polo Leste",
+          descricaoContrato: "Contratada A",
+          respostas: { gerais_q1: "1", gerais_q2: "0" }
+        }),
+        // BAIXADA / Polo Sul / Contratada A (same name, other região -> separate row)
+        breakdownRow({
+          percentual: 1,
+          regiaoAdministrativa: "BAIXADA SANTISTA",
+          poloNome: "Polo Sul",
+          descricaoContrato: "Contratada A",
+          respostas: { gerais_q1: "1", gerais_q2: "1" }
+        })
+      ]
+    });
+
+    const resumo = await getRelatorio(repository, { id: "sup", perfil: "supervisor", poloId: null });
+
+    // Região: METROPOLITANA aggregates 4 conforme + 2 não-conforme -> 4/6
+    const metro = resumo.porRegiao.find((r) => r.nome === "METROPOLITANA");
+    expect(metro).toMatchObject({ total: 2, mediaPercentual: 0.7 });
+    expect(metro?.iqes).toBeCloseTo(4 / 6, 5);
+
+    // Polo Leste mirrors METROPOLITANA here
+    const leste = resumo.porPolo.find((p) => p.nome === "Polo Leste");
+    expect(leste).toMatchObject({ total: 2 });
+    expect(leste?.iqes).toBeCloseTo(4 / 6, 5);
+
+    // Contratada A split per região: two distinct rows
+    const contratadaA = resumo.porContratada.filter((c) => c.nome === "Contratada A");
+    expect(contratadaA).toHaveLength(2);
+    const metroA = contratadaA.find((c) => c.regiao === "METROPOLITANA");
+    expect(metroA).toMatchObject({ total: 2 });
+    expect(metroA?.iqes).toBeCloseTo(4 / 6, 5);
+    const baixadaA = contratadaA.find((c) => c.regiao === "BAIXADA SANTISTA");
+    expect(baixadaA).toMatchObject({ total: 1, iqes: 1 });
   });
 
   it("returns zeros when there are no tabulations", async () => {
@@ -87,14 +158,30 @@ describe("getRelatorio", () => {
     ]);
   });
 
-  it("exports scoped report rows as CSV with name + matrícula", async () => {
+  it("exports scoped report rows as CSV with name + matrícula and a contratada/IQES section", async () => {
     const repository = repo({
       porFiscal: [{ fiscalId: "f1", total: 2, mediaPercentual: 0.75 }],
-      fiscais: [{ id: "f1", name: "Ana", matricula: "F0001" }]
+      fiscais: [{ id: "f1", name: "Ana", matricula: "F0001" }],
+      breakdown: [
+        breakdownRow({
+          percentual: 0.75,
+          regiaoAdministrativa: "METROPOLITANA",
+          descricaoContrato: "Contratada A",
+          respostas: { gerais_q1: "1", gerais_q3: "1", ramal_agua_q3: "1", gerais_q2: "0" }
+        })
+      ]
     });
 
     const csv = await exportRelatorioCsv(repository, { id: "sup", perfil: "supervisor", poloId: null });
 
-    expect(csv).toBe("Fiscal,Matricula,Tabulacoes,Media FFR\nAna,F0001,2,75.00%");
+    expect(csv).toBe(
+      [
+        "Fiscal,Matricula,Tabulacoes,Media FFR",
+        "Ana,F0001,2,75.00%",
+        "",
+        "Regiao,Contratada,Tabulacoes,Media FFR,IQES",
+        "METROPOLITANA,Contratada A,1,75.00%,75.00%"
+      ].join("\n")
+    );
   });
 });
