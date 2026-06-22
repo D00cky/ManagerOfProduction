@@ -242,6 +242,17 @@ export async function getOpcoesGeograficas(
   return buildOpcoesGeograficas(await repository.findGeoFacets(buildOsScope(user)));
 }
 
+/**
+ * Lista os meses (MM/YY) presentes nos dados importados do usuário, do mais recente ao mais
+ * antigo. Reutilizável por qualquer tela com filtro mensal (dashboard e relatórios).
+ */
+export async function getMesesDisponiveis(
+  repository: Pick<DashboardRepository, "mesesDisponiveis">,
+  user: SessionUserScope
+): Promise<MesDisponivel[]> {
+  return mesesDisponiveisDe(await repository.mesesDisponiveis(buildOsScope(user)));
+}
+
 const OS_PARADA_DIAS = 2;
 /** Page size for the backlog detail list (shown when a polo is filtered). */
 export const PARADAS_PAGE_SIZE = 10;

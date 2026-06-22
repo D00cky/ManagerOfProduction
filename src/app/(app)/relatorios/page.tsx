@@ -2,12 +2,15 @@ import type { Conceito } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GeoFilter } from "@/components/dashboard/geo-filter";
+import { MesSelect } from "@/components/dashboard/mes-select";
+import { BaseDataSelect } from "@/components/relatorios/base-data-select";
+import { Label } from "@/components/ui/label";
 import { ESTADO } from "@/data/regioes-sp";
 import { defaultRedirect, hasPermission } from "@/lib/permissions";
 import { formatPercent } from "@/lib/utils";
-import { getRelatorio, type NivelDesempenho } from "@/server/relatorio-service";
+import { getRelatorio, mesParaIntervalo, type NivelDesempenho } from "@/server/relatorio-service";
 import { prismaRelatorioRepository } from "@/server/prisma-relatorio-repository";
-import { getOpcoesGeograficas } from "@/server/dashboard-service";
+import { getMesesDisponiveis, getOpcoesGeograficas } from "@/server/dashboard-service";
 import { prismaDashboardRepository } from "@/server/prisma-dashboard-repository";
 import { getCurrentUser } from "@/server/session";
 
@@ -30,22 +33,35 @@ function firstParam(value: string | string[] | undefined) {
 export default async function RelatoriosPage({
   searchParams
 }: {
-  searchParams: Promise<{ regiao?: string | string[]; polo?: string | string[]; municipio?: string | string[] }>;
+  searchParams: Promise<{
+    regiao?: string | string[];
+    polo?: string | string[];
+    municipio?: string | string[];
+    mes?: string | string[];
+    base?: string | string[];
+  }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (!hasPermission(user.perfil, "relatorios:read")) redirect(defaultRedirect(user.perfil));
 
   const params = await searchParams;
+  const mes = firstParam(params.mes);
+  const baseData = firstParam(params.base) === "importacao" ? "importacao" : "conclusao";
+  const { from, to } = mesParaIntervalo(mes);
   const filtros = {
     regiao: firstParam(params.regiao),
     polo: firstParam(params.polo),
-    municipio: firstParam(params.municipio)
-  };
+    municipio: firstParam(params.municipio),
+    from,
+    to,
+    baseData
+  } as const;
 
-  const [relatorio, opcoesGeograficas] = await Promise.all([
+  const [relatorio, opcoesGeograficas, mesesDisponiveis] = await Promise.all([
     getRelatorio(prismaRelatorioRepository, user, filtros),
-    getOpcoesGeograficas(prismaDashboardRepository, user)
+    getOpcoesGeograficas(prismaDashboardRepository, user),
+    getMesesDisponiveis(prismaDashboardRepository, user)
   ]);
 
   return (
@@ -59,6 +75,14 @@ export default async function RelatoriosPage({
         polo={filtros.polo}
         municipio={filtros.municipio}
       />
+
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="mes">Mes</Label>
+          <MesSelect opcoes={mesesDisponiveis} selecionado={mes ?? ""} />
+        </div>
+        <BaseDataSelect value={baseData} />
+      </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-7">
         <Card>
