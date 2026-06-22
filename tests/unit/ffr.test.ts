@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calcularConceito } from "@/lib/ffr";
+import { calcularConceito, contarConformidade, iqesPercentual } from "@/lib/ffr";
 import {
   chaveObsNaoConforme,
   gruposParaTipo,
@@ -52,6 +52,33 @@ describe("calcularConceito", () => {
     expect(result.somaPossivel).toBe(0);
     expect(result.percentual).toBe(0);
     expect(result.conceito).toBe("NaoAvaliado");
+  });
+});
+
+describe("contarConformidade / iqesPercentual", () => {
+  it("counts conforme/não-conforme items, excluding X, vazio, texto e peso 0", () => {
+    const contagem = contarConformidade({ tipoServico: "RedeRamalAgua" }, {
+      gerais_q1: "1", // conforme
+      gerais_q2: "0", // não conforme
+      gerais_q3: "1", // conforme
+      gerais_q4: "texto livre", // item texto (peso 0) -> excluído
+      ramal_agua_q1: "X", // não avaliado -> excluído
+      ramal_agua_q2: null, // vazio -> excluído
+      ramal_agua_q3: "1" // conforme (grupo específico do tipo RedeRamalAgua)
+    });
+
+    expect(contagem).toEqual({ conforme: 3, naoConforme: 1 });
+    expect(iqesPercentual(contagem)).toBeCloseTo(0.75, 5);
+  });
+
+  it("returns 0 IQES when there are no evaluated items", () => {
+    const contagem = contarConformidade({ tipoServico: "Outros" }, {
+      gerais_q1: "X",
+      gerais_q4: "informativo"
+    });
+
+    expect(contagem).toEqual({ conforme: 0, naoConforme: 0 });
+    expect(iqesPercentual(contagem)).toBe(0);
   });
 });
 

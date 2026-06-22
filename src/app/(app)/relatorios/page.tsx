@@ -91,6 +91,100 @@ export default async function RelatoriosPage() {
           </table>
         </CardContent>
       </Card>
+
+      <BreakdownTable
+        title="Desempenho por regiao"
+        nameHeader="Regiao"
+        rows={relatorio.porRegiao}
+      />
+
+      <BreakdownTable title="Desempenho por polo" nameHeader="Polo" rows={relatorio.porPolo} />
+
+      <Card className="overflow-hidden">
+        <CardHeader>
+          <CardTitle>Desempenho por contratada (IQES)</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <table className="w-full text-left text-sm">
+            <thead className="border-y border-[hsl(var(--border))] text-xs uppercase text-[hsl(var(--muted-foreground))]">
+              <tr>
+                <th className="px-4 py-3">Regiao</th>
+                <th className="px-4 py-3">Contratada</th>
+                <th className="px-4 py-3">Tabulacoes</th>
+                <th className="px-4 py-3">Media FFR</th>
+                <th className="px-4 py-3">IQES</th>
+              </tr>
+            </thead>
+            <tbody>
+              {relatorio.porContratada.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-[hsl(var(--muted-foreground))]">
+                    Sem tabulacoes no periodo.
+                  </td>
+                </tr>
+              ) : (
+                relatorio.porContratada.map((item) => (
+                  <tr key={item.chave} className="border-b border-[hsl(var(--border))] last:border-0">
+                    <td className="px-4 py-3">{item.regiao}</td>
+                    <td className="px-4 py-3">{item.nome}</td>
+                    <td className="px-4 py-3">{item.total}</td>
+                    <td className="px-4 py-3">{formatPercent(item.mediaPercentual)}</td>
+                    <td className="px-4 py-3">{formatPercent(item.iqes)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
     </div>
+  );
+}
+
+function BreakdownTable({
+  title,
+  nameHeader,
+  rows
+}: {
+  title: string;
+  nameHeader: string;
+  rows: Array<{ chave: string; nome: string; total: number; mediaPercentual: number; iqes: number }>;
+}) {
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <table className="w-full text-left text-sm">
+          <thead className="border-y border-[hsl(var(--border))] text-xs uppercase text-[hsl(var(--muted-foreground))]">
+            <tr>
+              <th className="px-4 py-3">{nameHeader}</th>
+              <th className="px-4 py-3">Tabulacoes</th>
+              <th className="px-4 py-3">Media FFR</th>
+              <th className="px-4 py-3">IQES</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-[hsl(var(--muted-foreground))]">
+                  Sem tabulacoes no periodo.
+                </td>
+              </tr>
+            ) : (
+              rows.map((item) => (
+                <tr key={item.chave} className="border-b border-[hsl(var(--border))] last:border-0">
+                  <td className="px-4 py-3">{item.nome}</td>
+                  <td className="px-4 py-3">{item.total}</td>
+                  <td className="px-4 py-3">{formatPercent(item.mediaPercentual)}</td>
+                  <td className="px-4 py-3">{formatPercent(item.iqes)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
   );
 }
