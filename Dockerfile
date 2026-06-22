@@ -2,6 +2,9 @@ FROM node:22-trixie-slim AS base
 RUN apt-get update \
   && apt-get install -y --no-install-recommends openssl \
   && rm -rf /var/lib/apt/lists/*
+# Pin npm to match the version the committed package-lock.json was generated
+# with, so `npm ci` resolves the same dependency tree the image ships with.
+RUN npm install -g npm@11.6.2
 
 FROM base AS deps
 WORKDIR /app
