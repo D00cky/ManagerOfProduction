@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allowedPoloIds, buildOsScope } from "@/lib/scope";
+import { allowedPoloIds, buildOsScope, mergeScopeAndGeo } from "@/lib/scope";
 
 describe("allowedPoloIds", () => {
   it("returns undefined for supervisor users to represent unrestricted scope", () => {
@@ -39,6 +39,42 @@ describe("buildOsScope", () => {
 
   it("scopes a monitor without a região to nothing", () => {
     expect(buildOsScope({ id: "m1", perfil: "monitor" })).toEqual({
+      regiaoAdministrativa: { in: [] }
+    });
+  });
+});
+
+describe("mergeScopeAndGeo", () => {
+  it("returns a copy of the scope when there is no filter", () => {
+    const scope = { fiscalId: "f1" };
+    const where = mergeScopeAndGeo(scope, {});
+    expect(where).toEqual({ fiscalId: "f1" });
+    expect(where).not.toBe(scope);
+  });
+
+  it("adds polo and município as additional narrowings", () => {
+    expect(mergeScopeAndGeo({}, { polo: "p1", municipio: "Santos" })).toEqual({
+      poloId: "p1",
+      cidade: "Santos"
+    });
+  });
+
+  it("lets a supervisor narrow to any região", () => {
+    expect(mergeScopeAndGeo({}, { regiao: "METROPOLITANA" })).toEqual({
+      regiaoAdministrativa: "METROPOLITANA"
+    });
+  });
+
+  it("narrows a monitor within their scoped região", () => {
+    const scope = { regiaoAdministrativa: { in: ["METROPOLITANA"] } };
+    expect(mergeScopeAndGeo(scope, { regiao: "METROPOLITANA" })).toEqual({
+      regiaoAdministrativa: "METROPOLITANA"
+    });
+  });
+
+  it("collapses an out-of-scope região filter to nothing", () => {
+    const scope = { regiaoAdministrativa: { in: ["METROPOLITANA"] } };
+    expect(mergeScopeAndGeo(scope, { regiao: "BAIXADA SANTISTA" })).toEqual({
       regiaoAdministrativa: { in: [] }
     });
   });
