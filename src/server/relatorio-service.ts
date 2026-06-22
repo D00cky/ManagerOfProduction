@@ -1,4 +1,5 @@
 import type { Conceito, Prisma, TipoServico } from "@prisma/client";
+import { endOfMonth, startOfMonth } from "date-fns";
 import { contarConformidade, iqesPercentual, type RespostasFfr } from "@/lib/ffr";
 import { hasPermission } from "@/lib/permissions";
 import { buildOsScope, mergeScopeAndGeo, type GeoFiltros, type SessionUserScope } from "@/lib/scope";
@@ -67,17 +68,50 @@ const SEM_CONTRATADA = "Sem contratada";
 
 const conceitos: Conceito[] = ["A", "B", "C", "D", "NaoAvaliado"];
 
+/** Base de data do filtro de período: por conclusão (`concluidaEm`) ou importação (`createdAt`). */
+export type BaseData = "conclusao" | "importacao";
+
+export type RelatorioFiltros = GeoFiltros & {
+  from?: Date;
+  to?: Date;
+  /** Default: "conclusao" (serviços concluídos no período). */
+  baseData?: BaseData;
+};
+
+/** Converte `YYYY-MM` na janela [início, fim] do mês; `{}` para vazio/ inválido. */
+export function mesParaIntervalo(mes?: string): { from?: Date; to?: Date } {
+  if (!mes || !/^\d{4}-\d{2}$/.test(mes)) return {};
+  const base = new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)) - 1, 1);
+  if (Number.isNaN(base.getTime())) return {};
+  return { from: startOfMonth(base), to: endOfMonth(base) };
+}
+
+/** Aplica o período (por conclusão ou importação) ao filtro de OS, mantendo escopo/geo. */
+function aplicarPeriodo(
+  where: Prisma.OrdemServicoWhereInput,
+  filtros: RelatorioFiltros
+): Prisma.OrdemServicoWhereInput {
+  if (!filtros.from && !filtros.to) return where;
+  const intervalo: Prisma.DateTimeFilter = {
+    ...(filtros.from && { gte: filtros.from }),
+    ...(filtros.to && { lte: filtros.to })
+  };
+  const campo = filtros.baseData === "importacao" ? "createdAt" : "concluidaEm";
+  return { ...where, [campo]: intervalo };
+}
+
 export async function getRelatorio(
   repository: RelatorioRepository,
   user: SessionUserScope,
-  filtros: GeoFiltros = {}
+  filtros: RelatorioFiltros = {}
 ): Promise<RelatorioResumo> {
   if (!hasPermission(user.perfil, "relatorios:read")) {
     throw new Error("Sem permissao para ver relatorios");
   }
 
-  // A região/polo filter only narrows within the user's access scope (scope always wins).
-  const where = mergeScopeAndGeo(buildOsScope(user), filtros);
+  // A região/polo filter only narrows within the user's access scope (scope always wins);
+  // the period further narrows by conclusion or import date on the same OS filter.
+  const where = aplicarPeriodo(mergeScopeAndGeo(buildOsScope(user), filtros), filtros);
   const [overall, conceitoCounts, porFiscalRows, breakdownRows] = await Promise.all([
     repository.overall(where),
     repository.countByConceito(where),
@@ -208,7 +242,7 @@ function zeroFillConceitos(counts: ConceitoCount[]): Record<Conceito, number> {
 export async function exportRelatorioCsv(
   repository: RelatorioRepository,
   user: SessionUserScope,
-  filtros: GeoFiltros = {}
+  filtros: RelatorioFiltros = {}
 ) {
   const relatorio = await getRelatorio(repository, user, filtros);
   const arvoreRows = relatorio.arvore.flatMap((regiao) =>

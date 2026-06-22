@@ -3,6 +3,7 @@ import type { Conceito } from "@prisma/client";
 import {
   exportRelatorioCsv,
   getRelatorio,
+  mesParaIntervalo,
   type ConceitoCount,
   type FiscalInfo,
   type FiscalQualidade,
@@ -76,6 +77,40 @@ describe("getRelatorio", () => {
     const expected = { regiaoAdministrativa: "METROPOLITANA", poloId: "p1" };
     expect(repository.overall).toHaveBeenCalledWith(expected);
     expect(repository.listTabulacoesParaBreakdown).toHaveBeenCalledWith(expected);
+  });
+
+  it("filters by conclusion date by default and combines with the geo filter", async () => {
+    const repository = repo({});
+    const from = new Date("2026-05-01T00:00:00.000Z");
+    const to = new Date("2026-05-31T23:59:59.999Z");
+
+    await getRelatorio(
+      repository,
+      { id: "sup", perfil: "supervisor", poloId: null },
+      { regiao: "METROPOLITANA", from, to }
+    );
+
+    const expected = {
+      regiaoAdministrativa: "METROPOLITANA",
+      concluidaEm: { gte: from, lte: to }
+    };
+    expect(repository.overall).toHaveBeenCalledWith(expected);
+    expect(repository.mediaPorFiscal).toHaveBeenCalledWith(expected);
+    expect(repository.listTabulacoesParaBreakdown).toHaveBeenCalledWith(expected);
+  });
+
+  it("filters by import date when baseData is 'importacao'", async () => {
+    const repository = repo({});
+    const from = new Date("2026-05-01T00:00:00.000Z");
+    const to = new Date("2026-05-31T23:59:59.999Z");
+
+    await getRelatorio(
+      repository,
+      { id: "sup", perfil: "supervisor", poloId: null },
+      { from, to, baseData: "importacao" }
+    );
+
+    expect(repository.overall).toHaveBeenCalledWith({ createdAt: { gte: from, lte: to } });
   });
 
   it("returns zeros when there are no tabulations", async () => {
@@ -206,5 +241,20 @@ describe("getRelatorio", () => {
         "METROPOLITANA,Polo Leste,Contratada A,1,75.00%,75.00%"
       ].join("\n")
     );
+  });
+});
+
+describe("mesParaIntervalo", () => {
+  it("turns YYYY-MM into the first and last instant of that month", () => {
+    const { from, to } = mesParaIntervalo("2026-05");
+    expect(from).toEqual(new Date(2026, 4, 1, 0, 0, 0, 0));
+    expect(to).toEqual(new Date(2026, 4, 31, 23, 59, 59, 999));
+  });
+
+  it("returns an empty window for missing or invalid input", () => {
+    expect(mesParaIntervalo(undefined)).toEqual({});
+    expect(mesParaIntervalo("")).toEqual({});
+    expect(mesParaIntervalo("2026-5")).toEqual({});
+    expect(mesParaIntervalo("not-a-month")).toEqual({});
   });
 });

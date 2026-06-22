@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { exportRelatorioCsv } from "@/server/relatorio-service";
+import { exportRelatorioCsv, mesParaIntervalo } from "@/server/relatorio-service";
 import { prismaRelatorioRepository } from "@/server/prisma-relatorio-repository";
 import { getCurrentUser } from "@/server/session";
 
@@ -8,10 +8,14 @@ export async function GET(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Nao autenticado" }, { status: 401 });
 
   const { searchParams } = request.nextUrl;
+  const { from, to } = mesParaIntervalo(searchParams.get("mes") ?? undefined);
   const filtros = {
     regiao: searchParams.get("regiao") ?? undefined,
     polo: searchParams.get("polo") ?? undefined,
-    municipio: searchParams.get("municipio") ?? undefined
+    municipio: searchParams.get("municipio") ?? undefined,
+    from,
+    to,
+    baseData: searchParams.get("base") === "importacao" ? ("importacao" as const) : ("conclusao" as const)
   };
 
   try {
