@@ -22,7 +22,9 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_OPTIONS="--max-old-space-size=384"
+# Node heap is set at runtime via NODE_OPTIONS (see docker-compose). A small
+# fallback keeps non-compose runs from going unbounded.
+ENV NODE_OPTIONS="--max-old-space-size=512"
 RUN apt-get update \
   && apt-get install -y --no-install-recommends postgresql-client \
   && rm -rf /var/lib/apt/lists/*
