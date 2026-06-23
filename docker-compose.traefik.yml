@@ -1,12 +1,12 @@
 services:
   traefik:
     container_name: manager-of-production-traefik
-    image: traefik:v3.3
+    image: traefik:v3.7.5
     restart: unless-stopped
+    # traefik:v3.7.x ships a Docker SDK new enough to talk to recent Docker
+    # Engines (e.g. v29, whose minimum API is 1.40). Older v3.3 negotiated down
+    # to API 1.24 and was rejected. DOCKER_API_VERSION is kept as a backstop.
     environment:
-      # The host's Docker daemon rejects the API version the client defaults
-      # to during negotiation; pin a version the daemon supports so the docker
-      # provider can read containers/labels.
       DOCKER_API_VERSION: "1.44"
     command:
       # Entrypoints
