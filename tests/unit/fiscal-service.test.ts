@@ -47,7 +47,7 @@ describe("resumoFiscal", () => {
 describe("getFiscalHome", () => {
   it("returns the resumo, today's completions and the next OS id for the fiscal", async () => {
     const repo = repository({
-      contarPorStatus: vi.fn(async () => [
+      contarPorStatus: vi.fn(async (): Promise<StatusCount[]> => [
         { status: "NaFila", count: 2 },
         { status: "Concluida", count: 1 }
       ]),
@@ -86,7 +86,7 @@ describe("getFiscalDesempenho", () => {
       { tipoServico: "Desobstrucao", count: 2 }
     ];
     const repo = repository({
-      contarPorStatus: vi.fn(async () => [
+      contarPorStatus: vi.fn(async (): Promise<StatusCount[]> => [
         { status: "NaFila", count: 4 },
         { status: "Concluida", count: 7 }
       ]),

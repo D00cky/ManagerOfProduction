@@ -156,11 +156,11 @@ describe("saveTabulacao", () => {
     );
   });
 
-  it("lets a monitor tabulate a região-matching imported OS in a foreign polo", async () => {
-    // OS importada: polo auto-criado diferente, mas mesma região do monitor.
-    const repository = repo(os({ fiscalId: "f1", poloId: "polo-importado", regiaoAdministrativa: "Campinas" }));
+  it("lets a monitor tabulate an imported OS in one of their assigned polos", async () => {
+    // OS importada num polo auto-criado, explicitamente atribuído ao monitor.
+    const repository = repo(os({ fiscalId: "f1", poloId: "polo-importado" }));
 
-    await saveTabulacao(repository, { id: "m1", perfil: "monitor", poloId: "p1", regiao: "Campinas" }, {
+    await saveTabulacao(repository, { id: "m1", perfil: "monitor", polosPermitidos: ["polo-importado"] }, {
       ordemServicoId: "os1",
       respostas: { gerais_q1: "1" }
     });
@@ -168,11 +168,11 @@ describe("saveTabulacao", () => {
     expect(repository.upsertTabulacao).toHaveBeenCalled();
   });
 
-  it("blocks a monitor from tabulating an OS in another região", async () => {
-    const repository = repo(os({ fiscalId: "f1", regiaoAdministrativa: "Santos" }));
+  it("blocks a monitor from tabulating an OS in a polo not assigned to them", async () => {
+    const repository = repo(os({ fiscalId: "f1", poloId: "p2" }));
 
     await expect(
-      saveTabulacao(repository, { id: "m1", perfil: "monitor", poloId: "p1", regiao: "Campinas" }, {
+      saveTabulacao(repository, { id: "m1", perfil: "monitor", poloId: "p1", polosPermitidos: ["p1"] }, {
         ordemServicoId: "os1",
         respostas: { gerais_q1: "1" }
       })

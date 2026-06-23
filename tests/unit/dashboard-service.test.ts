@@ -213,12 +213,12 @@ function repository(ordens: OrdemServico[], tabulacoes: TabFixture[] = []): Dash
 }
 
 describe("getDashboardResumo", () => {
-  it("loads OS using the requester scope (monitor → whole região)", async () => {
+  it("loads OS using the requester scope (monitor → assigned polos)", async () => {
     const repo = repository([]);
 
-    await getDashboardResumo(repo, { id: "m1", perfil: "monitor", regiao: "Registro" });
+    await getDashboardResumo(repo, { id: "m1", perfil: "monitor", polosPermitidos: ["p1"] });
 
-    expect(repo.countByStatus).toHaveBeenCalledWith({ regiaoAdministrativa: { in: ["Registro"] } });
+    expect(repo.countByStatus).toHaveBeenCalledWith({ poloId: { in: ["p1"] } });
   });
 
   it("calculates status metrics and completion percentage", async () => {
@@ -322,25 +322,25 @@ describe("getDashboardResumo", () => {
     ]);
   });
 
-  it("narrows by municipality and keeps the access scope (monitor cannot read other regiões)", async () => {
+  it("narrows by municipality and keeps the access scope (monitor cannot read other polos)", async () => {
     const repo = repository([
-      os({ id: "1", cidade: "MIRACATU", regiaoAdministrativa: "Registro" }),
-      os({ id: "2", cidade: "REGISTRO", regiaoAdministrativa: "Registro" }),
-      os({ id: "3", cidade: "MIRACATU", regiaoAdministrativa: "São Paulo" })
+      os({ id: "1", cidade: "MIRACATU", poloId: "p1" }),
+      os({ id: "2", cidade: "REGISTRO", poloId: "p1" }),
+      os({ id: "3", cidade: "MIRACATU", poloId: "polo-x" })
     ]);
 
     const resumo = await getDashboardResumo(
       repo,
-      { id: "m1", perfil: "monitor", regiao: "Registro" },
+      { id: "m1", perfil: "monitor", polosPermitidos: ["p1"] },
       new Date("2026-06-07T10:00:00.000Z"),
       { municipio: "MIRACATU" }
     );
 
     expect(repo.countByStatus).toHaveBeenCalledWith({
-      regiaoAdministrativa: { in: ["Registro"] },
+      poloId: { in: ["p1"] },
       cidade: "MIRACATU"
     });
-    // Only the in-scope (Registro) MIRACATU OS, not the São Paulo one.
+    // Only the in-scope (polo p1) MIRACATU OS, not the polo-x one.
     expect(resumo.metricas.total).toBe(1);
   });
 

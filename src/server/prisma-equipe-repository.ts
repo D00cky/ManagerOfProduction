@@ -23,11 +23,9 @@ export const prismaEquipeRepository: EquipeRepository = {
         : {
             perfil: { in: perfisEquipe },
             OR: [
-              // Fiscais/monitores cujo polo é da região (fiscais herdam via polo).
-              { polo: { regiao: scope.regiao } },
-              // Monitores da região (a região fica no cadastro do monitor).
-              { regiao: scope.regiao },
-              // Sempre inclui o próprio monitor, mesmo com polo inconsistente.
+              // Fiscais/monitores cujo polo está atribuído ao monitor.
+              { poloId: { in: scope.poloIds } },
+              // Sempre inclui o próprio monitor, mesmo com polo fora do escopo.
               { id: scope.selfId }
             ]
           };

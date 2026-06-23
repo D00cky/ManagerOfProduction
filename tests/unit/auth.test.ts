@@ -4,11 +4,12 @@ const findFirst = vi.fn();
 const update = vi.fn();
 const userUpsert = vi.fn();
 const poloUpsert = vi.fn();
+const poloFindMany = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: { findFirst, update, upsert: userUpsert },
-    polo: { upsert: poloUpsert }
+    polo: { upsert: poloUpsert, findMany: poloFindMany }
   }
 }));
 
@@ -22,7 +23,7 @@ describe("authorizeCredentials", () => {
     delete process.env.DEMO_AUTH_ENABLED;
   });
 
-  it("returns a database user when credentials match", async () => {
+  it("returns a database user with only their explicitly assigned polos", async () => {
     findFirst.mockResolvedValue({
       id: "u1",
       name: "Monitor Teste",
@@ -30,14 +31,19 @@ describe("authorizeCredentials", () => {
       matricula: "M0001",
       perfil: "monitor",
       poloId: "p1",
+      // Has a região, but scope must come from explicit UserPoloAccess rows, not
+      // from every polo in the região (regression for the removed override).
+      regiao: "Campinas",
       passwordHash: "hash",
-      acessosPolo: [{ poloId: "p1" }]
+      acessosPolo: [{ poloId: "pa" }, { poloId: "pb" }]
     });
     const { authorizeCredentials } = await import("@/lib/auth");
 
     const user = await authorizeCredentials({ login: "M0001", password: "senha123" });
 
-    expect(user).toMatchObject({ id: "u1", perfil: "monitor", polosPermitidos: ["p1"] });
+    expect(user).toMatchObject({ id: "u1", perfil: "monitor", polosPermitidos: ["pa", "pb"] });
+    // The região → polos expansion must be gone.
+    expect(poloFindMany).not.toHaveBeenCalled();
     expect(update).toHaveBeenCalledWith({ where: { id: "u1" }, data: { lastSeenAt: expect.any(Date) } });
   });
 

@@ -20,6 +20,7 @@ function usuario(overrides: Partial<UsuarioResumo> = {}): UsuarioResumo {
     status: "ativo" as StatusUsuario,
     poloId: "p1",
     regiao: null,
+    polosPermitidos: [],
     ...overrides
   };
 }
@@ -107,7 +108,8 @@ describe("criarUsuario", () => {
       password: "senha123",
       perfil: "fiscal",
       poloId: "p1",
-      regiao: null
+      regiao: null,
+      polosPermitidos: []
     });
     expect(created.email).toBe("novo@example.com");
     expect(repository.log).toHaveBeenCalledWith(
@@ -152,6 +154,38 @@ describe("criarUsuario", () => {
     });
     expect(repository.create).toHaveBeenLastCalledWith(
       expect.objectContaining({ perfil: "supervisor", regiao: null })
+    );
+  });
+
+  it("forwards a monitor's assigned polos (deduped, falsy filtered)", async () => {
+    const repository = repo({ existing: null });
+
+    await criarUsuario(repository, supervisor, {
+      ...validInput,
+      perfil: "monitor",
+      matricula: "M0010",
+      email: "mon10@example.com",
+      polosPermitidos: ["p1", "", "p2", "p1"]
+    });
+
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ perfil: "monitor", polosPermitidos: ["p1", "p2"] })
+    );
+  });
+
+  it("never assigns polos to a supervisor", async () => {
+    const repository = repo({ existing: null });
+
+    await criarUsuario(repository, supervisor, {
+      ...validInput,
+      perfil: "supervisor",
+      matricula: "S0010",
+      email: "sup10@example.com",
+      polosPermitidos: ["p1", "p2"]
+    });
+
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ perfil: "supervisor", polosPermitidos: [] })
     );
   });
 });
@@ -209,6 +243,31 @@ describe("atualizarUsuario", () => {
     await atualizarUsuario(repository, supervisor, "u1", { perfil: "supervisor", regiao: "Campinas" });
 
     expect(repository.update).toHaveBeenCalledWith("u1", { perfil: "supervisor", regiao: null });
+  });
+
+  it("forwards updated monitor polos (deduped, falsy filtered)", async () => {
+    const repository = repo({ byId: usuario({ perfil: "monitor" }) });
+
+    await atualizarUsuario(repository, supervisor, "u1", {
+      polosPermitidos: ["p1", "", "p2", "p2"]
+    });
+
+    expect(repository.update).toHaveBeenCalledWith("u1", { polosPermitidos: ["p1", "p2"] });
+  });
+
+  it("clears assigned polos when the user becomes a supervisor", async () => {
+    const repository = repo({ byId: usuario({ perfil: "monitor" }) });
+
+    await atualizarUsuario(repository, supervisor, "u1", {
+      perfil: "supervisor",
+      polosPermitidos: ["p1", "p2"]
+    });
+
+    expect(repository.update).toHaveBeenCalledWith("u1", {
+      perfil: "supervisor",
+      regiao: null,
+      polosPermitidos: []
+    });
   });
 
   it("resets the password when provided and keeps it out of the log", async () => {

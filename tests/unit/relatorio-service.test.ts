@@ -56,12 +56,12 @@ describe("getRelatorio", () => {
     expect(repository.overall).not.toHaveBeenCalled();
   });
 
-  it("scopes a monitor to their whole região", async () => {
+  it("scopes a monitor to their assigned polos", async () => {
     const repository = repo({});
 
-    await getRelatorio(repository, { id: "m1", perfil: "monitor", regiao: "Campinas" });
+    await getRelatorio(repository, { id: "m1", perfil: "monitor", polosPermitidos: ["p1"] });
 
-    const expected = { regiaoAdministrativa: { in: ["Campinas"] } };
+    const expected = { poloId: { in: ["p1"] } };
     expect(repository.overall).toHaveBeenCalledWith(expected);
     expect(repository.countByConceito).toHaveBeenCalledWith(expected);
     expect(repository.mediaPorFiscal).toHaveBeenCalledWith(expected);
