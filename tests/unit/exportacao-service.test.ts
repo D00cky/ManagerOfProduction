@@ -109,7 +109,13 @@ describe("buildExportDataset", () => {
       os({
         descricaoTss: "LIGAÇÃO DE ÁGUA",
         tabulacao: tab({
-          respostas: { gerais_q1: "1", gerais_q2: "0", gerais_q3: "X", gerais_q4: "dano de terceiro" }
+          respostas: {
+            gerais_q1: "1",
+            gerais_q2: "0",
+            gerais_q3: "X",
+            gerais_q4: "1",
+            "__campo__:gerais_q4": "dano de terceiro"
+          }
         })
       })
     ]);
@@ -131,9 +137,33 @@ describe("buildExportDataset", () => {
     expect(
       linha[idx("AS COORDENADAS GEOGRÁFICAS CONDIZEM COM O ENDEREÇO DO SERVIÇO SOLICITADO?")]
     ).toBe("N/A");
-    expect(linha[idx("SERVIÇO DECORRENTE DE DANOS DE TERCEIROS?")]).toBe("dano de terceiro");
+    // gerais_q4 virou 3-estados; a descrição vai para a coluna do campoTexto.
+    expect(linha[idx("SERVIÇO DECORRENTE DE DANOS DE TERCEIROS?")]).toBe("Conforme");
+    expect(linha[idx("Descreva")]).toBe("dano de terceiro");
     expect(linha[idx("Soma obtida")]).toBe(5);
     expect(linha[idx("Conceito")]).toBe("B");
+  });
+
+  it("exporta o valor do campoTexto (leitura do hidrômetro) em coluna própria", async () => {
+    const { repository } = repo([
+      os({
+        tipoServico: "RamalAgua",
+        tabulacao: tab({
+          respostas: { ramal_agua_q4: "1", "ramal_agua_q5": "98765" }
+        })
+      })
+    ]);
+
+    const { sheets } = await buildExportDataset(repository, supervisor, {});
+    const sheet = sheets[0];
+    const idx = (label: string) => sheet.colunas.indexOf(label);
+    const linha = sheet.linhas[0];
+
+    expect(idx("Informe a leitura do hidrômetro")).toBeGreaterThanOrEqual(0);
+    expect(linha[idx("TEM FOTO LEGÍVEL PARA LEITURA DO HIDRÔMETRO?")]).toBe("Conforme");
+    expect(linha[idx("Informe a leitura do hidrômetro")]).toBe("98765");
+    // o item "INFORME A LEITURA DO HIDRÔMETRO" separado não existe mais como coluna
+    expect(idx("INFORME A LEITURA DO HIDRÔMETRO")).toBe(-1);
   });
 
   it("includes audit columns (tabulador + alteração)", async () => {

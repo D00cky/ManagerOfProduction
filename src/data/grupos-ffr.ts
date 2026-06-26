@@ -15,11 +15,39 @@ export function chaveObsNaoConforme(itemId: string): string {
   return `${OBS_NAO_CONFORME_PREFIX}${itemId}`;
 }
 
+/**
+ * Prefixo das chaves de um campo de texto condicional (ex.: leitura/matrícula do
+ * hidrômetro, descrição de "danos de terceiros"). Como o cálculo FFR e o export
+ * iteram pelos itens, essas chaves extras são naturalmente ignoradas pela pontuação.
+ */
+export const CAMPO_TEXTO_PREFIX = "__campo__:";
+
+/** Chave padrão em `respostas` que guarda o valor de um campo de texto condicional. */
+export function chaveCampoTexto(itemId: string): string {
+  return `${CAMPO_TEXTO_PREFIX}${itemId}`;
+}
+
+/**
+ * Caixa de texto que aparece sob um item booleano quando a resposta está em
+ * `revelarEm`. Usada para capturar dados (leitura/matrícula/desnível) ou uma
+ * descrição, sem afetar a pontuação (o item permanece informativo, peso 0, ou a
+ * caixa só guarda texto livre).
+ */
+export type CampoTextoCondicional = {
+  /** Respostas que revelam a caixa, ex.: ["1"] (só Conforme) ou ["1","0"]. */
+  revelarEm: ValorResposta[];
+  /** Chave de armazenamento; default `chaveCampoTexto(item.id)`. */
+  chave?: string;
+  label?: string;
+  placeholder?: string;
+};
+
 export type FfrItem = {
   id: string;
   texto: string;
   peso: number;
   tipo?: "booleano" | "texto";
+  campoTexto?: CampoTextoCondicional;
 };
 
 export type FfrGrupo = {
@@ -42,7 +70,7 @@ export const gruposFfr: FfrGrupo[] = [
       { id: "gerais_q1", texto: "O REGISTRO FOTOGRÁFICO DO SERVIÇO FOI EXECUTADO?", peso: 3 },
       { id: "gerais_q2", texto: "A QUALIDADE DAS FOTOS ESTÁ FAVORECENDO A FISCALIZAÇÃO (NÍTIDAS/BEM ENQUADRADAS)?", peso: 2 },
       { id: "gerais_q3", texto: "AS COORDENADAS GEOGRÁFICAS CONDIZEM COM O ENDEREÇO DO SERVIÇO SOLICITADO?", peso: 3 },
-      { id: "gerais_q4", texto: "SERVIÇO DECORRENTE DE DANOS DE TERCEIROS?", peso: 0, tipo: "texto" },
+      { id: "gerais_q4", texto: "SERVIÇO DECORRENTE DE DANOS DE TERCEIROS?", peso: 0, campoTexto: { revelarEm: ["1", "0"], label: "Descreva" } },
     ]
   },
   {
@@ -77,7 +105,7 @@ export const gruposFfr: FfrGrupo[] = [
       { id: "rede_agua_q14", texto: "A VALA FOI REQUADRADA?", peso: 3 },
       { id: "rede_agua_q15", texto: "O MATERIAL ESCAVADO FOI DEPOSITADO CORRETAMENTE EM LONA/ENCERADO?", peso: 3 },
       { id: "rede_agua_q16", texto: "O LOCAL FOI LIMPO APÓS A EXECUÇÃO?", peso: 3 },
-      { id: "rede_agua_q17", texto: "FOI REALIZADA REPOSIÇÃO PROVISÓRIA DE PISO OU PAVIMENTO?", peso: 0, tipo: "texto" },
+      { id: "rede_agua_q17", texto: "FOI REALIZADA REPOSIÇÃO PROVISÓRIA DE PISO OU PAVIMENTO?", peso: 0 },
       { id: "rede_agua_q18", texto: "HÁ SINALIZAÇÃO (CARIMBO DE PROVISÓRIO) QUE INDIQUE QUE A REPOSIÇÃO É PROVISÓRIA?", peso: 3 },
     ]
   },
@@ -89,10 +117,8 @@ export const gruposFfr: FfrGrupo[] = [
       { id: "ramal_agua_q1", texto: "TEM FOTO DA FACHADA DO IMÓVEL?", peso: 3 },
       { id: "ramal_agua_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
       { id: "ramal_agua_q3", texto: "TEM FOTO DA ETAPA FINAL?", peso: 3 },
-      { id: "ramal_agua_q4", texto: "TEM FOTO LEGÍVEL PARA LEITURA DO HIDRÔMETRO?", peso: 3 },
-      { id: "ramal_agua_q5", texto: "INFORME A LEITURA DO HIDRÔMETRO", peso: 0, tipo: "texto" },
-      { id: "ramal_agua_q6", texto: "TEM FOTO LEGÍVEL PARA LEITURA DA MATRÍCULA DO HIDRÔMETRO?", peso: 3 },
-      { id: "ramal_agua_q7", texto: "INFORME A MATRÍCULA DO HIDRÔMETRO", peso: 0, tipo: "texto" },
+      { id: "ramal_agua_q4", texto: "TEM FOTO LEGÍVEL PARA LEITURA DO HIDRÔMETRO?", peso: 3, campoTexto: { revelarEm: ["1"], chave: "ramal_agua_q5", label: "Informe a leitura do hidrômetro" } },
+      { id: "ramal_agua_q6", texto: "TEM FOTO LEGÍVEL PARA LEITURA DA MATRÍCULA DO HIDRÔMETRO?", peso: 3, campoTexto: { revelarEm: ["1"], chave: "ramal_agua_q7", label: "Informe a matrícula do hidrômetro" } },
       { id: "ramal_agua_q8", texto: "O MATERIAL APLICADO FOI INFORMADO?", peso: 3 },
       { id: "ramal_agua_q9", texto: "É POSSIVEL IDENTIFICAR QUAL FOI O MATERIAL APLICADO?", peso: 2 },
       { id: "ramal_agua_q10", texto: "A QUANTIDADE DE MATERIAL APLICADO CONDIZ COM O SERVIÇO EXECUTADO?", peso: 3 },
@@ -107,7 +133,7 @@ export const gruposFfr: FfrGrupo[] = [
       { id: "ramal_agua_q19", texto: "A VALA FOI REQUADRADA?", peso: 3 },
       { id: "ramal_agua_q20", texto: "O MATERIAL ESCAVADO FOI DEPOSITADO CORRETAMENTE EM LONA/ENCERADO?", peso: 3 },
       { id: "ramal_agua_q21", texto: "O LOCAL FOI LIMPO APÓS A EXECUÇÃO?", peso: 3 },
-      { id: "ramal_agua_q22", texto: "FOI REALIZADA REPOSIÇÃO PROVISÓRIA DE PISO OU PAVIMENTO?", peso: 0, tipo: "texto" },
+      { id: "ramal_agua_q22", texto: "FOI REALIZADA REPOSIÇÃO PROVISÓRIA DE PISO OU PAVIMENTO?", peso: 0 },
       { id: "ramal_agua_q23", texto: "HÁ SINALIZAÇÃO (CARIMBO DE PROVISÓRIO) QUE INDIQUE QUE A REPOSIÇÃO É PROVISÓRIA?", peso: 3 },
     ]
   },
@@ -119,14 +145,10 @@ export const gruposFfr: FfrGrupo[] = [
       { id: "cavalete_hidrometro_q1", texto: "TEM FOTO DA FACHADA?", peso: 3 },
       { id: "cavalete_hidrometro_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
       { id: "cavalete_hidrometro_q3", texto: "TEM FOTO DA ETAPA FINAL?", peso: 3 },
-      { id: "cavalete_hidrometro_q4", texto: "TEM FOTO LEGÍVEL PARA LEITURA DO HIDRÔMETRO RETIRADO?", peso: 3 },
-      { id: "cavalete_hidrometro_q5", texto: "INFORME A LEITURA DO HIDRÔMETRO RETIRADO", peso: 0, tipo: "texto" },
-      { id: "cavalete_hidrometro_q6", texto: "TEM FOTO LEGÍVEL PARA LEITURA DO HIDRÔMETRO INSTALADO?", peso: 3 },
-      { id: "cavalete_hidrometro_q7", texto: "INFORME A LEITURA DO HIDRÔMETRO INSTALADO", peso: 0, tipo: "texto" },
-      { id: "cavalete_hidrometro_q8", texto: "TEM FOTO LEGÍVEL PARA LEITURA DA MATRÍCULA DO HIDRÔMETRO RETIRADO?", peso: 3 },
-      { id: "cavalete_hidrometro_q9", texto: "INFORME A MATRÍCULA DO HIDRÔMETRO RETIRADO", peso: 0, tipo: "texto" },
-      { id: "cavalete_hidrometro_q10", texto: "TEM FOTO LEGÍVEL PARA LEITURA DA MATRÍCULA DO HIDRÔMETRO INSTALADO?", peso: 3 },
-      { id: "cavalete_hidrometro_q11", texto: "INFORME A MATRÍCULA DO HIDRÔMETRO INSTALADO", peso: 0, tipo: "texto" },
+      { id: "cavalete_hidrometro_q4", texto: "TEM FOTO LEGÍVEL PARA LEITURA DO HIDRÔMETRO RETIRADO?", peso: 3, campoTexto: { revelarEm: ["1"], chave: "cavalete_hidrometro_q5", label: "Informe a leitura do hidrômetro retirado" } },
+      { id: "cavalete_hidrometro_q6", texto: "TEM FOTO LEGÍVEL PARA LEITURA DO HIDRÔMETRO INSTALADO?", peso: 3, campoTexto: { revelarEm: ["1"], chave: "cavalete_hidrometro_q7", label: "Informe a leitura do hidrômetro instalado" } },
+      { id: "cavalete_hidrometro_q8", texto: "TEM FOTO LEGÍVEL PARA LEITURA DA MATRÍCULA DO HIDRÔMETRO RETIRADO?", peso: 3, campoTexto: { revelarEm: ["1"], chave: "cavalete_hidrometro_q9", label: "Informe a matrícula do hidrômetro retirado" } },
+      { id: "cavalete_hidrometro_q10", texto: "TEM FOTO LEGÍVEL PARA LEITURA DA MATRÍCULA DO HIDRÔMETRO INSTALADO?", peso: 3, campoTexto: { revelarEm: ["1"], chave: "cavalete_hidrometro_q11", label: "Informe a matrícula do hidrômetro instalado" } },
       { id: "cavalete_hidrometro_q12", texto: "O MATERIAL APLICADO FOI INFORMADO?", peso: 3 },
       { id: "cavalete_hidrometro_q13", texto: "É POSSIVEL IDENTIFICAR QUAL FOI O MATERIAL APLICADO?", peso: 2 },
       { id: "cavalete_hidrometro_q14", texto: "A QUANTIDADE DE MATERIAL APLICADO CONDIZ COM O SERVIÇO EXECUTADO?", peso: 3 },
@@ -148,7 +170,7 @@ export const gruposFfr: FfrGrupo[] = [
       { id: "esgoto_q9", texto: "A VALA FOI REQUADRADA?", peso: 3 },
       { id: "esgoto_q10", texto: "O MATERIAL ESCAVADO FOI DEPOSITADO CORRETAMENTE EM LONA/ENCERADO?", peso: 3 },
       { id: "esgoto_q11", texto: "O LOCAL FOI LIMPO APÓS A EXECUÇÃO?", peso: 3 },
-      { id: "esgoto_q12", texto: "FOI REALIZADA REPOSIÇÃO PROVISÓRIA DE PISO OU PAVIMENTO?", peso: 0, tipo: "texto" },
+      { id: "esgoto_q12", texto: "FOI REALIZADA REPOSIÇÃO PROVISÓRIA DE PISO OU PAVIMENTO?", peso: 0 },
       { id: "esgoto_q13", texto: "HÁ SINALIZAÇÃO (CARIMBO DE PROVISÓRIO) QUE INDIQUE QUE A REPOSIÇÃO É PROVISÓRIA?", peso: 3 },
     ]
   },
@@ -210,8 +232,7 @@ export const gruposFfr: FfrGrupo[] = [
       { id: "reposicao_asfaltica_q6", texto: "A VALA FOI REQUADRADA?", peso: 4 },
       { id: "reposicao_asfaltica_q7", texto: "TEM FOTO DO TERMÔMETRO?", peso: 3 },
       { id: "reposicao_asfaltica_q8", texto: "A TEMPERATURA MEDIDA ESTÁ ADEQUADA (ENTRE 165 ºC E 175 ºC PARA ASFALTO USINADO A QUENTE OU ENTRE 125 ºC E 150 º C PARA ASFALTO COM MISTURA MORNA)?", peso: 2 },
-      { id: "reposicao_asfaltica_q9", texto: "TEM FOTO DO NIVELAMENTO DA RECOMPOSIÇÃO? (COM RÉGUA E TRENA)", peso: 3 },
-      { id: "reposicao_asfaltica_q10", texto: "INFORME O DESNÍVEL MEDIDO (EM MM)", peso: 0, tipo: "texto" },
+      { id: "reposicao_asfaltica_q9", texto: "TEM FOTO DO NIVELAMENTO DA RECOMPOSIÇÃO? (COM RÉGUA E TRENA)", peso: 3, campoTexto: { revelarEm: ["1"], chave: "reposicao_asfaltica_q10", label: "Informe o desnível medido (em mm)" } },
       { id: "reposicao_asfaltica_q11", texto: "A REPOSIÇÃO FOI RECOMPOSTA DE FORMA A PRESERVAR O ASPECTO ANTERIOR DO PAVIMENTO?", peso: 3 },
       { id: "reposicao_asfaltica_q12", texto: "O LOCAL FOI LIMPO APÓS A EXECUÇÃO?", peso: 3 },
     ]
@@ -230,6 +251,24 @@ export function gruposParaTipo(tipoServico: TipoServico) {
 export type OrdemFfrContext = { tipoServico: TipoServico; descricaoTss?: string | null };
 
 const gruposPorId = new Map(gruposFfr.map((grupo) => [grupo.id, grupo]));
+
+/** Ids dos grupos "sempre presentes", referenciados pela regra de não execução. */
+export const GRUPO_GERAIS_ID = "gerais";
+export const GRUPO_NAO_EXECUTADO_ID = "nao_executado";
+
+/**
+ * O grupo "Serviço não executado" só se aplica quando TODOS os itens gerais
+ * pontuados (peso > 0) foram marcados "Não conforme" ("0") — sinal de que o
+ * serviço não foi executado/documentado. Caso contrário fica oculto e seus itens
+ * não pontuam (entram como N/A). Usado tanto pela UI quanto pela pontuação, para
+ * que prévia e cálculo no servidor fiquem consistentes.
+ */
+export function naoExecutadoAplica(respostas: Record<string, ValorResposta>): boolean {
+  const gerais = gruposPorId.get(GRUPO_GERAIS_ID);
+  if (!gerais) return false;
+  const pontuados = gerais.itens.filter((item) => item.peso > 0 && item.tipo !== "texto");
+  return pontuados.length > 0 && pontuados.every((item) => respostas[item.id] === "0");
+}
 
 const tipoServicoFallback: Record<TipoServico, string> = {
   RedeAgua: "rede_agua",

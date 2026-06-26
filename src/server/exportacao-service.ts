@@ -3,6 +3,7 @@ import { buildOsScope, type SessionUserScope } from "@/lib/scope";
 import { hasPermission } from "@/lib/permissions";
 import { buildListWhere, type OsListFilters } from "@/server/os-service";
 import {
+  chaveCampoTexto,
   chaveObsNaoConforme,
   gruposFfr,
   gruposParaOrdem,
@@ -88,9 +89,14 @@ export function mapearResposta(valor: ValorResposta | undefined, item: FfrItem):
 /** Header prefix for the per-criteria "Não conforme" observation column. */
 export const PREFIXO_OBS_NAO_CONFORME = "Obs. Não conforme: ";
 
-/** Booleano criteria carry a paired observation column (texto items do not). */
+/**
+ * Booleano criteria carry a paired observation column — exceto quando o item tem
+ * um `campoTexto` que já cobre "Não conforme" ("0"), pois nesse caso a descrição
+ * é guardada na coluna do campoTexto (espelha a supressão da UI). Itens texto não
+ * têm coluna de observação.
+ */
 function temColunaObsNaoConforme(item: FfrItem): boolean {
-  return item.tipo !== "texto";
+  return item.tipo !== "texto" && !item.campoTexto?.revelarEm.includes("0");
 }
 
 /** Observation a fiscal wrote for a criteria — only when it was marked "Não conforme". */
@@ -101,6 +107,35 @@ export function observacaoNaoConforme(
   if (!temColunaObsNaoConforme(item) || respostas[item.id] !== "0") return "";
   const obs = respostas[chaveObsNaoConforme(item.id)];
   return typeof obs === "string" ? obs : "";
+}
+
+/** Valor do campo de texto condicional (leitura/matrícula/desnível/descrição). */
+export function valorCampoTexto(
+  respostas: Record<string, ValorResposta>,
+  item: FfrItem
+): string {
+  if (!item.campoTexto) return "";
+  const valor = respostas[item.campoTexto.chave ?? chaveCampoTexto(item.id)];
+  return typeof valor === "string" ? valor : "";
+}
+
+/** Cabeçalhos de coluna gerados por um item (resposta [+ obs] [+ campoTexto]). */
+function colunasDoItem(item: FfrItem): string[] {
+  const colunas = [item.texto];
+  if (temColunaObsNaoConforme(item)) colunas.push(`${PREFIXO_OBS_NAO_CONFORME}${item.texto}`);
+  if (item.campoTexto) colunas.push(item.campoTexto.label ?? item.texto);
+  return colunas;
+}
+
+/** Valores de uma OS para as colunas de um item, na mesma ordem de `colunasDoItem`. */
+function valoresDoItem(
+  respostas: Record<string, ValorResposta>,
+  item: FfrItem
+): (string | number)[] {
+  const valores: (string | number)[] = [mapearResposta(respostas[item.id], item)];
+  if (temColunaObsNaoConforme(item)) valores.push(observacaoNaoConforme(respostas, item));
+  if (item.campoTexto) valores.push(valorCampoTexto(respostas, item));
+  return valores;
 }
 
 /** Excel sheet names: ≤31 chars, no :\/?*[], unique. Returns a sanitized unique name. */
@@ -147,11 +182,7 @@ export async function buildExportDataset(
     // pareada com a observação de "Não conforme" daquele critério.
     const colunas = [
       ...colunasMetadados.map(([label]) => label),
-      ...itens.flatMap((item) =>
-        temColunaObsNaoConforme(item)
-          ? [item.texto, `${PREFIXO_OBS_NAO_CONFORME}${item.texto}`]
-          : [item.texto]
-      ),
+      ...itens.flatMap((item) => colunasDoItem(item)),
       ...colunasScore,
       ...colunasAuditoria
     ];
@@ -161,11 +192,7 @@ export async function buildExportDataset(
       const tab = ordem.tabulacao;
       return [
         ...colunasMetadados.map(([, extrair]) => extrair(ordem)),
-        ...itens.flatMap((item) =>
-          temColunaObsNaoConforme(item)
-            ? [mapearResposta(respostas[item.id], item), observacaoNaoConforme(respostas, item)]
-            : [mapearResposta(respostas[item.id], item)]
-        ),
+        ...itens.flatMap((item) => valoresDoItem(respostas, item)),
         tab ? tab.somaObtida : "",
         tab ? tab.somaPossivel : "",
         tab ? tab.percentual : "",

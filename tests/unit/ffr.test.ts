@@ -118,3 +118,43 @@ describe("gruposParaTipo", () => {
     expect(groups).not.toContain("rede_agua");
   });
 });
+
+describe("pontuação condicional do grupo 'Serviço não executado'", () => {
+  it("ignora itens de nao_executado quando os Itens Gerais NÃO são todos Não conforme", () => {
+    const result = calcularConceito(
+      { tipoServico: "RamalAgua" },
+      {
+        gerais_q1: "1", // peso 3
+        nao_executado_q1: "0", // peso 2 — não deve contar (serviço foi executado)
+        nao_executado_q3: "1" // peso 3 — não deve contar
+      }
+    );
+    // só gerais_q1 conta: 3/3
+    expect(result.somaObtida).toBe(3);
+    expect(result.somaPossivel).toBe(3);
+  });
+
+  it("inclui itens de nao_executado quando todos os Itens Gerais são Não conforme", () => {
+    const result = calcularConceito(
+      { tipoServico: "RamalAgua" },
+      {
+        gerais_q1: "0", // peso 3
+        gerais_q2: "0", // peso 2
+        gerais_q3: "0", // peso 3
+        nao_executado_q3: "1" // peso 3 — agora conta
+      }
+    );
+    // gerais: 0/8 obtido, 8 possível; nao_executado_q3: +3 obtido, +3 possível
+    expect(result.somaObtida).toBe(3);
+    expect(result.somaPossivel).toBe(11);
+  });
+
+  it("contarConformidade também respeita a regra do nao_executado", () => {
+    const semExecucao = contarConformidade(
+      { tipoServico: "RamalAgua" },
+      { gerais_q1: "1", nao_executado_q1: "0", nao_executado_q3: "1" }
+    );
+    // nao_executado ignorado: só gerais_q1 conforme
+    expect(semExecucao).toEqual({ conforme: 1, naoConforme: 0 });
+  });
+});
