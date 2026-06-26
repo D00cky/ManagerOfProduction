@@ -107,6 +107,39 @@ describe("saveTabulacao", () => {
     expect(result.percentual).toBeCloseTo(6 / 8);
   });
 
+  it("preenche tudo com N/A quando os Itens Gerais são N/A (OS não avaliada)", async () => {
+    const repository = repo(os());
+
+    await saveTabulacao(repository, { id: "f1", perfil: "fiscal", poloId: "p1" }, {
+      ordemServicoId: "os1",
+      respostas: { gerais_q1: "X", gerais_q2: "X", gerais_q3: "X", ramal_agua_q1: "1" }
+    });
+
+    expect(repository.upsertTabulacao).toHaveBeenCalledWith(
+      expect.objectContaining({ conceito: "NaoAvaliado", somaObtida: 0, somaPossivel: 0 })
+    );
+    const arg = vi.mocked(repository.upsertTabulacao).mock.calls[0][0];
+    const respostas = arg.respostas as Record<string, string>;
+    // o "1" do fiscal no grupo do serviço é sobrescrito por N/A; não executado idem
+    expect(respostas.ramal_agua_q1).toBe("X");
+    expect(respostas.nao_executado_q1).toBe("X");
+  });
+
+  it("marca 'Serviço não executado' como N/A quando os gerais são Conforme", async () => {
+    const repository = repo(os());
+
+    await saveTabulacao(repository, { id: "f1", perfil: "fiscal", poloId: "p1" }, {
+      ordemServicoId: "os1",
+      respostas: { gerais_q1: "1", gerais_q2: "1", gerais_q3: "1", ramal_agua_q1: "1" }
+    });
+
+    const arg = vi.mocked(repository.upsertTabulacao).mock.calls[0][0];
+    const respostas = arg.respostas as Record<string, string>;
+    expect(respostas.nao_executado_q1).toBe("X");
+    // grupo do serviço preservado (não é forçado quando gerais são Conforme)
+    expect(respostas.ramal_agua_q1).toBe("1");
+  });
+
   it("blocks tabulation for OS outside the requester scope", async () => {
     const repository = repo(os({ fiscalId: "other" }));
 

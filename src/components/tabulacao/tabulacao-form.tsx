@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Perfil, StatusOS, TipoServico } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
@@ -11,9 +11,11 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   chaveCampoTexto,
   chaveObsNaoConforme,
+  GRUPO_GERAIS_ID,
   GRUPO_NAO_EXECUTADO_ID,
   gruposParaOrdem,
   naoExecutadoAplica,
+  preencherAutoNA,
   type ValorResposta
 } from "@/data/grupos-ffr";
 import { calcularConceito, type RespostasFfr } from "@/lib/ffr";
@@ -89,6 +91,24 @@ export function TabulacaoForm({
   const gruposVisiveis = grupos.filter(
     (grupo) => grupo.id !== GRUPO_NAO_EXECUTADO_ID || naoExecutadoAplica(respostas)
   );
+
+  // Chave que muda só quando uma resposta de Item Geral pontuado muda — dispara o
+  // preenchimento automático de N/A sem brigar com edições dos demais itens.
+  const geraisKey = useMemo(() => {
+    const gerais = grupos.find((grupo) => grupo.id === GRUPO_GERAIS_ID);
+    const ids = gerais
+      ? gerais.itens.filter((item) => item.peso > 0 && item.tipo !== "texto").map((item) => item.id)
+      : [];
+    return ids.map((id) => `${id}=${respostas[id] ?? ""}`).join("|");
+  }, [grupos, respostas]);
+
+  // Preenche N/A automaticamente a partir dos Itens Gerais (idempotente): todos
+  // gerais N/A → OS inteira N/A; "Serviço não executado" oculto → itens N/A.
+  useEffect(() => {
+    if (bloqueada) return;
+    setRespostas((current) => preencherAutoNA({ tipoServico, descricaoTss }, current));
+    // geraisKey resume as respostas relevantes; demais deps são estáveis.
+  }, [geraisKey, bloqueada, tipoServico, descricaoTss]);
 
   function setResposta(itemId: string, value: ValorResposta) {
     setSaved(false);

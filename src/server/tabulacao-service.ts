@@ -1,5 +1,6 @@
 import type { EventoLog, OrdemServico, Prisma, Tabulacao } from "@prisma/client";
 import { calcularConceito, type RespostasFfr } from "@/lib/ffr";
+import { preencherAutoNA } from "@/data/grupos-ffr";
 import type { SessionUserScope } from "@/lib/scope";
 import { isOrdemInUserScope } from "@/server/os-service";
 
@@ -89,10 +90,12 @@ export async function saveTabulacao(
     }
   }
 
-  const resultado = calcularConceito(
-    { tipoServico: ordem.tipoServico, descricaoTss: ordem.descricaoTss },
-    input.respostas
-  );
+  // Normaliza o auto-N/A no servidor também (não confia só na UI): Itens Gerais
+  // todos N/A → OS inteira N/A; "Serviço não executado" oculto → seus itens N/A.
+  const ctx = { tipoServico: ordem.tipoServico, descricaoTss: ordem.descricaoTss };
+  const respostas = preencherAutoNA(ctx, input.respostas);
+
+  const resultado = calcularConceito(ctx, respostas);
   const tabulacao = await repository.upsertTabulacao({
     ordemServicoId: ordem.id,
     // Qualidade por fiscal agrupa pela OS, então a tabulação aponta para o fiscal
@@ -100,7 +103,7 @@ export async function saveTabulacao(
     fiscalId: ordem.fiscalId ?? user.id,
     // Preserva quem tabulou originalmente; numa criação, é quem está gravando.
     tabuladoPorId: existente?.tabuladoPorId ?? user.id,
-    respostas: input.respostas as Prisma.InputJsonObject,
+    respostas: respostas as Prisma.InputJsonObject,
     somaObtida: resultado.somaObtida,
     somaPossivel: resultado.somaPossivel,
     percentual: resultado.percentual,

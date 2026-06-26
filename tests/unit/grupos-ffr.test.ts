@@ -3,6 +3,7 @@ import {
   chaveCampoTexto,
   gruposFfr,
   naoExecutadoAplica,
+  preencherAutoNA,
   CAMPO_TEXTO_PREFIX
 } from "@/data/grupos-ffr";
 
@@ -57,5 +58,46 @@ describe("itens com campoTexto (revelar caixa de texto)", () => {
 
   it("chaveCampoTexto usa o prefixo dedicado", () => {
     expect(chaveCampoTexto("x")).toBe(`${CAMPO_TEXTO_PREFIX}x`);
+  });
+});
+
+describe("preencherAutoNA", () => {
+  const ctx = { tipoServico: "RamalAgua" as const };
+
+  it("Itens Gerais todos N/A → OS inteira N/A (grupo do serviço + não executado)", () => {
+    const out = preencherAutoNA(ctx, { gerais_q1: "X", gerais_q2: "X", gerais_q3: "X" });
+    // grupo do serviço
+    expect(out.ramal_agua_q1).toBe("X");
+    expect(out.ramal_agua_q4).toBe("X");
+    // serviço não executado
+    expect(out.nao_executado_q1).toBe("X");
+    expect(out.nao_executado_q3).toBe("X");
+    // os Itens Gerais não são alterados
+    expect(out.gerais_q1).toBe("X");
+  });
+
+  it("Itens Gerais Conforme → não executado (oculto) vira N/A, sem tocar no grupo do serviço", () => {
+    const out = preencherAutoNA(ctx, { gerais_q1: "1", gerais_q2: "1", gerais_q3: "1" });
+    expect(out.nao_executado_q1).toBe("X");
+    expect(out.nao_executado_q3).toBe("X");
+    // grupo do serviço continua a cargo do fiscal (não preenchido)
+    expect(out.ramal_agua_q1).toBeUndefined();
+  });
+
+  it("Itens Gerais todos Não conforme → não executado aparece e NÃO é forçado a N/A", () => {
+    const out = preencherAutoNA(ctx, {
+      gerais_q1: "0",
+      gerais_q2: "0",
+      gerais_q3: "0",
+      nao_executado_q1: "1"
+    });
+    expect(out.nao_executado_q1).toBe("1");
+    // grupo do serviço também não é forçado
+    expect(out.ramal_agua_q1).toBeUndefined();
+  });
+
+  it("é idempotente (mesma referência quando nada muda)", () => {
+    const base = preencherAutoNA(ctx, { gerais_q1: "X", gerais_q2: "X", gerais_q3: "X" });
+    expect(preencherAutoNA(ctx, base)).toBe(base);
   });
 });

@@ -293,3 +293,42 @@ export function gruposParaOrdem(ctx: OrdemFfrContext): FfrGrupo[] {
   const especifico = especificoId ? gruposPorId.get(especificoId) : undefined;
   return especifico ? [...sempre, especifico] : sempre;
 }
+
+/**
+ * Preenche N/A ("X") automaticamente a partir dos Itens Gerais. Idempotente:
+ * retorna a mesma referência quando nada muda.
+ * - Itens Gerais pontuados TODOS N/A → a OS inteira vira N/A: marca todos os
+ *   itens booleanos do grupo do serviço e do "Serviço não executado" como "X".
+ * - Caso contrário, o grupo "Serviço não executado" fica oculto (regra
+ *   `naoExecutadoAplica`) e seus itens são marcados "X" — mesmo quando os gerais
+ *   são Conforme. Os Itens Gerais em si não são alterados (são decisão do fiscal).
+ */
+export function preencherAutoNA(
+  ctx: OrdemFfrContext,
+  respostas: Record<string, ValorResposta>
+): Record<string, ValorResposta> {
+  const grupos = gruposParaOrdem(ctx);
+  const gerais = gruposPorId.get(GRUPO_GERAIS_ID);
+  if (!gerais) return respostas;
+
+  const geraisPontuados = gerais.itens.filter((item) => item.peso > 0 && item.tipo !== "texto");
+  const todosGeraisNA =
+    geraisPontuados.length > 0 && geraisPontuados.every((item) => respostas[item.id] === "X");
+  const mostrarNaoExecutado = naoExecutadoAplica(respostas);
+
+  let alterou = false;
+  const proximo = { ...respostas };
+  for (const grupo of grupos) {
+    if (grupo.id === GRUPO_GERAIS_ID) continue;
+    const ehNaoExecutado = grupo.id === GRUPO_NAO_EXECUTADO_ID;
+    for (const item of grupo.itens) {
+      if (item.tipo === "texto") continue;
+      const forcarNA = todosGeraisNA || (ehNaoExecutado && !mostrarNaoExecutado);
+      if (forcarNA && proximo[item.id] !== "X") {
+        proximo[item.id] = "X";
+        alterou = true;
+      }
+    }
+  }
+  return alterou ? proximo : respostas;
+}
