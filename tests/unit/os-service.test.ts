@@ -33,7 +33,7 @@ function os(overrides: Partial<OrdemServico> = {}): OrdemServico {
     equipe: null,
     dataInicioExecucao: null,
     dataFimExecucao: null,
-    tipoServico: "RedeRamalAgua",
+    tipoServico: "RedeAgua",
     status: "NaFila",
     poloId: "p1",
     fiscalId: "f1",

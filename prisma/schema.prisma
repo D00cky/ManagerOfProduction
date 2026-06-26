@@ -27,13 +27,14 @@ enum StatusOS {
 }
 
 enum TipoServico {
-  RedeRamalAgua
+  RedeAgua
+  RamalAgua
   CavaleteHidrometro
   RedeRamalEsgoto
   Desobstrucao
+  LavagemEee
   ReposicaoPiso
   ReposicaoAsfaltica
-  Outros
 }
 
 enum Conceito {

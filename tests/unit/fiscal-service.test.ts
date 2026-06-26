@@ -82,7 +82,7 @@ describe("getFiscalHome", () => {
 describe("getFiscalDesempenho", () => {
   it("returns today, month and per-tipo completions over the right windows", async () => {
     const porTipo: Array<{ tipoServico: TipoServico; count: number }> = [
-      { tipoServico: "RedeRamalAgua", count: 5 },
+      { tipoServico: "RedeAgua", count: 5 },
       { tipoServico: "Desobstrucao", count: 2 }
     ];
     const repo = repository({

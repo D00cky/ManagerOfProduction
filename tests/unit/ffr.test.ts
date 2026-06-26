@@ -9,7 +9,7 @@ import {
 
 describe("calcularConceito", () => {
   it("sums obtained and possible points only for answers marked as 1 or 0", () => {
-    const result = calcularConceito({ tipoServico: "RedeRamalAgua" }, {
+    const result = calcularConceito({ tipoServico: "RamalAgua" }, {
       gerais_q1: "1", // peso 3 -> obtida + possivel
       gerais_q2: "0", // peso 2 -> possivel
       gerais_q3: "X", // excluido (nao avaliado)
@@ -26,11 +26,11 @@ describe("calcularConceito", () => {
   });
 
   it("ignores Não conforme observation keys stored alongside the answers", () => {
-    const semObs = calcularConceito({ tipoServico: "RedeRamalAgua" }, {
+    const semObs = calcularConceito({ tipoServico: "RamalAgua" }, {
       gerais_q1: "1", // peso 3
       gerais_q2: "0" // peso 2
     });
-    const comObs = calcularConceito({ tipoServico: "RedeRamalAgua" }, {
+    const comObs = calcularConceito({ tipoServico: "RamalAgua" }, {
       gerais_q1: "1",
       gerais_q2: "0",
       [chaveObsNaoConforme("gerais_q2")]: "faltou foto"
@@ -42,7 +42,7 @@ describe("calcularConceito", () => {
   });
 
   it("returns NaoAvaliado when no weighted item is applicable", () => {
-    const result = calcularConceito({ tipoServico: "Outros", descricaoTss: "REDE DE ESGOTO" }, {
+    const result = calcularConceito({ tipoServico: "RedeRamalEsgoto" }, {
       gerais_q4: "sem avaliacao", // texto
       gerais_q1: "X", // nao avaliado
       esgoto_q1: null
@@ -57,14 +57,14 @@ describe("calcularConceito", () => {
 
 describe("contarConformidade / iqesPercentual", () => {
   it("counts conforme/não-conforme items, excluding X, vazio, texto e peso 0", () => {
-    const contagem = contarConformidade({ tipoServico: "RedeRamalAgua" }, {
+    const contagem = contarConformidade({ tipoServico: "RamalAgua" }, {
       gerais_q1: "1", // conforme
       gerais_q2: "0", // não conforme
       gerais_q3: "1", // conforme
       gerais_q4: "texto livre", // item texto (peso 0) -> excluído
       ramal_agua_q1: "X", // não avaliado -> excluído
       ramal_agua_q2: null, // vazio -> excluído
-      ramal_agua_q3: "1" // conforme (grupo específico do tipo RedeRamalAgua)
+      ramal_agua_q3: "1" // conforme (grupo específico do tipo RamalAgua)
     });
 
     expect(contagem).toEqual({ conforme: 3, naoConforme: 1 });
@@ -72,7 +72,7 @@ describe("contarConformidade / iqesPercentual", () => {
   });
 
   it("returns 0 IQES when there are no evaluated items", () => {
-    const contagem = contarConformidade({ tipoServico: "Outros" }, {
+    const contagem = contarConformidade({ tipoServico: "RamalAgua" }, {
       gerais_q1: "X",
       gerais_q4: "informativo"
     });
@@ -83,31 +83,27 @@ describe("contarConformidade / iqesPercentual", () => {
 });
 
 describe("selecionarGrupoEspecificoId / gruposParaOrdem", () => {
-  it("maps the Descrição TSS keyword to the matching group", () => {
-    expect(selecionarGrupoEspecificoId({ tipoServico: "Outros", descricaoTss: "LIGAÇÃO DE ÁGUA S/V" })).toBe("ramal_agua");
-    expect(selecionarGrupoEspecificoId({ tipoServico: "Outros", descricaoTss: "RELIGAÇÃO DE ÁGUA" })).toBe("cavalete_hidrometro");
-    expect(selecionarGrupoEspecificoId({ tipoServico: "Outros", descricaoTss: "REPOSIÇÃO ASFÁLTICA" })).toBe("reposicao_asfaltica");
-    expect(selecionarGrupoEspecificoId({ tipoServico: "Outros", descricaoTss: "DESOBSTRUÇÃO DE RAMAL" })).toBe("desobstrucao");
-    expect(selecionarGrupoEspecificoId({ tipoServico: "Outros", descricaoTss: "REDE DE ESGOTO" })).toBe("esgoto");
-    expect(selecionarGrupoEspecificoId({ tipoServico: "Outros", descricaoTss: "REPARO DE REDE DE ÁGUA" })).toBe("rede_agua");
+  it("maps each service type to its FFR scoring group", () => {
+    expect(selecionarGrupoEspecificoId({ tipoServico: "RedeAgua" })).toBe("rede_agua");
+    expect(selecionarGrupoEspecificoId({ tipoServico: "RamalAgua" })).toBe("ramal_agua");
+    expect(selecionarGrupoEspecificoId({ tipoServico: "CavaleteHidrometro" })).toBe("cavalete_hidrometro");
+    expect(selecionarGrupoEspecificoId({ tipoServico: "RedeRamalEsgoto" })).toBe("esgoto");
+    expect(selecionarGrupoEspecificoId({ tipoServico: "Desobstrucao" })).toBe("desobstrucao");
+    expect(selecionarGrupoEspecificoId({ tipoServico: "LavagemEee" })).toBe("lavagem_eee");
+    expect(selecionarGrupoEspecificoId({ tipoServico: "ReposicaoPiso" })).toBe("reposicao_piso");
+    expect(selecionarGrupoEspecificoId({ tipoServico: "ReposicaoAsfaltica" })).toBe("reposicao_asfaltica");
   });
 
-  it("falls back to the tipoServico when the TSS text is empty/unmatched", () => {
-    expect(selecionarGrupoEspecificoId({ tipoServico: "RedeRamalAgua", descricaoTss: null })).toBe("ramal_agua");
-    expect(selecionarGrupoEspecificoId({ tipoServico: "CavaleteHidrometro", descricaoTss: null })).toBe("cavalete_hidrometro");
-    expect(selecionarGrupoEspecificoId({ tipoServico: "Outros", descricaoTss: "algo sem palavra-chave" })).toBeNull();
+  it("scores LavagemEee with the lavagem_eee group", () => {
+    const ids = gruposParaOrdem({ tipoServico: "LavagemEee" }).map((g) => g.id);
+    expect(ids).toEqual(["gerais", "nao_executado", "lavagem_eee"]);
   });
 
-  it("always returns Itens Gerais + Serviço não executado plus at most one specific group", () => {
-    const ids = gruposParaOrdem({ tipoServico: "Outros", descricaoTss: "REDE DE ESGOTO" }).map((g) => g.id);
+  it("always returns Itens Gerais + Serviço não executado plus exactly one specific group", () => {
+    const ids = gruposParaOrdem({ tipoServico: "RedeRamalEsgoto" }).map((g) => g.id);
     expect(ids).toEqual(["gerais", "nao_executado", "esgoto"]);
-    // The over-broad Outros groups are no longer all shown together.
     expect(ids).not.toContain("desobstrucao");
     expect(ids).not.toContain("reposicao_asfaltica");
-  });
-
-  it("shows only the general groups for Outros without TSS keyword", () => {
-    expect(gruposParaOrdem({ tipoServico: "Outros" }).map((g) => g.id)).toEqual(["gerais", "nao_executado"]);
   });
 });
 

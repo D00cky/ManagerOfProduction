@@ -35,7 +35,7 @@ function breakdownRow(over: Partial<TabulacaoBreakdownRow>): TabulacaoBreakdownR
   return {
     percentual: 0,
     respostas: {},
-    tipoServico: "RedeRamalAgua",
+    tipoServico: "RamalAgua",
     descricaoTss: null,
     regiaoAdministrativa: null,
     poloNome: null,

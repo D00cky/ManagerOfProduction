@@ -31,7 +31,7 @@ function os(overrides: Partial<OrdemExport> = {}): OrdemExport {
     equipe: null,
     dataInicioExecucao: null,
     dataFimExecucao: null,
-    tipoServico: "Outros",
+    tipoServico: "RedeRamalEsgoto",
     status: "Concluida",
     poloId: "p1",
     fiscalId: "f1",
@@ -93,7 +93,7 @@ describe("buildExportDataset", () => {
   it("creates one sheet per service category", async () => {
     const { repository } = repo([
       os({ id: "a", descricaoTss: "REDE DE ESGOTO" }),
-      os({ id: "b", numero: "1002", descricaoTss: "LIGAÇÃO DE ÁGUA" })
+      os({ id: "b", numero: "1002", tipoServico: "RamalAgua", descricaoTss: "LIGAÇÃO DE ÁGUA" })
     ]);
 
     const { sheets } = await buildExportDataset(repository, supervisor, {});

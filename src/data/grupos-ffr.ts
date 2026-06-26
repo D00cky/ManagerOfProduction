@@ -1,5 +1,4 @@
 import type { TipoServico } from "@prisma/client";
-import { normalizeHeader } from "@/lib/importacao";
 
 export type ValorResposta = "1" | "0" | "X" | null | string;
 
@@ -32,8 +31,8 @@ export type FfrGrupo = {
 
 // Formulario FFR v22_04_2026 (Roteiro + Formulario FFR). Itens marcados como
 // "Informativo" no formulario sao campos de texto (peso 0, fora do calculo).
-// Mapeamento de grupos por tipo de servico e best-effort: os grupos de agua
-// casam com o enum; esgoto/desobstrucao/lavagem/reposicao ficam em "Outros".
+// O tipo de servico (derivado do codigo Sabesp, ver categorias-servico.ts) casa
+// 1:1 com o grupo FFR de pontuacao via tipoServicoFallback.
 export const gruposFfr: FfrGrupo[] = [
   {
     id: "gerais",
@@ -60,7 +59,7 @@ export const gruposFfr: FfrGrupo[] = [
   {
     id: "rede_agua",
     nome: "Rede de agua",
-    tipos: ["RedeRamalAgua"],
+    tipos: ["RedeAgua"],
     itens: [
       { id: "rede_agua_q1", texto: "TEM FOTO DA FACHADA DO IMÓVEL?", peso: 3 },
       { id: "rede_agua_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
@@ -85,7 +84,7 @@ export const gruposFfr: FfrGrupo[] = [
   {
     id: "ramal_agua",
     nome: "Ramal de agua",
-    tipos: ["RedeRamalAgua"],
+    tipos: ["RamalAgua"],
     itens: [
       { id: "ramal_agua_q1", texto: "TEM FOTO DA FACHADA DO IMÓVEL?", peso: 3 },
       { id: "ramal_agua_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
@@ -170,7 +169,7 @@ export const gruposFfr: FfrGrupo[] = [
   {
     id: "lavagem_eee",
     nome: "Lavagem de EEE",
-    tipos: ["Desobstrucao"],
+    tipos: ["LavagemEee"],
     itens: [
       { id: "lavagem_eee_q1", texto: "TEM FOTO DA FACHADA?", peso: 3 },
       { id: "lavagem_eee_q2", texto: "TEM FOTO DA EXECUÇÃO DO SERVIÇO?", peso: 3 },
@@ -223,65 +222,28 @@ export function gruposParaTipo(tipoServico: TipoServico) {
   return gruposFfr.filter((grupo) => grupo.tipos === "todos" || grupo.tipos.includes(tipoServico));
 }
 
-// --- Seleção precisa de critérios pela Descrição TSS importada ---------------
-// A Descrição TSS (texto livre vindo da Sabesp) determina o grupo específico de
-// critérios. Itens Gerais + Serviço não executado aparecem sempre; além deles,
-// apenas o grupo que casa com o serviço. O mapeamento por palavra-chave é
-// best-effort sobre o texto normalizado (ver normalizeHeader). Ordem importa:
-// regras mais específicas primeiro (ex.: "religacao" antes de "ligacao", já que
-// "religacao" contém "ligacao").
+// --- Seleção precisa de critérios pela categoria do serviço ------------------
+// O tipo de serviço (determinístico, vindo do código Sabesp) define o grupo de
+// critérios específico via `tipoServicoFallback`, 1:1. Itens Gerais + Serviço não
+// executado aparecem sempre; além deles, apenas o grupo que casa com o tipo.
 
 export type OrdemFfrContext = { tipoServico: TipoServico; descricaoTss?: string | null };
 
 const gruposPorId = new Map(gruposFfr.map((grupo) => [grupo.id, grupo]));
 
-const tssGrupoKeywords: Array<[needle: string, grupoId: string]> = [
-  ["religacao", "cavalete_hidrometro"],
-  ["corte", "cavalete_hidrometro"],
-  ["hidrometro", "cavalete_hidrometro"],
-  ["cavalete", "cavalete_hidrometro"],
-  ["ligacao", "ramal_agua"],
-  ["ramal_de_agua", "ramal_agua"],
-  ["rede_de_agua", "rede_agua"],
-  ["reparo", "rede_agua"],
-  ["vazamento", "rede_agua"],
-  ["asfalt", "reposicao_asfaltica"],
-  ["piso", "reposicao_piso"],
-  ["passeio", "reposicao_piso"],
-  ["calcada", "reposicao_piso"],
-  ["bloquete", "reposicao_piso"],
-  ["paralelep", "reposicao_piso"],
-  ["desobstru", "desobstrucao"],
-  ["lavagem_de_rede", "desobstrucao"],
-  ["lavagem_de_ramal", "desobstrucao"],
-  ["_eee_", "lavagem_eee"],
-  ["elevatoria", "lavagem_eee"],
-  ["esgoto", "esgoto"],
-  ["coletor", "esgoto"],
-  ["_pv_", "esgoto"],
-  ["_pi_", "esgoto"],
-  ["_tl_", "esgoto"]
-];
-
-const tipoServicoFallback: Partial<Record<TipoServico, string>> = {
-  RedeRamalAgua: "ramal_agua", // a keyword TSS distingue rede vs ramal
+const tipoServicoFallback: Record<TipoServico, string> = {
+  RedeAgua: "rede_agua",
+  RamalAgua: "ramal_agua",
   CavaleteHidrometro: "cavalete_hidrometro",
   RedeRamalEsgoto: "esgoto",
-  Desobstrucao: "desobstrucao", // keyword TSS distingue desobstrução vs lavagem EEE
+  Desobstrucao: "desobstrucao",
+  LavagemEee: "lavagem_eee",
   ReposicaoPiso: "reposicao_piso",
   ReposicaoAsfaltica: "reposicao_asfaltica"
-  // Outros: sem grupo específico (apenas Itens Gerais + não executado)
 };
 
-/** Resolve the single specific FFR group id for an OS (TSS keyword → tipo fallback). */
+/** Resolve the single specific FFR group id for an OS: tipo de serviço → grupo. */
 export function selecionarGrupoEspecificoId(ctx: OrdemFfrContext): string | null {
-  const texto = ctx.descricaoTss ? normalizeHeader(ctx.descricaoTss) : "";
-  if (texto) {
-    const padded = `_${texto}_`;
-    for (const [needle, grupoId] of tssGrupoKeywords) {
-      if (padded.includes(needle)) return grupoId;
-    }
-  }
   return tipoServicoFallback[ctx.tipoServico] ?? null;
 }
 

@@ -77,6 +77,8 @@ export type ImportacaoResumo = {
   atualizadas: number;
   ignoradas: number;
   invalidas: number;
+  /** Linhas descartadas por estarem fora da tabela de códigos (sem categoria FFR). */
+  descartadas: number;
   erros: ImportacaoErro[];
 };
 
@@ -96,6 +98,7 @@ export async function confirmarImportacao(
     atualizadas: 0,
     ignoradas: 0,
     invalidas: 0,
+    descartadas: 0,
     erros: []
   };
 
@@ -109,7 +112,13 @@ export async function confirmarImportacao(
   // not exist yet — once, for all distinct missing values.
   const missingPolos = unique(
     rows
-      .filter((row) => validateRow(row).length === 0 && row.polo && !poloMap.has(poloKey(row.polo)))
+      .filter(
+        (row) =>
+          !row.foraDeEscopo &&
+          validateRow(row).length === 0 &&
+          row.polo &&
+          !poloMap.has(poloKey(row.polo))
+      )
       .map((row) => row.polo as string)
   );
   if (missingPolos.length > 0) {
@@ -137,6 +146,14 @@ export async function confirmarImportacao(
 
   for (const [index, row] of rows.entries()) {
     const linha = index + 1;
+
+    // Serviços fora da tabela de códigos não têm categoria FFR: descartar (não importar).
+    if (row.foraDeEscopo || row.tipoServico === null) {
+      resumo.descartadas += 1;
+      continue;
+    }
+    const tipoServico = row.tipoServico;
+
     const errors = validateRow(row);
     if (errors.length > 0) {
       resumo.invalidas += 1;
@@ -167,7 +184,7 @@ export async function confirmarImportacao(
         cidade: row.cidade ?? null,
         // Região is owned by the polo (denormalized onto the OS for scope/dashboard).
         regiaoAdministrativa: polo.regiao ?? row.regiaoAdministrativa ?? null,
-        tipoServico: row.tipoServico,
+        tipoServico,
         status: "NaFila",
         poloId: polo.id,
         fiscalId: null,
@@ -258,13 +275,14 @@ export async function confirmarImportacao(
 
   await repository.log({
     evento: "importacao",
-    descricao: `Importacao Excel concluida: ${resumo.criadas} criadas, ${resumo.atualizadas} atualizadas, ${resumo.ignoradas} ignoradas, ${resumo.invalidas} invalidas`,
+    descricao: `Importacao Excel concluida: ${resumo.criadas} criadas, ${resumo.atualizadas} atualizadas, ${resumo.ignoradas} ignoradas, ${resumo.invalidas} invalidas, ${resumo.descartadas} descartadas`,
     userId: user.id,
     metadata: {
       criadas: resumo.criadas,
       atualizadas: resumo.atualizadas,
       ignoradas: resumo.ignoradas,
       invalidas: resumo.invalidas,
+      descartadas: resumo.descartadas,
       total: resumo.total
     }
   });

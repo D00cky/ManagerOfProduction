@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectMapping, normalizeHeader, normalizeImportRow, normalizeTipoServico } from "@/lib/importacao";
+import { detectMapping, normalizeHeader, normalizeImportRow } from "@/lib/importacao";
 
 describe("normalizeHeader", () => {
   it("normalizes accents, casing, and separators", () => {
@@ -10,11 +10,11 @@ describe("normalizeHeader", () => {
 
 describe("detectMapping", () => {
   it("detects import columns from known aliases", () => {
-    const mapping = detectMapping(["Número OS", "Endereço Completo", "Serviço", "Matrícula", "Polo"]);
+    const mapping = detectMapping(["Número OS", "Endereço Completo", "Código TSS", "Matrícula", "Polo"]);
 
     expect(mapping.numero).toBe("Número OS");
     expect(mapping.enderecoCompleto).toBe("Endereço Completo");
-    expect(mapping.tipoServico).toBe("Serviço");
+    expect(mapping.codigoTss).toBe("Código TSS");
     expect(mapping.fiscal).toBe("Matrícula");
     expect(mapping.polo).toBe("Polo");
   });
@@ -23,26 +23,26 @@ describe("detectMapping", () => {
 describe("normalizeImportRow", () => {
   it("validates required numero_os and endereco_completo fields", () => {
     const result = normalizeImportRow(
-      { OS: "", Endereco: "", Servico: "vistoria" },
-      { numero: "OS", enderecoCompleto: "Endereco", tipoServico: "Servico" }
+      { OS: "", Endereco: "", Codigo: "2540" },
+      { numero: "OS", enderecoCompleto: "Endereco", codigoTss: "Codigo" }
     );
 
     expect(result.errors).toEqual(["numero_os obrigatorio", "endereco_completo obrigatorio"]);
   });
 
-  it("normalizes a valid row into domain fields", () => {
+  it("categoriza a OS pelo código TSS (não pela descrição)", () => {
     const result = normalizeImportRow(
       {
         OS: "123",
         Endereco: "Rua A, 10",
-        Servico: "Troca Hidrômetro",
+        Codigo: "2010",
         Fiscal: "1002",
         Polo: "Norte"
       },
       {
         numero: "OS",
         enderecoCompleto: "Endereco",
-        tipoServico: "Servico",
+        codigoTss: "Codigo",
         fiscal: "Fiscal",
         polo: "Polo"
       }
@@ -53,26 +53,31 @@ describe("normalizeImportRow", () => {
       numero: "123",
       enderecoCompleto: "Rua A, 10",
       tipoServico: "CavaleteHidrometro",
+      foraDeEscopo: false,
       fiscal: "1002",
       polo: "Norte"
     });
   });
-});
 
-describe("normalizeTipoServico", () => {
-  it("falls back to Outros for unknown service types", () => {
-    expect(normalizeTipoServico("servico especial")).toBe("Outros");
+  it("cai para o código TSE quando o TSS está ausente", () => {
+    const result = normalizeImportRow(
+      { OS: "123", Endereco: "Rua A, 10", Tse: "5810" },
+      { numero: "OS", enderecoCompleto: "Endereco", codigoTse: "Tse" }
+    );
+
+    expect(result.row.tipoServico).toBe("Desobstrucao");
+    expect(result.row.foraDeEscopo).toBe(false);
   });
 
-  it("matches Sabesp service descriptions by keyword (FFR types)", () => {
-    expect(normalizeTipoServico("LIGAÇÃO DE ÁGUA S/V")).toBe("RedeRamalAgua");
-    expect(normalizeTipoServico("REPARO DE REDE DE ÁGUA")).toBe("RedeRamalAgua");
-    expect(normalizeTipoServico("RELIGAÇÃO DE ÁGUA")).toBe("CavaleteHidrometro");
-    expect(normalizeTipoServico("CORTE NO CAVALETE")).toBe("CavaleteHidrometro");
-    expect(normalizeTipoServico("REDE DE ESGOTO")).toBe("RedeRamalEsgoto");
-    expect(normalizeTipoServico("DESOBSTRUÇÃO DE RAMAL")).toBe("Desobstrucao");
-    expect(normalizeTipoServico("REPOSIÇÃO ASFÁLTICA")).toBe("ReposicaoAsfaltica");
-    expect(normalizeTipoServico("REPOSIÇÃO DE PISO / PASSEIO")).toBe("ReposicaoPiso");
+  it("marca como fora de escopo quando o código não está na tabela", () => {
+    const result = normalizeImportRow(
+      { OS: "123", Endereco: "Rua A, 10", Codigo: "9999" },
+      { numero: "OS", enderecoCompleto: "Endereco", codigoTss: "Codigo" }
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.row.tipoServico).toBeNull();
+    expect(result.row.foraDeEscopo).toBe(true);
   });
 });
 
@@ -96,7 +101,7 @@ describe("Sabesp execution export", () => {
     "Número": "82",
     Complemento: "C/1",
     Bairro: "VILA KAMAIT",
-    "Código Resultado": "254000",
+    "Código Resultado": "2540",
     Resultado: "LIGAÇÃO DE ÁGUA S/V",
     "Data Início Execução": "01/06/2026 12:05",
     "Data Fim Execução": "01/06/2026 15:00",
@@ -105,18 +110,14 @@ describe("Sabesp execution export", () => {
     Equipe: "LEANDRO ESTEVAM"
   };
 
-  it("derives the service type from Descrição TSS instead of Família", () => {
+  it("categoriza pelo Código TSS (independente da descrição da Família)", () => {
     const mapping = detectMapping(headers);
     const { row } = normalizeImportRow(
-      {
-        ...sampleRow,
-        "Descrição TSS": "CORTE NO CAVALETE",
-        Família: "LIGAÇÃO DE ÁGUA"
-      },
+      { ...sampleRow, "Código TSS": "2010" },
       mapping
     );
 
-    expect(mapping.tipoServico).toBe("Descrição TSS");
+    expect(mapping.codigoTss).toBe("Código TSS");
     expect(row.tipoServico).toBe("CavaleteHidrometro");
   });
 
@@ -133,7 +134,8 @@ describe("Sabesp execution export", () => {
       bairro: "VILA KAMAIT",
       cidade: "MIRACATU",
       regiaoAdministrativa: "Registro",
-      tipoServico: "RedeRamalAgua",
+      tipoServico: "RamalAgua",
+      foraDeEscopo: false,
       // No Polo column — keyed off the Unidade Executante.
       polo: "ORMR - DIV MANUT SERV OPE REGISTRO",
       unidadeExecutante: "ORMR - DIV MANUT SERV OPE REGISTRO",
@@ -144,7 +146,7 @@ describe("Sabesp execution export", () => {
       descricaoContrato: "SABESP",
       codigoTss: "2540",
       descricaoTss: "LIGAÇÃO DE ÁGUA S/V",
-      codigoTse: "254000",
+      codigoTse: "2540",
       descricaoTse: "LIGAÇÃO DE ÁGUA S/V",
       pde: "2001000975"
     });

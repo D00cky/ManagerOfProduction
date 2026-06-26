@@ -7,8 +7,9 @@ vi.mock("@/server/session", () => ({ getCurrentUser }));
 function previewRequest() {
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.json_to_sheet([
-    { "Número OS": "1001", "Endereço Completo": "Rua A", Serviço: "Outros", Polo: "Norte" },
-    { "Número OS": "", "Endereço Completo": "", Serviço: "Outros", Polo: "Norte" }
+    { "Número OS": "1001", "Endereço Completo": "Rua A", "Código TSS": "2540", Polo: "Norte" },
+    { "Número OS": "", "Endereço Completo": "", "Código TSS": "2540", Polo: "Norte" },
+    { "Número OS": "1003", "Endereço Completo": "Rua C", "Código TSS": "9999", Polo: "Norte" }
   ]);
   XLSX.utils.book_append_sheet(workbook, worksheet, "OS");
   const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
@@ -53,12 +54,13 @@ describe("POST /api/importacao/preview", () => {
       mapping: {
         numero: "Número OS",
         enderecoCompleto: "Endereço Completo",
-        tipoServico: "Serviço",
+        codigoTss: "Código TSS",
         polo: "Polo"
       },
-      total: 2,
+      total: 3,
       validas: 1,
       invalidas: 1,
+      descartadas: 1,
       erros: [{ linha: 2, erros: ["numero_os obrigatorio", "endereco_completo obrigatorio"] }]
     });
   });

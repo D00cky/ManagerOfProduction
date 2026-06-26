@@ -32,13 +32,14 @@ export type FiscalOption = { id: string; name: string };
 const FILTROS_STORAGE_KEY = "fila:filtros";
 
 const TIPOS: TipoServico[] = [
-  "RedeRamalAgua",
+  "RedeAgua",
+  "RamalAgua",
   "CavaleteHidrometro",
   "RedeRamalEsgoto",
   "Desobstrucao",
+  "LavagemEee",
   "ReposicaoPiso",
-  "ReposicaoAsfaltica",
-  "Outros"
+  "ReposicaoAsfaltica"
 ];
 const STATUS: StatusOS[] = ["NaFila", "EmExecucao", "Pendente", "Concluida", "Cancelada"];
 

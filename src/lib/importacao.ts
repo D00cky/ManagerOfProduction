@@ -1,6 +1,7 @@
 import type { TipoServico } from "@prisma/client";
 import { parseDate } from "@/lib/utils";
 import { resolveRegiao } from "@/data/regioes-sp";
+import { categoriaPorCodigo } from "@/data/categorias-servico";
 
 export type ImportColumn =
   | "numero"
@@ -38,7 +39,11 @@ export type NormalizedImportRow = {
   bairro?: string;
   cidade?: string;
   regiaoAdministrativa?: string;
-  tipoServico: TipoServico;
+  // Categoria FFR derivada do código do serviço (TSS/TSE). `null` quando o código
+  // não está na tabela fixa — a linha está fora de escopo e não deve ser importada.
+  tipoServico: TipoServico | null;
+  // `true` quando o serviço não consta na tabela de códigos (descartar na importação).
+  foraDeEscopo: boolean;
   polo?: string;
   fiscal?: string;
   unidadeExecutante?: string;
@@ -81,42 +86,6 @@ export const aliases: Record<ImportColumn, string[]> = {
   observacao: ["observacao", "obs", "notas_de_acatamento"]
 };
 
-// Classificação canônica do Tipo de Serviço a partir da Descrição TSS, alinhada aos
-// 6 tipos do formulário FFR (+ "Outros"). Mantida consistente com a tabela de grupos
-// em grupos-ffr.ts (tssGrupoKeywords): tipo e grupo específico concordam.
-const tipoServicoMap: Record<string, TipoServico> = {
-  rederamaldeagua: "RedeRamalAgua",
-  cavaletehidrometro: "CavaleteHidrometro",
-  rederamaldeesgoto: "RedeRamalEsgoto",
-  desobstrucao: "Desobstrucao",
-  reposicaopiso: "ReposicaoPiso",
-  reposicaoasfaltica: "ReposicaoAsfaltica",
-  outros: "Outros"
-};
-
-// Substring fallback for Sabesp service descriptions like "LIGAÇÃO DE ÁGUA S/V".
-// Order matters: more specific prefixes (religacao) before broader ones (ligacao).
-const tipoServicoKeywords: Array<[string, TipoServico]> = [
-  ["religacao", "CavaleteHidrometro"],
-  ["corte", "CavaleteHidrometro"],
-  ["hidrometro", "CavaleteHidrometro"],
-  ["cavalete", "CavaleteHidrometro"],
-  ["esgoto", "RedeRamalEsgoto"],
-  ["coletor", "RedeRamalEsgoto"],
-  ["desobstru", "Desobstrucao"],
-  ["lavagem", "Desobstrucao"],
-  ["asfalt", "ReposicaoAsfaltica"],
-  ["piso", "ReposicaoPiso"],
-  ["passeio", "ReposicaoPiso"],
-  ["calcada", "ReposicaoPiso"],
-  ["bloquete", "ReposicaoPiso"],
-  ["paralelep", "ReposicaoPiso"],
-  ["ligacao", "RedeRamalAgua"],
-  ["ramal", "RedeRamalAgua"],
-  ["reparo", "RedeRamalAgua"],
-  ["vazamento", "RedeRamalAgua"]
-];
-
 export function normalizeHeader(value: string) {
   return value
     .normalize("NFD")
@@ -141,16 +110,6 @@ export function detectMapping(headers: string[]): ImportMapping {
   return mapping;
 }
 
-export function normalizeTipoServico(value: unknown): TipoServico {
-  const key = normalizeHeader(String(value || "outros")).replace(/_/g, "");
-  const exact = tipoServicoMap[key];
-  if (exact) return exact;
-  for (const [needle, tipo] of tipoServicoKeywords) {
-    if (key.includes(needle)) return tipo;
-  }
-  return "Outros";
-}
-
 export function normalizeImportRow(row: RawImportRow, mapping: ImportMapping) {
   const get = (column: ImportColumn) => {
     const header = mapping[column];
@@ -158,6 +117,10 @@ export function normalizeImportRow(row: RawImportRow, mapping: ImportMapping) {
   };
   const cidade = optionalString(get("cidade"));
   const unidadeExecutante = optionalString(get("unidadeExecutante"));
+  const codigoTss = optionalString(get("codigoTss"));
+  const codigoTse = optionalString(get("codigoTse"));
+  // Categoria determinística pela tabela fixa de códigos; `null` = fora de escopo.
+  const tipoServico = categoriaPorCodigo(codigoTss, codigoTse);
   const normalized: NormalizedImportRow = {
     numero: String(get("numero") ?? "").trim(),
     enderecoCompleto: String(get("enderecoCompleto") ?? "").trim(),
@@ -166,16 +129,17 @@ export function normalizeImportRow(row: RawImportRow, mapping: ImportMapping) {
     bairro: optionalString(get("bairro")),
     cidade,
     regiaoAdministrativa: resolveRegiao(cidade) ?? undefined,
-    tipoServico: normalizeTipoServico(get("tipoServico")),
+    tipoServico,
+    foraDeEscopo: tipoServico === null,
     // No explicit Polo column in the Sabesp export — key the polo off the unit.
     polo: optionalString(get("polo")) ?? unidadeExecutante,
     fiscal: optionalString(get("fiscal")),
     unidadeExecutante,
     codigoContrato: optionalString(get("codigoContrato")),
     descricaoContrato: optionalString(get("descricaoContrato")),
-    codigoTss: optionalString(get("codigoTss")),
+    codigoTss,
     descricaoTss: optionalString(get("descricaoTss")),
-    codigoTse: optionalString(get("codigoTse")),
+    codigoTse,
     descricaoTse: optionalString(get("descricaoTse")),
     pde: optionalString(get("pde")),
     equipe: optionalString(get("equipe")),
