@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { OsSearch } from "@/components/layout/os-search";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { perfilLabel } from "@/lib/perfil";
 import { cn } from "@/lib/utils";
@@ -26,13 +25,9 @@ export function Sidebar({
 
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4">
-      <div className="px-2 pb-4">
+      <div className="px-2 pb-6">
         <p className="text-sm font-semibold">ManagerOfProduction</p>
         <p className="text-xs text-[hsl(var(--muted-foreground))]">FFR</p>
-      </div>
-
-      <div className="px-1 pb-4">
-        <OsSearch />
       </div>
 
       <nav className="flex flex-1 flex-col gap-1">

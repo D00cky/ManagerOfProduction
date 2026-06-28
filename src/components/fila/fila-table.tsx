@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Search } from "lucide-react";
 import type { StatusOS, TipoServico } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -217,6 +218,30 @@ export function FilaTable({
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
       <Card className="flex flex-wrap items-end gap-3 p-4">
+        <form
+          className="flex flex-col gap-1 text-xs uppercase text-[hsl(var(--muted-foreground))]"
+          role="search"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const valor = String(new FormData(event.currentTarget).get("busca") ?? "").trim();
+            navegar({ busca: valor });
+          }}
+        >
+          Buscar OS
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
+            <Input
+              key={filtros.busca}
+              name="busca"
+              type="search"
+              defaultValue={filtros.busca}
+              placeholder="Nº, endereço, bairro, cidade, unidade"
+              aria-label="Buscar OS"
+              className="h-9 w-72 pl-8 normal-case"
+            />
+          </div>
+        </form>
+
         <label className="flex flex-col gap-1 text-xs uppercase text-[hsl(var(--muted-foreground))]">
           Regiao
           <Select

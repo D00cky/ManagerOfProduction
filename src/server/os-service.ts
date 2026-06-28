@@ -101,7 +101,10 @@ export function buildListWhere(
   if (filters.busca) {
     where.OR = [
       { numero: { contains: filters.busca, mode: "insensitive" } },
-      { enderecoCompleto: { contains: filters.busca, mode: "insensitive" } }
+      { enderecoCompleto: { contains: filters.busca, mode: "insensitive" } },
+      { bairro: { contains: filters.busca, mode: "insensitive" } },
+      { cidade: { contains: filters.busca, mode: "insensitive" } },
+      { unidadeExecutante: { contains: filters.busca, mode: "insensitive" } }
     ];
   }
   if (filters.fimDe || filters.fimAte) {

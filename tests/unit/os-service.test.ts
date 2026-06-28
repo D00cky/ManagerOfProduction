@@ -166,7 +166,10 @@ describe("buildListWhere", () => {
       status: "NaFila",
       OR: [
         { numero: { contains: "1001", mode: "insensitive" } },
-        { enderecoCompleto: { contains: "1001", mode: "insensitive" } }
+        { enderecoCompleto: { contains: "1001", mode: "insensitive" } },
+        { bairro: { contains: "1001", mode: "insensitive" } },
+        { cidade: { contains: "1001", mode: "insensitive" } },
+        { unidadeExecutante: { contains: "1001", mode: "insensitive" } }
       ]
     });
   });
