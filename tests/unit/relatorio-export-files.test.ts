@@ -18,7 +18,6 @@ function dataset(): RelatorioExportDataset {
       { nome: "Não Atende", quantidade: 2, percentual: 0.25 },
       { nome: "Não Avaliada", quantidade: 1, percentual: 0.125 }
     ],
-    distribuicaoConceito: { A: 3, B: 2, C: 1, D: 1, NaoAvaliado: 1 },
     principaisNaoConformidades: [
       { itemId: "desobstrucao_q1", criterio: "TEM FOTO DA FACHADA?", grupo: "Desobstrucao", quantidade: 4, percentualSobreInspecionadas: 0.5 },
       { itemId: "gerais_q3", criterio: "AS COORDENADAS CONDIZEM?", grupo: "Itens Gerais", quantidade: 2, percentualSobreInspecionadas: 0.25 }

@@ -1,4 +1,4 @@
-import type { Conceito, TipoServico } from "@prisma/client";
+import type { TipoServico } from "@prisma/client";
 import type { RelatorioExportFiltros, RelatorioPeriodoTipo } from "@/server/relatorio-export-service";
 
 /**
@@ -16,15 +16,9 @@ export type RawRelatorioExportFiltros = {
   municipio?: string | null;
   tipoServico?: string | null;
   fiscalId?: string | null;
-  contrato?: string | null;
-  codigoContrato?: string | null;
-  unidadeExecutante?: string | null;
-  conceito?: string | null;
-  criterio?: string | null;
 };
 
 const PERIODOS: RelatorioPeriodoTipo[] = ["semanal", "mensal", "personalizado"];
-const CONCEITOS: Conceito[] = ["A", "B", "C", "D", "NaoAvaliado"];
 
 function clean(value: string | null | undefined): string | undefined {
   const trimmed = value?.trim();
@@ -83,21 +77,6 @@ export function parseRelatorioExportFiltros(raw: RawRelatorioExportFiltros): Rel
   const fiscalId = clean(raw.fiscalId);
   if (fiscalId) filtros.fiscalId = fiscalId;
 
-  const contrato = clean(raw.contrato);
-  if (contrato) filtros.contrato = contrato;
-
-  const codigoContrato = clean(raw.codigoContrato);
-  if (codigoContrato) filtros.codigoContrato = codigoContrato;
-
-  const unidadeExecutante = clean(raw.unidadeExecutante);
-  if (unidadeExecutante) filtros.unidadeExecutante = unidadeExecutante;
-
-  const conceito = clean(raw.conceito);
-  if (conceito && (CONCEITOS as string[]).includes(conceito)) filtros.conceito = conceito as Conceito;
-
-  const criterio = clean(raw.criterio);
-  if (criterio) filtros.criterio = criterio;
-
   return filtros;
 }
 
@@ -113,11 +92,6 @@ export function filtrosFromSearchParams(params: URLSearchParams): RelatorioExpor
     polo: params.get("polo"),
     municipio: params.get("municipio"),
     tipoServico: params.get("tipoServico"),
-    fiscalId: params.get("fiscalId"),
-    contrato: params.get("contrato"),
-    codigoContrato: params.get("codigoContrato"),
-    unidadeExecutante: params.get("unidadeExecutante"),
-    conceito: params.get("conceito"),
-    criterio: params.get("criterio")
+    fiscalId: params.get("fiscalId")
   });
 }

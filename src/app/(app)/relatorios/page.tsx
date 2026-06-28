@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GeoFilter } from "@/components/dashboard/geo-filter";
 import { MesSelect } from "@/components/dashboard/mes-select";
 import { RelatorioExportCard } from "@/components/relatorios/relatorio-export-card";
-import { RelatorioContratadaView } from "@/components/relatorios/relatorio-contratada-view";
 import { Label } from "@/components/ui/label";
 import { ESTADO } from "@/data/regioes-sp";
 import { defaultRedirect, hasPermission } from "@/lib/permissions";
@@ -75,8 +74,6 @@ export default async function RelatoriosPage({
       />
 
       <RelatorioExportCard />
-
-      <RelatorioContratadaView />
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1.5">
