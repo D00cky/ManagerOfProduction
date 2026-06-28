@@ -79,6 +79,7 @@ async function main() {
         cidade: ordem.cidade,
         // Região is denormalized from the polo so monitor (whole-região) scope sees it.
         regiaoAdministrativa: polo.regiao,
+        codigoTss: ordem.codigoTss,
         tipoServico: ordem.tipoServico,
         status: ordem.status,
         poloId: polo.id,

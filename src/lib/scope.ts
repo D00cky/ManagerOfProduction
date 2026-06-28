@@ -29,18 +29,34 @@ export function allowedPoloIds(user: SessionUserScope) {
 export function buildOsScope(user: SessionUserScope) {
   if (user.perfil === "supervisor") return {};
   if (user.perfil === "fiscal") return { fiscalId: user.id };
-  // Monitors oversee a whole administrative região. OS rows carry their polo's
-  // região in `regiaoAdministrativa` (denormalized on import), so scoping by that
-  // single indexed column is both correct and cheap. An empty `in` list (monitor
-  // without a região) matches nothing, mirroring the old empty-polo-list behaviour.
-  return { regiaoAdministrativa: { in: user.regiao ? [user.regiao] : [] } };
+  // Monitors see only the polos explicitly assigned to them (via UserPoloAccess,
+  // surfaced as `polosPermitidos`), falling back to their own `poloId`. Scoping by
+  // `poloId` keeps two monitors in the same região isolated to their own polos. An
+  // empty list matches nothing (fail-closed) — a monitor with no polo sees nothing.
+  const polos = allowedPoloIds(user) ?? [];
+  return { poloId: { in: polos } };
+}
+
+/**
+ * Apply a polo filter without letting it escape a `poloId`-scoped `where`. If the
+ * role scope already restricts `poloId` to a set, a polo outside that set collapses
+ * to "nothing" (`{ in: [] }`); otherwise (supervisor) the polo is used as-is.
+ */
+export function narrowPoloId(
+  scopePoloId: Prisma.OrdemServicoWhereInput["poloId"],
+  polo: string
+): Prisma.OrdemServicoWhereInput["poloId"] {
+  const allowed = (scopePoloId as { in?: string[] } | undefined)?.in;
+  if (Array.isArray(allowed) && !allowed.includes(polo)) return { in: [] };
+  return polo;
 }
 
 /**
  * Combine the role access scope with a geographic filter so the scope always wins.
- * A monitor is restricted to a single região (`{ regiaoAdministrativa: { in } }`); a região
- * filter may only narrow *within* that scope — never escape it — and an out-of-scope região
- * collapses to "nothing". Polo/município are additional AND narrowings within the scope.
+ * The role scope (a monitor's `{ poloId: { in } }`, or `{}` for a supervisor) is kept
+ * and the geo filters are ANDed on top: a polo filter is narrowed against the scope
+ * (never escapes it), and região/município are plain AND narrowings — for a monitor
+ * they intersect with the polo scope, so they can only ever shrink the visible set.
  */
 export function mergeScopeAndGeo(
   scope: Prisma.OrdemServicoWhereInput,
@@ -48,11 +64,7 @@ export function mergeScopeAndGeo(
 ): Prisma.OrdemServicoWhereInput {
   const where: Prisma.OrdemServicoWhereInput = { ...scope };
   if (filtros.municipio) where.cidade = filtros.municipio;
-  if (filtros.polo) where.poloId = filtros.polo;
-  if (filtros.regiao) {
-    const scoped = scope.regiaoAdministrativa as { in?: string[] } | undefined;
-    const allowed = !scoped || (Array.isArray(scoped.in) ? scoped.in.includes(filtros.regiao) : true);
-    where.regiaoAdministrativa = allowed ? filtros.regiao : { in: [] };
-  }
+  if (filtros.polo) where.poloId = narrowPoloId(scope.poloId, filtros.polo);
+  if (filtros.regiao) where.regiaoAdministrativa = filtros.regiao;
   return where;
 }

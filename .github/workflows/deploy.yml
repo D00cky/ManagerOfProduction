@@ -1,0 +1,33 @@
+name: Deploy to VPS
+
+# Ao dar push em main, conecta na VPS via SSH e reconstrói o container do app.
+# Também pode ser disparado manualmente em Actions > Deploy to VPS > Run workflow.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.VPS_PROJECT_PATH }}"
+            git fetch --all --prune
+            git checkout main
+            git reset --hard origin/main
+            export COMPOSE_PROJECT_NAME=managerofproduction
+            docker compose -f docker-compose.traefik.yml --env-file .env.vps up -d --build app
+            docker image prune -f

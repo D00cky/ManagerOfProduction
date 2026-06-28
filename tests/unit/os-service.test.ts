@@ -33,7 +33,7 @@ function os(overrides: Partial<OrdemServico> = {}): OrdemServico {
     equipe: null,
     dataInicioExecucao: null,
     dataFimExecucao: null,
-    tipoServico: "RedeRamalAgua",
+    tipoServico: "RedeAgua",
     status: "NaFila",
     poloId: "p1",
     fiscalId: "f1",
@@ -111,17 +111,17 @@ describe("listOrdens", () => {
     expect(repository.claimNextAvailable).not.toHaveBeenCalled();
   });
 
-  it("scopes monitor users to their whole região", async () => {
+  it("scopes monitor users to their assigned polos", async () => {
     const repository = repo(os());
 
     await listOrdens(repository, {
       id: "m1",
       perfil: "monitor",
-      regiao: "Campinas"
+      polosPermitidos: ["p1"]
     });
 
     expect(repository.findPage).toHaveBeenCalledWith(
-      { regiaoAdministrativa: { in: ["Campinas"] } },
+      { poloId: { in: ["p1"] } },
       { skip: 0, take: 20 }
     );
     expect(repository.claimNextAvailable).not.toHaveBeenCalled();
@@ -166,7 +166,12 @@ describe("buildListWhere", () => {
       status: "NaFila",
       OR: [
         { numero: { contains: "1001", mode: "insensitive" } },
-        { enderecoCompleto: { contains: "1001", mode: "insensitive" } }
+        { enderecoCompleto: { contains: "1001", mode: "insensitive" } },
+        { bairro: { contains: "1001", mode: "insensitive" } },
+        { cidade: { contains: "1001", mode: "insensitive" } },
+        { unidadeExecutante: { contains: "1001", mode: "insensitive" } },
+        { codigoContrato: { contains: "1001", mode: "insensitive" } },
+        { descricaoContrato: { contains: "1001", mode: "insensitive" } }
       ]
     });
   });
@@ -250,16 +255,12 @@ describe("updateOrdemStatus", () => {
     expect(repository.updateStatus).toHaveBeenCalledWith("os1", expect.objectContaining({ status: "Cancelada" }));
   });
 
-  it("lets a monitor change status of a região-matching OS in a different polo", async () => {
-    // OS importada: polo auto-criado diferente, mas mesma região do monitor.
-    const repository = repo(
-      os({ status: "EmExecucao", poloId: "polo-importado", regiaoAdministrativa: "Campinas" }),
-      false
-    );
+  it("lets a monitor change status of an OS in one of their polos", async () => {
+    const repository = repo(os({ status: "EmExecucao", poloId: "p1" }), false);
 
     const updated = await updateOrdemStatus(
       repository,
-      { id: "m1", perfil: "monitor", poloId: "p1", regiao: "Campinas" },
+      { id: "m1", perfil: "monitor", polosPermitidos: ["p1"] },
       "os1",
       "Pendente"
     );
@@ -267,13 +268,13 @@ describe("updateOrdemStatus", () => {
     expect(updated.status).toBe("Pendente");
   });
 
-  it("blocks a monitor from a status change on an OS in another região", async () => {
-    const repository = repo(os({ status: "NaFila", regiaoAdministrativa: "Santos" }), false);
+  it("blocks a monitor from a status change on an OS in another polo", async () => {
+    const repository = repo(os({ status: "NaFila", poloId: "polo-x" }), false);
 
     await expect(
       updateOrdemStatus(
         repository,
-        { id: "m1", perfil: "monitor", poloId: "p1", regiao: "Campinas" },
+        { id: "m1", perfil: "monitor", polosPermitidos: ["p1"] },
         "os1",
         "EmExecucao"
       )
@@ -363,11 +364,10 @@ describe("updateOrdemStatus", () => {
 });
 
 describe("atribuirOrdem", () => {
-  // Monitor de Campinas e OS na mesma região (o polo pode ser qualquer um, ex.: polo
-  // auto-criado de uma importação) — o escopo do monitor é por região, não por polo.
-  const monitorCampinas = { id: "m1", perfil: "monitor" as const, poloId: "p1", regiao: "Campinas" };
+  // Monitor cujo escopo é o polo "p1"; só enxerga/atribui OS e responsáveis desse polo.
+  const monitorCampinas = { id: "m1", perfil: "monitor" as const, polosPermitidos: ["p1"] };
   const osCampinas = (overrides: Partial<OrdemServico> = {}) =>
-    os({ regiaoAdministrativa: "Campinas", fiscalId: null, ...overrides });
+    os({ poloId: "p1", fiscalId: null, ...overrides });
 
   it("denies users without the os:write capability", async () => {
     const repository = repo(os());
@@ -378,16 +378,17 @@ describe("atribuirOrdem", () => {
     expect(repository.updateFiscal).not.toHaveBeenCalled();
   });
 
-  it("blocks assigning an OS in another região", async () => {
-    const repository = repo(osCampinas({ regiaoAdministrativa: "Santos" }));
+  it("blocks assigning an OS in another polo", async () => {
+    const repository = repo(osCampinas({ poloId: "polo-x" }));
 
     await expect(atribuirOrdem(repository, monitorCampinas, "os1", "f2")).rejects.toThrow(
       "OS fora do escopo do usuario"
     );
   });
 
-  it("blocks a monitor when the OS has no regiaoAdministrativa", async () => {
-    const repository = repo(osCampinas({ regiaoAdministrativa: null }));
+  it("blocks a monitor from an OS in another polo even when they share a região", async () => {
+    // Regression: the gate is the polo, not the região — same região must not grant access.
+    const repository = repo(osCampinas({ poloId: "polo-x", regiaoAdministrativa: "Campinas" }));
 
     await expect(atribuirOrdem(repository, monitorCampinas, "os1", "f2")).rejects.toThrow(
       "OS fora do escopo do usuario"
@@ -400,8 +401,8 @@ describe("atribuirOrdem", () => {
     await expect(atribuirOrdem(repository, monitorCampinas, "os1", "s9")).rejects.toThrow("Fiscal invalido");
   });
 
-  it("allows a monitor to assign an OS to another monitor in the same região", async () => {
-    const repository = repo(osCampinas(), false, { id: "m2", perfil: "monitor", poloId: null, regiao: "Campinas" });
+  it("allows a monitor to assign an OS to another monitor in the same polo", async () => {
+    const repository = repo(osCampinas(), false, { id: "m2", perfil: "monitor", poloId: "p1", regiao: "Campinas" });
 
     const updated = await atribuirOrdem(repository, monitorCampinas, "os1", "m2");
 
@@ -436,11 +437,11 @@ describe("atribuirOrdem", () => {
     expect(updated.fiscalId).toBe("m1");
   });
 
-  it("allows a monitor to assign an imported OS (região match, different polo) to a região fiscal", async () => {
+  it("allows a monitor to assign an OS in their polo to a fiscal in that polo", async () => {
     const repository = repo(
-      osCampinas({ poloId: "polo-importado" }),
+      osCampinas(),
       false,
-      { id: "f2", perfil: "fiscal", poloId: "polo-campinas", regiao: "Campinas" }
+      { id: "f2", perfil: "fiscal", poloId: "p1", regiao: "Campinas" }
     );
 
     const updated = await atribuirOrdem(repository, monitorCampinas, "os1", "f2");
@@ -555,7 +556,7 @@ describe("atribuirOrdensLote", () => {
 
     expect(result).toEqual({ atribuidas: 2 });
     expect(repository.assignManyToFiscal).toHaveBeenCalledWith(["os1", "os2"], "f2", {
-      regiaoAdministrativa: { in: ["Campinas"] }
+      poloId: { in: ["p1"] }
     });
     expect(repository.log).toHaveBeenCalledWith(
       expect.objectContaining({ evento: "atribuicao", metadata: { fiscalId: "f2", total: 2 } })
@@ -583,7 +584,7 @@ describe("excluirOrdens", () => {
 
     expect(result).toEqual({ excluidas: 2 });
     expect(repository.deleteOrdens).toHaveBeenCalledWith({
-      AND: [{ regiaoAdministrativa: { in: ["Campinas"] } }, { id: { in: ["os1", "os2"] } }]
+      AND: [{ poloId: { in: ["p1"] } }, { id: { in: ["os1", "os2"] } }]
     });
     expect(repository.log).toHaveBeenCalledWith(
       expect.objectContaining({ evento: "exclusao", metadata: { total: 2, todas: false } })

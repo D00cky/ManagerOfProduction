@@ -24,8 +24,8 @@ describe("POST /api/importacao/confirmar", () => {
 
   it("confirms import through the service", async () => {
     const user = { id: "m1", perfil: "monitor", poloId: "p1" };
-    const rows = [{ numero: "1001", enderecoCompleto: "Rua A", tipoServico: "Outros", polo: "Norte" }];
-    const resumo = { total: 1, criadas: 1, atualizadas: 0, ignoradas: 0, invalidas: 0, erros: [] };
+    const rows = [{ numero: "1001", enderecoCompleto: "Rua A", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte" }];
+    const resumo = { total: 1, criadas: 1, atualizadas: 0, ignoradas: 0, invalidas: 0, descartadas: 0, erros: [] };
     getCurrentUser.mockResolvedValue(user);
     confirmarImportacao.mockResolvedValue(resumo);
     const { POST } = await import("@/app/api/importacao/confirmar/route");

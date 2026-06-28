@@ -12,7 +12,7 @@ test("supervisor imports an XLSX file parsed in the browser", async ({ page }, t
       endereco_completo: "Rua E2E, 10",
       bairro: "Centro",
       cidade: "Cidade Teste",
-      tipo_servico: "Outros",
+      codigo_tss: "3000",
       polo: "POLO-01",
       fiscal: "F0001",
       observacao: "Criada pelo E2E"

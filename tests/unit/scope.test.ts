@@ -31,15 +31,15 @@ describe("buildOsScope", () => {
     expect(buildOsScope({ id: "f1", perfil: "fiscal", poloId: "p1" })).toEqual({ fiscalId: "f1" });
   });
 
-  it("scopes monitor users to their whole região", () => {
+  it("scopes monitor users to their assigned polos", () => {
     expect(
-      buildOsScope({ id: "m1", perfil: "monitor", regiao: "Campinas" })
-    ).toEqual({ regiaoAdministrativa: { in: ["Campinas"] } });
+      buildOsScope({ id: "m1", perfil: "monitor", polosPermitidos: ["p1", "p2"] })
+    ).toEqual({ poloId: { in: ["p1", "p2"] } });
   });
 
-  it("scopes a monitor without a região to nothing", () => {
+  it("scopes a monitor without any polo to nothing", () => {
     expect(buildOsScope({ id: "m1", perfil: "monitor" })).toEqual({
-      regiaoAdministrativa: { in: [] }
+      poloId: { in: [] }
     });
   });
 });
@@ -65,17 +65,21 @@ describe("mergeScopeAndGeo", () => {
     });
   });
 
-  it("narrows a monitor within their scoped região", () => {
-    const scope = { regiaoAdministrativa: { in: ["METROPOLITANA"] } };
-    expect(mergeScopeAndGeo(scope, { regiao: "METROPOLITANA" })).toEqual({
-      regiaoAdministrativa: "METROPOLITANA"
-    });
+  it("narrows a polo within a monitor's polo scope", () => {
+    const scope = { poloId: { in: ["p1", "p2"] } };
+    expect(mergeScopeAndGeo(scope, { polo: "p1" })).toEqual({ poloId: "p1" });
   });
 
-  it("collapses an out-of-scope região filter to nothing", () => {
-    const scope = { regiaoAdministrativa: { in: ["METROPOLITANA"] } };
+  it("collapses an out-of-scope polo filter to nothing", () => {
+    const scope = { poloId: { in: ["p1", "p2"] } };
+    expect(mergeScopeAndGeo(scope, { polo: "p9" })).toEqual({ poloId: { in: [] } });
+  });
+
+  it("ANDs a região filter on top of a monitor's polo scope (cannot escape it)", () => {
+    const scope = { poloId: { in: ["p1", "p2"] } };
     expect(mergeScopeAndGeo(scope, { regiao: "BAIXADA SANTISTA" })).toEqual({
-      regiaoAdministrativa: { in: [] }
+      poloId: { in: ["p1", "p2"] },
+      regiaoAdministrativa: "BAIXADA SANTISTA"
     });
   });
 });

@@ -34,6 +34,9 @@ export async function POST(request: Request) {
   };
   if (body.poloId !== undefined) input.poloId = body.poloId;
   if (body.regiao !== undefined) input.regiao = body.regiao;
+  if (Array.isArray(body.polosPermitidos)) {
+    input.polosPermitidos = body.polosPermitidos.map(String);
+  }
 
   try {
     const usuario = await criarUsuario(prismaUsuarioRepository, user, input);

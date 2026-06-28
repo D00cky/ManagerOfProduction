@@ -10,6 +10,9 @@ const rows = demoOrdensServico.map((ordem) => ({
   endereco_completo: ordem.enderecoCompleto,
   bairro: ordem.bairro,
   cidade: ordem.cidade,
+  // A categorização na importação é por código (codigo_tss); tipo_servico fica
+  // como referência humana mas não é mais usado para classificar.
+  codigo_tss: ordem.codigoTss,
   tipo_servico: ordem.tipoServico,
   polo: ordem.poloCodigo,
   fiscal: ordem.fiscalMatricula ?? "",

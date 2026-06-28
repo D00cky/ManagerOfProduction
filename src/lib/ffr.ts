@@ -1,5 +1,11 @@
 import type { Conceito } from "@prisma/client";
-import { gruposParaOrdem, type OrdemFfrContext, type ValorResposta } from "@/data/grupos-ffr";
+import {
+  GRUPO_NAO_EXECUTADO_ID,
+  gruposParaOrdem,
+  naoExecutadoAplica,
+  type OrdemFfrContext,
+  type ValorResposta
+} from "@/data/grupos-ffr";
 
 export type RespostasFfr = Record<string, ValorResposta>;
 
@@ -14,7 +20,9 @@ export function calcularConceito(ctx: OrdemFfrContext, respostas: RespostasFfr):
   let somaObtida = 0;
   let somaPossivel = 0;
 
+  const incluiNaoExecutado = naoExecutadoAplica(respostas);
   for (const grupo of gruposParaOrdem(ctx)) {
+    if (grupo.id === GRUPO_NAO_EXECUTADO_ID && !incluiNaoExecutado) continue;
     for (const item of grupo.itens) {
       const resposta = respostas[item.id];
       if (item.peso <= 0 || item.tipo === "texto" || resposta === "X" || resposta === null || resposta === undefined) {
@@ -58,7 +66,9 @@ export function contarConformidade(ctx: OrdemFfrContext, respostas: RespostasFfr
   let conforme = 0;
   let naoConforme = 0;
 
+  const incluiNaoExecutado = naoExecutadoAplica(respostas);
   for (const grupo of gruposParaOrdem(ctx)) {
+    if (grupo.id === GRUPO_NAO_EXECUTADO_ID && !incluiNaoExecutado) continue;
     for (const item of grupo.itens) {
       const resposta = respostas[item.id];
       if (item.peso <= 0 || item.tipo === "texto" || resposta === "X" || resposta === null || resposta === undefined) {

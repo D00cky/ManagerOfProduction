@@ -25,7 +25,8 @@ const emptyForm = {
   password: "",
   perfil: "fiscal" as Perfil,
   poloId: "",
-  regiao: ""
+  regiao: "",
+  polosPermitidos: [] as string[]
 };
 
 export function UsuariosManager({
@@ -55,7 +56,8 @@ export function UsuariosManager({
       password: "",
       perfil: usuario.perfil,
       poloId: usuario.poloId ?? "",
-      regiao: usuario.regiao ?? ""
+      regiao: usuario.regiao ?? "",
+      polosPermitidos: usuario.polosPermitidos ?? []
     });
   }
 
@@ -79,6 +81,7 @@ export function UsuariosManager({
         perfil: editForm.perfil,
         poloId: editForm.poloId || null,
         regiao: editForm.perfil !== "supervisor" ? editForm.regiao || null : null,
+        polosPermitidos: editForm.perfil === "monitor" ? editForm.polosPermitidos : [],
         // Senha só vai quando preenchida (reset opcional).
         ...(editForm.password ? { password: editForm.password } : {})
       })
@@ -104,7 +107,8 @@ export function UsuariosManager({
       body: JSON.stringify({
         ...form,
         poloId: form.poloId || undefined,
-        regiao: form.perfil !== "supervisor" ? form.regiao || undefined : undefined
+        regiao: form.perfil !== "supervisor" ? form.regiao || undefined : undefined,
+        polosPermitidos: form.perfil === "monitor" ? form.polosPermitidos : []
       })
     });
 
@@ -251,6 +255,29 @@ export function UsuariosManager({
                 </Select>
               </div>
             ) : null}
+            {form.perfil === "monitor" ? (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="polosPermitidos">Polos do monitor</Label>
+                <Select
+                  id="polosPermitidos"
+                  multiple
+                  className="h-auto min-h-24"
+                  value={form.polosPermitidos}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      polosPermitidos: Array.from(event.target.selectedOptions, (option) => option.value)
+                    })
+                  }
+                >
+                  {polos.map((polo) => (
+                    <option key={polo.id} value={polo.id}>
+                      {polo.nome}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ) : null}
 
             {error ? <p className="text-sm text-red-600 md:col-span-2">{error}</p> : null}
 
@@ -351,6 +378,29 @@ export function UsuariosManager({
                     {REGIOES_SP.map((regiao) => (
                       <option key={regiao} value={regiao}>
                         {regiao}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              ) : null}
+              {editForm.perfil === "monitor" ? (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="edit-polosPermitidos">Polos do monitor</Label>
+                  <Select
+                    id="edit-polosPermitidos"
+                    multiple
+                    className="h-auto min-h-24"
+                    value={editForm.polosPermitidos}
+                    onChange={(event) =>
+                      setEditForm({
+                        ...editForm,
+                        polosPermitidos: Array.from(event.target.selectedOptions, (option) => option.value)
+                      })
+                    }
+                  >
+                    {polos.map((polo) => (
+                      <option key={polo.id} value={polo.id}>
+                        {polo.nome}
                       </option>
                     ))}
                   </Select>

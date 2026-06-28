@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { perfilLabel } from "@/lib/perfil";
 import { cn } from "@/lib/utils";
 import type { Perfil } from "@prisma/client";
@@ -57,6 +58,7 @@ export function Sidebar({
       <div className="mt-4 border-t border-[hsl(var(--border))] pt-4">
         <p className="px-3 text-sm font-medium">{userName ?? "Usuario"}</p>
         <p className="px-3 pb-2 text-xs text-[hsl(var(--muted-foreground))]">{perfilLabel(perfil)}</p>
+        <ThemeToggle />
         <Button
           variant="ghost"
           size="sm"

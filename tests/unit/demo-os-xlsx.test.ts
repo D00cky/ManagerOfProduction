@@ -18,7 +18,8 @@ describe("Example/demo-os.xlsx", () => {
     expect(rows[0]).toMatchObject({
       numero_os: "OS-1001",
       endereco_completo: "Rua das Flores, 100",
-      tipo_servico: "RedeRamalAgua",
+      codigo_tss: "3000",
+      tipo_servico: "RedeAgua",
       polo: "POLO-01"
     });
     expect(rows.map((row) => row.numero_os)).toEqual(demoOrdensServico.map((ordem) => ordem.numero));

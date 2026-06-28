@@ -72,17 +72,10 @@ export async function authorizeCredentials(credentials: Credentials | undefined)
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return null;
     await prisma.user.update({ where: { id: user.id }, data: { lastSeenAt: new Date() } });
-    // A monitor oversees a whole região; their manageable polos are all polos in
-    // that região (used by team/polo management scoping), independent of any
-    // explicit UserPoloAccess rows.
-    let polosPermitidos = user.acessosPolo.map((access) => access.poloId);
-    if (user.perfil === "monitor" && user.regiao) {
-      const polosDaRegiao = await prisma.polo.findMany({
-        where: { regiao: user.regiao },
-        select: { id: true }
-      });
-      polosPermitidos = polosDaRegiao.map((polo) => polo.id);
-    }
+    // A monitor's visible scope is exactly the polos explicitly assigned to them
+    // via UserPoloAccess — never the whole região. `regiao` is kept for dashboard
+    // tree grouping and fiscal visibility, but does not widen polo scope.
+    const polosPermitidos = user.acessosPolo.map((access) => access.poloId);
     return {
       id: user.id,
       name: user.name,

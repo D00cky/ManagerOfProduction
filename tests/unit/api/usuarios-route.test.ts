@@ -70,6 +70,29 @@ describe("POST /api/usuarios", () => {
     await expect(response.json()).resolves.toEqual({ data: { id: "new" } });
   });
 
+  it("forwards a monitor's assigned polos to the service", async () => {
+    const user = { id: "sup", perfil: "supervisor" };
+    const input = {
+      name: "X",
+      email: "x@e.com",
+      matricula: "X1",
+      password: "senha123",
+      perfil: "monitor",
+      polosPermitidos: ["p1", "p2"]
+    };
+    getCurrentUser.mockResolvedValue(user);
+    criarUsuario.mockResolvedValue({ id: "new" });
+    const { POST } = await import("@/app/api/usuarios/route");
+
+    await POST(jsonRequest(input));
+
+    expect(criarUsuario).toHaveBeenCalledWith(
+      { name: "repo" },
+      user,
+      expect.objectContaining({ polosPermitidos: ["p1", "p2"] })
+    );
+  });
+
   it("returns 400 when the service rejects the payload", async () => {
     getCurrentUser.mockResolvedValue({ id: "sup", perfil: "supervisor" });
     criarUsuario.mockRejectedValue(new Error("Dados de usuario invalidos"));
@@ -109,5 +132,20 @@ describe("PATCH /api/usuarios/[id]", () => {
     expect(response.status).toBe(200);
     expect(atualizarUsuario).toHaveBeenCalledWith({ name: "repo" }, user, "u1", { status: "inativo" });
     await expect(response.json()).resolves.toEqual({ data: { id: "u1", status: "inativo" } });
+  });
+
+  it("forwards updated assigned polos to the service", async () => {
+    const user = { id: "sup", perfil: "supervisor" };
+    getCurrentUser.mockResolvedValue(user);
+    atualizarUsuario.mockResolvedValue({ id: "u1" });
+    const { PATCH } = await import("@/app/api/usuarios/[id]/route");
+
+    await PATCH(jsonRequest({ polosPermitidos: ["p1"] }, "PATCH"), {
+      params: Promise.resolve({ id: "u1" })
+    });
+
+    expect(atualizarUsuario).toHaveBeenCalledWith({ name: "repo" }, user, "u1", {
+      polosPermitidos: ["p1"]
+    });
   });
 });

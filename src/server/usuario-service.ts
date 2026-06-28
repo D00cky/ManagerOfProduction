@@ -1,6 +1,6 @@
 import type { Perfil, Prisma, StatusUsuario } from "@prisma/client";
 import { hasPermission } from "@/lib/permissions";
-import type { SessionUserScope } from "@/lib/scope";
+import { allowedPoloIds, type SessionUserScope } from "@/lib/scope";
 
 export type UsuarioResumo = {
   id: string;
@@ -11,6 +11,8 @@ export type UsuarioResumo = {
   status: StatusUsuario;
   poloId: string | null;
   regiao: string | null;
+  /** Polos atribuídos ao monitor (UserPoloAccess); vazio para outros perfis. */
+  polosPermitidos: string[];
 };
 
 export type CriarUsuarioInput = {
@@ -21,6 +23,7 @@ export type CriarUsuarioInput = {
   perfil: Perfil;
   poloId?: string | null;
   regiao?: string | null;
+  polosPermitidos?: string[];
 };
 
 export type AtualizarUsuarioInput = Partial<{
@@ -31,9 +34,15 @@ export type AtualizarUsuarioInput = Partial<{
   poloId: string | null;
   regiao: string | null;
   status: StatusUsuario;
+  polosPermitidos: string[];
   /** Nova senha (reset pelo supervisor); o repositório aplica o hash. */
   password: string;
 }>;
+
+/** Normaliza uma lista de polos: remove vazios e duplicados, preservando a ordem. */
+function normalizarPolos(polos: string[] | undefined): string[] {
+  return [...new Set((polos ?? []).filter(Boolean))];
+}
 
 export type UsuarioLogInput = {
   evento: "usuario";
@@ -43,7 +52,8 @@ export type UsuarioLogInput = {
 };
 
 export type UsuarioRepository = {
-  list(): Promise<UsuarioResumo[]>;
+  /** `poloIds` undefined = sem restrição (supervisor); lista filtra por esses polos. */
+  list(poloIds?: string[]): Promise<UsuarioResumo[]>;
   findByLogin(email: string, matricula: string): Promise<UsuarioResumo | null>;
   findById(id: string): Promise<UsuarioResumo | null>;
   create(input: CriarUsuarioInput): Promise<UsuarioResumo>;
@@ -62,7 +72,8 @@ function ensureCanManage(user: SessionUserScope) {
 
 export async function listUsuarios(repository: UsuarioRepository, user: SessionUserScope) {
   ensureCanManage(user);
-  return repository.list();
+  // Defense-in-depth: scope by the requester's polos. Supervisor → undefined → all.
+  return repository.list(allowedPoloIds(user));
 }
 
 export async function criarUsuario(
@@ -92,7 +103,9 @@ export async function criarUsuario(
     poloId: input.poloId ?? null,
     // Supervisores enxergam tudo, então nunca têm região. Monitores e fiscais
     // carregam região: é por ela que o monitor enxerga os fiscais da sua região.
-    regiao: input.perfil === "supervisor" ? null : input.regiao?.trim() || null
+    regiao: input.perfil === "supervisor" ? null : input.regiao?.trim() || null,
+    // Apenas monitores carregam polos atribuídos; supervisor enxerga tudo.
+    polosPermitidos: input.perfil === "supervisor" ? [] : normalizarPolos(input.polosPermitidos)
   });
   await repository.log({
     evento: "usuario",
@@ -119,10 +132,16 @@ export async function atualizarUsuario(
   if (sanitized.email !== undefined) sanitized.email = sanitized.email.trim().toLowerCase();
   if (sanitized.matricula !== undefined) sanitized.matricula = sanitized.matricula.trim();
   if (sanitized.regiao !== undefined) sanitized.regiao = sanitized.regiao?.trim() || null;
-  // Servidor é a autoridade: um supervisor nunca mantém região, mesmo que o
-  // perfil seja alterado para supervisor nesta mesma edição.
+  if (sanitized.polosPermitidos !== undefined) {
+    sanitized.polosPermitidos = normalizarPolos(sanitized.polosPermitidos);
+  }
+  // Servidor é a autoridade: um supervisor nunca mantém região nem polos, mesmo
+  // que o perfil seja alterado para supervisor nesta mesma edição.
   const perfilEfetivo = sanitized.perfil ?? target.perfil;
-  if (perfilEfetivo === "supervisor") sanitized.regiao = null;
+  if (perfilEfetivo === "supervisor") {
+    sanitized.regiao = null;
+    if (sanitized.polosPermitidos !== undefined) sanitized.polosPermitidos = [];
+  }
 
   if (sanitized.name !== undefined && !sanitized.name) throw new Error("Nome obrigatorio");
   if (sanitized.email !== undefined && !sanitized.email) throw new Error("E-mail obrigatorio");

@@ -1,8 +1,13 @@
 services:
   traefik:
     container_name: manager-of-production-traefik
-    image: traefik:v3.3
+    image: traefik:v3.7.5
     restart: unless-stopped
+    # traefik:v3.7.x ships a Docker SDK new enough to talk to recent Docker
+    # Engines (e.g. v29, whose minimum API is 1.40). Older v3.3 negotiated down
+    # to API 1.24 and was rejected. DOCKER_API_VERSION is kept as a backstop.
+    environment:
+      DOCKER_API_VERSION: "1.44"
     command:
       # Entrypoints
       - "--entrypoints.web.address=:80"
@@ -31,6 +36,20 @@ services:
     container_name: manager-of-production-postgres
     image: postgres:17-alpine
     restart: unless-stopped
+    # Tuned for the KVM8 host (8 vCPU / 32 GB RAM). Defaults (shared_buffers
+    # 128MB, work_mem 4MB) are far too small for the real dataset.
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=2GB"
+      - "-c"
+      - "effective_cache_size=8GB"
+      - "-c"
+      - "maintenance_work_mem=512MB"
+      - "-c"
+      - "work_mem=32MB"
+      - "-c"
+      - "max_connections=100"
     environment:
       POSTGRES_DB: manager_of_production
       POSTGRES_USER: manager
@@ -65,6 +84,8 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 3000
+      # Node heap. Defaults to 2GB for the KVM8 host; overridable per env.
+      NODE_OPTIONS: ${NODE_OPTIONS:---max-old-space-size=2048}
       DATABASE_URL: postgresql://manager:${POSTGRES_PASSWORD}@postgres:5432/manager_of_production?schema=public
       REDIS_URL: redis://redis:6379
       NEXTAUTH_URL: ${NEXTAUTH_URL}

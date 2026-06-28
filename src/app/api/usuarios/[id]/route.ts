@@ -23,6 +23,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (body.perfil !== undefined) data.perfil = body.perfil;
   if (body.poloId !== undefined) data.poloId = body.poloId;
   if (body.regiao !== undefined) data.regiao = body.regiao;
+  if (Array.isArray(body.polosPermitidos)) data.polosPermitidos = body.polosPermitidos.map(String);
   if (body.status !== undefined) data.status = body.status;
   if (typeof body.password === "string") data.password = body.password;
 

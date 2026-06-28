@@ -25,10 +25,13 @@ export async function POST(request: Request) {
   const headers = rows[0] ? Object.keys(rows[0]) : [];
   const mapping = detectMapping(headers);
   const erros: Array<{ linha: number; erros: string[] }> = [];
+  let descartadas = 0;
   const preview = rows.slice(0, 20).map((row, index) => {
     const normalized = normalizeImportRow(row, mapping);
     if (normalized.errors.length > 0) {
       erros.push({ linha: index + 1, erros: normalized.errors });
+    } else if (normalized.row.foraDeEscopo) {
+      descartadas += 1;
     }
     return normalized.row;
   });
@@ -39,14 +42,17 @@ export async function POST(request: Request) {
     if (normalized.errors.length > 0) {
       invalidas += 1;
       erros.push({ linha: index + 21, erros: normalized.errors });
+    } else if (normalized.row.foraDeEscopo) {
+      descartadas += 1;
     }
   }
 
   return NextResponse.json({
     mapping,
     total: rows.length,
-    validas: rows.length - invalidas,
+    validas: rows.length - invalidas - descartadas,
     invalidas,
+    descartadas,
     preview,
     erros
   });

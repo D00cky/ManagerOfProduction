@@ -12,6 +12,10 @@ export type ImportacaoOrdemExistente = {
   numero: string;
   codigoTss: string | null;
   codigoTse: string | null;
+  /** Estado de trabalho atual — preservado ao atualizar (a importação não o rebaixa). */
+  status: StatusOS;
+  fiscalId: string | null;
+  dataFimExecucao: Date | null;
 };
 /** Open (NaFila/EmExecucao/Pendente) OS ids a fiscal currently holds. */
 export type OpenWorkFiscal = { fiscalId: string; ordemIds: string[] };
@@ -77,6 +81,8 @@ export type ImportacaoResumo = {
   atualizadas: number;
   ignoradas: number;
   invalidas: number;
+  /** Linhas descartadas por estarem fora da tabela de códigos (sem categoria FFR). */
+  descartadas: number;
   erros: ImportacaoErro[];
 };
 
@@ -96,6 +102,7 @@ export async function confirmarImportacao(
     atualizadas: 0,
     ignoradas: 0,
     invalidas: 0,
+    descartadas: 0,
     erros: []
   };
 
@@ -109,7 +116,13 @@ export async function confirmarImportacao(
   // not exist yet — once, for all distinct missing values.
   const missingPolos = unique(
     rows
-      .filter((row) => validateRow(row).length === 0 && row.polo && !poloMap.has(poloKey(row.polo)))
+      .filter(
+        (row) =>
+          !row.foraDeEscopo &&
+          validateRow(row).length === 0 &&
+          row.polo &&
+          !poloMap.has(poloKey(row.polo))
+      )
       .map((row) => row.polo as string)
   );
   if (missingPolos.length > 0) {
@@ -137,6 +150,14 @@ export async function confirmarImportacao(
 
   for (const [index, row] of rows.entries()) {
     const linha = index + 1;
+
+    // Serviços fora da tabela de códigos não têm categoria FFR: descartar (não importar).
+    if (row.foraDeEscopo || row.tipoServico === null) {
+      resumo.descartadas += 1;
+      continue;
+    }
+    const tipoServico = row.tipoServico;
+
     const errors = validateRow(row);
     if (errors.length > 0) {
       resumo.invalidas += 1;
@@ -167,7 +188,7 @@ export async function confirmarImportacao(
         cidade: row.cidade ?? null,
         // Região is owned by the polo (denormalized onto the OS for scope/dashboard).
         regiaoAdministrativa: polo.regiao ?? row.regiaoAdministrativa ?? null,
-        tipoServico: row.tipoServico,
+        tipoServico,
         status: "NaFila",
         poloId: polo.id,
         fiscalId: null,
@@ -223,7 +244,10 @@ export async function confirmarImportacao(
   const updates: Array<{ id: string; input: ImportacaoOrdemInput }> = [];
 
   for (const prep of unicas) {
-    if (prep.fiscalId) {
+    // Não consumir uma vaga de atribuição para uma OS existente que já tem fiscal:
+    // o fiscal dela será preservado, não reatribuído.
+    const jaTemFiscal = prep.existente?.fiscalId != null;
+    if (prep.fiscalId && !jaTemFiscal) {
       const open = openWork.get(prep.fiscalId);
       const hasOtherOpen = open
         ? [...open].some((id) => id !== prep.existente?.id)
@@ -240,7 +264,20 @@ export async function confirmarImportacao(
       continue;
     }
     if (prep.existente && duplicateMode === "atualizar") {
-      updates.push({ id: prep.existente.id, input: prep.input });
+      // A importação atualiza metadados da fonte, mas NÃO rebaixa o estado de
+      // trabalho de uma OS que o fiscal já tocou: preserva o status atual, mantém
+      // o fiscal atribuído e nunca apaga uma data de fim de execução já registrada
+      // (só preenche quando a planilha trouxer uma). Isso evita que reimportações
+      // de planilhas diárias façam serviços concluídos "sumirem" da contabilização.
+      updates.push({
+        id: prep.existente.id,
+        input: {
+          ...prep.input,
+          status: prep.existente.status,
+          fiscalId: prep.existente.fiscalId ?? prep.input.fiscalId ?? null,
+          dataFimExecucao: prep.input.dataFimExecucao ?? prep.existente.dataFimExecucao
+        }
+      });
       resumo.atualizadas += 1;
       continue;
     }
@@ -258,13 +295,14 @@ export async function confirmarImportacao(
 
   await repository.log({
     evento: "importacao",
-    descricao: `Importacao Excel concluida: ${resumo.criadas} criadas, ${resumo.atualizadas} atualizadas, ${resumo.ignoradas} ignoradas, ${resumo.invalidas} invalidas`,
+    descricao: `Importacao Excel concluida: ${resumo.criadas} criadas, ${resumo.atualizadas} atualizadas, ${resumo.ignoradas} ignoradas, ${resumo.invalidas} invalidas, ${resumo.descartadas} descartadas`,
     userId: user.id,
     metadata: {
       criadas: resumo.criadas,
       atualizadas: resumo.atualizadas,
       ignoradas: resumo.ignoradas,
       invalidas: resumo.invalidas,
+      descartadas: resumo.descartadas,
       total: resumo.total
     }
   });

@@ -3,13 +3,13 @@ import { hasPermission } from "@/lib/permissions";
 import { allowedPoloIds, type SessionUserScope } from "@/lib/scope";
 
 /**
- * Escopo de listagem da equipe: supervisor vê todos; monitor vê quem está na sua
- * região (fiscais/monitores cujo polo é da região, monitores da região, e sempre
- * o próprio monitor, mesmo que o polo dele esteja inconsistente).
+ * Escopo de listagem da equipe: supervisor vê todos; monitor vê quem está nos
+ * polos atribuídos a ele (fiscais/monitores cujo polo está na lista) e sempre o
+ * próprio monitor, mesmo que o polo dele esteja fora do escopo.
  */
 export type EquipeScope =
   | { tipo: "todos" }
-  | { tipo: "regiao"; regiao: string; selfId: string };
+  | { tipo: "polos"; poloIds: string[]; selfId: string };
 
 export type MembroEquipe = {
   id: string;
@@ -42,7 +42,7 @@ export async function listEquipe(repository: EquipeRepository, user: SessionUser
   const scope: EquipeScope =
     user.perfil === "supervisor"
       ? { tipo: "todos" }
-      : { tipo: "regiao", regiao: user.regiao ?? "", selfId: user.id };
+      : { tipo: "polos", poloIds: allowedPoloIds(user) ?? [], selfId: user.id };
   return repository.list(scope);
 }
 

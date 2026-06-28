@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Perfil, StatusOS, TipoServico } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { chaveObsNaoConforme, gruposParaOrdem, type ValorResposta } from "@/data/grupos-ffr";
+import {
+  chaveCampoTexto,
+  chaveObsNaoConforme,
+  GRUPO_GERAIS_ID,
+  GRUPO_NAO_EXECUTADO_ID,
+  gruposParaOrdem,
+  naoExecutadoAplica,
+  preencherAutoNA,
+  type ValorResposta
+} from "@/data/grupos-ffr";
 import { calcularConceito, type RespostasFfr } from "@/lib/ffr";
 import { cn, formatPercent } from "@/lib/utils";
 
@@ -75,6 +84,31 @@ export function TabulacaoForm({
     () => calcularConceito({ tipoServico, descricaoTss }, respostas),
     [tipoServico, descricaoTss, respostas]
   );
+
+  // "Serviço não executado" só aparece quando todos os Itens Gerais pontuados
+  // forem "Não conforme" (serviço não executado). Caso contrário fica oculto e
+  // seus itens não pontuam (regra espelhada em calcularConceito).
+  const gruposVisiveis = grupos.filter(
+    (grupo) => grupo.id !== GRUPO_NAO_EXECUTADO_ID || naoExecutadoAplica(respostas)
+  );
+
+  // Chave que muda só quando uma resposta de Item Geral pontuado muda — dispara o
+  // preenchimento automático de N/A sem brigar com edições dos demais itens.
+  const geraisKey = useMemo(() => {
+    const gerais = grupos.find((grupo) => grupo.id === GRUPO_GERAIS_ID);
+    const ids = gerais
+      ? gerais.itens.filter((item) => item.peso > 0 && item.tipo !== "texto").map((item) => item.id)
+      : [];
+    return ids.map((id) => `${id}=${respostas[id] ?? ""}`).join("|");
+  }, [grupos, respostas]);
+
+  // Preenche N/A automaticamente a partir dos Itens Gerais (idempotente): todos
+  // gerais N/A → OS inteira N/A; "Serviço não executado" oculto → itens N/A.
+  useEffect(() => {
+    if (bloqueada) return;
+    setRespostas((current) => preencherAutoNA({ tipoServico, descricaoTss }, current));
+    // geraisKey resume as respostas relevantes; demais deps são estáveis.
+  }, [geraisKey, bloqueada, tipoServico, descricaoTss]);
 
   function setResposta(itemId: string, value: ValorResposta) {
     setSaved(false);
@@ -194,59 +228,85 @@ export function TabulacaoForm({
         </Card>
       ) : null}
 
-      {grupos.map((grupo) => (
+      {gruposVisiveis.map((grupo) => (
         <Card key={grupo.id}>
           <CardHeader>
             <CardTitle>{grupo.nome}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-x-6 gap-y-4 md:grid-cols-2">
-            {grupo.itens.map((item) => (
-              <div key={item.id} className="flex flex-col gap-2">
-                <p className="text-sm">
-                  {item.texto}
-                  {item.tipo !== "texto" && item.peso > 0 ? (
-                    <span className="ml-2 text-xs text-[hsl(var(--muted-foreground))]">peso {item.peso}</span>
-                  ) : null}
-                </p>
-                {item.tipo === "texto" ? (
-                  <Textarea
-                    className="max-w-xl"
-                    rows={2}
-                    value={(respostas[item.id] as string) ?? ""}
-                    onChange={(event) => setResposta(item.id, event.target.value)}
-                    disabled={bloqueada}
-                  />
-                ) : (
-                  <>
-                    <div className="flex gap-2">
-                      {opcoes.map((opcao) => (
-                        <Button
-                          key={opcao.value}
-                          type="button"
-                          size="sm"
-                          variant={respostas[item.id] === opcao.value ? "default" : "outline"}
-                          disabled={bloqueada}
-                          onClick={() => setResposta(item.id, opcao.value)}
-                        >
-                          {opcao.label}
-                        </Button>
-                      ))}
-                    </div>
-                    {respostas[item.id] === "0" ? (
-                      <Textarea
-                        className="max-w-xl"
-                        rows={2}
-                        placeholder="Observacao da nao conformidade"
-                        aria-label={`Observacao Nao conforme: ${item.texto}`}
-                        value={(respostas[chaveObsNaoConforme(item.id)] as string) ?? ""}
-                        onChange={(event) => setResposta(chaveObsNaoConforme(item.id), event.target.value)}
-                        disabled={bloqueada}
-                      />
+            {grupo.itens.map((item) => {
+              const campo = item.campoTexto;
+              const chaveCampo = campo?.chave ?? chaveCampoTexto(item.id);
+              const resposta = respostas[item.id] as ValorResposta;
+              const mostrarCampoTexto = campo ? campo.revelarEm.includes(resposta) : false;
+              // Evita caixa dupla: se o campoTexto já cobre "Não conforme", não
+              // renderiza também a observação padrão de não conformidade.
+              const mostrarObsNaoConforme =
+                resposta === "0" && !(campo?.revelarEm.includes("0"));
+              return (
+                <div key={item.id} className="flex flex-col gap-2">
+                  <p className="text-sm">
+                    {item.texto}
+                    {item.tipo !== "texto" && item.peso > 0 ? (
+                      <span className="ml-2 text-xs text-[hsl(var(--muted-foreground))]">peso {item.peso}</span>
                     ) : null}
-                  </>
-                )}
-              </div>
-            ))}
+                  </p>
+                  {item.tipo === "texto" ? (
+                    <Textarea
+                      className="max-w-xl"
+                      rows={2}
+                      value={(respostas[item.id] as string) ?? ""}
+                      onChange={(event) => setResposta(item.id, event.target.value)}
+                      disabled={bloqueada}
+                    />
+                  ) : (
+                    <>
+                      <div className="flex gap-2">
+                        {opcoes.map((opcao) => (
+                          <Button
+                            key={opcao.value}
+                            type="button"
+                            size="sm"
+                            variant={resposta === opcao.value ? "default" : "outline"}
+                            disabled={bloqueada}
+                            onClick={() => setResposta(item.id, opcao.value)}
+                          >
+                            {opcao.label}
+                          </Button>
+                        ))}
+                      </div>
+                      {campo && mostrarCampoTexto ? (
+                        <div className="flex flex-col gap-1">
+                          {campo.label ? (
+                            <span className="text-xs text-[hsl(var(--muted-foreground))]">{campo.label}</span>
+                          ) : null}
+                          <Textarea
+                            className="max-w-xs"
+                            rows={1}
+                            placeholder={campo.placeholder}
+                            aria-label={campo.label ?? item.texto}
+                            value={(respostas[chaveCampo] as string) ?? ""}
+                            onChange={(event) => setResposta(chaveCampo, event.target.value)}
+                            disabled={bloqueada}
+                          />
+                        </div>
+                      ) : null}
+                      {mostrarObsNaoConforme ? (
+                        <Textarea
+                          className="max-w-xl"
+                          rows={2}
+                          placeholder="Observacao da nao conformidade"
+                          aria-label={`Observacao Nao conforme: ${item.texto}`}
+                          value={(respostas[chaveObsNaoConforme(item.id)] as string) ?? ""}
+                          onChange={(event) => setResposta(chaveObsNaoConforme(item.id), event.target.value)}
+                          disabled={bloqueada}
+                        />
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
       ))}

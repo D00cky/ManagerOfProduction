@@ -1,6 +1,6 @@
 import type { EventoLog, OrdemServico, Perfil, Prisma, StatusOS, TipoServico } from "@prisma/client";
 import { canTransitionStatus, hasPermission } from "@/lib/permissions";
-import { buildOsScope, type SessionUserScope } from "@/lib/scope";
+import { allowedPoloIds, buildOsScope, narrowPoloId, type SessionUserScope } from "@/lib/scope";
 
 export type OrdemStatusUpdate = Partial<
   Pick<OrdemServico, "status" | "iniciadaEm" | "concluidaEm" | "canceladaEm" | "fiscalId">
@@ -86,9 +86,10 @@ export function buildListWhere(
   filters: OsListFilters
 ): Prisma.OrdemServicoWhereInput {
   const where: Prisma.OrdemServicoWhereInput = { ...scope };
-  if (filters.poloId) where.poloId = filters.poloId;
+  // Polo é narrowed contra o escopo (um monitor não escapa para outro polo via filtro).
+  if (filters.poloId) where.poloId = narrowPoloId(scope.poloId, filters.poloId);
   // Região/município são ANDados (não sobrescrevem) para nunca escapar do escopo:
-  // um monitor já é limitado por `regiaoAdministrativa` no `scope`.
+  // um monitor já é limitado por `poloId` no `scope`.
   const geo: Prisma.OrdemServicoWhereInput[] = [];
   if (filters.regiao) geo.push({ regiaoAdministrativa: filters.regiao });
   if (filters.municipio) geo.push({ cidade: filters.municipio });
@@ -100,7 +101,12 @@ export function buildListWhere(
   if (filters.busca) {
     where.OR = [
       { numero: { contains: filters.busca, mode: "insensitive" } },
-      { enderecoCompleto: { contains: filters.busca, mode: "insensitive" } }
+      { enderecoCompleto: { contains: filters.busca, mode: "insensitive" } },
+      { bairro: { contains: filters.busca, mode: "insensitive" } },
+      { cidade: { contains: filters.busca, mode: "insensitive" } },
+      { unidadeExecutante: { contains: filters.busca, mode: "insensitive" } },
+      { codigoContrato: { contains: filters.busca, mode: "insensitive" } },
+      { descricaoContrato: { contains: filters.busca, mode: "insensitive" } }
     ];
   }
   if (filters.fimDe || filters.fimAte) {
@@ -300,26 +306,22 @@ export async function excluirOrdens(
 export function isOrdemInUserScope(ordem: OrdemServico, user: SessionUserScope) {
   if (user.perfil === "supervisor") return true;
   if (user.perfil === "fiscal") return ordem.fiscalId === user.id;
-  // Monitor: região inteira, espelhando buildOsScope. OS importadas ficam em
-  // polos auto-criados (regiao:null) mas carregam regiaoAdministrativa resolvida,
-  // então o escopo é pela região da OS, não pelo polo.
-  return (
-    ordem.regiaoAdministrativa != null &&
-    user.regiao != null &&
-    ordem.regiaoAdministrativa === user.regiao
-  );
+  // Monitor: apenas os polos atribuídos a ele, espelhando buildOsScope.
+  const polos = allowedPoloIds(user) ?? [];
+  return ordem.poloId != null && polos.includes(ordem.poloId);
 }
 
 /**
  * Pode o caller atribuir uma OS a este responsável? Supervisor não tem
- * restrição; um monitor pode atribuir a si mesmo e a qualquer fiscal/monitor da
- * sua região. (Fiscais não chegam aqui — não têm os:write.)
+ * restrição; um monitor pode atribuir a si mesmo e a qualquer fiscal/monitor de
+ * um dos polos atribuídos a ele. (Fiscais não chegam aqui — não têm os:write.)
  */
 function podeAtribuirResponsavel(user: SessionUserScope, fiscal: FiscalRef): boolean {
   if (user.perfil === "supervisor") return true;
   if (fiscal.id === user.id) return true;
   if (user.perfil === "monitor") {
-    return user.regiao != null && fiscal.regiao === user.regiao;
+    const polos = allowedPoloIds(user) ?? [];
+    return fiscal.poloId != null && polos.includes(fiscal.poloId);
   }
   return false;
 }

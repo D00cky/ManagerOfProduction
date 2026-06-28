@@ -21,6 +21,7 @@ type Parsed = {
   mapping: ImportMapping;
   rows: ParsedRow[];
   invalidas: number;
+  descartadas: number;
 };
 
 export function ImportarForm() {
@@ -48,7 +49,12 @@ export function ImportarForm() {
       const headers = raw[0] ? Object.keys(raw[0]) : [];
       const mapping = detectMapping(headers);
       const rows = raw.map((row) => normalizeImportRow(row, mapping));
-      setParsed({ mapping, rows, invalidas: rows.filter((entry) => entry.errors.length > 0).length });
+      setParsed({
+        mapping,
+        rows,
+        invalidas: rows.filter((entry) => entry.errors.length > 0).length,
+        descartadas: rows.filter((entry) => entry.errors.length === 0 && entry.row.foraDeEscopo).length
+      });
     } catch {
       setError("Nao foi possivel ler a planilha.");
       setParsed(null);
@@ -123,7 +129,8 @@ export function ImportarForm() {
         <Card>
           <CardHeader>
             <CardTitle>
-              Pre-visualizacao &middot; {parsed.rows.length} linhas, {parsed.invalidas} com erros
+              Pre-visualizacao &middot; {parsed.rows.length} linhas, {parsed.invalidas} com erros,{" "}
+              {parsed.descartadas} fora de escopo
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
@@ -151,7 +158,13 @@ export function ImportarForm() {
                       <td className="px-3 py-2">{entry.row.enderecoCompleto || "-"}</td>
                       <td className="px-3 py-2">{entry.row.cidade ?? "-"}</td>
                       <td className="px-3 py-2">{entry.row.regiaoAdministrativa ?? "-"}</td>
-                      <td className="px-3 py-2">{entry.row.tipoServico}</td>
+                      <td className="px-3 py-2">
+                        {entry.row.foraDeEscopo ? (
+                          <span className="text-amber-600">Fora de escopo (descartar)</span>
+                        ) : (
+                          entry.row.tipoServico
+                        )}
+                      </td>
                       <td className="px-3 py-2">{entry.row.polo ?? "-"}</td>
                       <td className="px-3 py-2">{entry.row.fiscal ?? "-"}</td>
                       <td className="px-3 py-2 text-red-600">{entry.errors.join(", ")}</td>
@@ -182,7 +195,7 @@ export function ImportarForm() {
           <CardContent className="flex flex-col gap-2 text-sm">
             <p>
               {resumo.criadas} criadas &middot; {resumo.atualizadas} atualizadas &middot; {resumo.ignoradas} ignoradas
-              &middot; {resumo.invalidas} invalidas (de {resumo.total})
+              &middot; {resumo.invalidas} invalidas &middot; {resumo.descartadas} fora de escopo (de {resumo.total})
             </p>
             {resumo.erros.length > 0 ? (
               <ul className="list-inside list-disc text-red-600">
