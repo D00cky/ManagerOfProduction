@@ -153,6 +153,11 @@ model OrdemServico {
   @@index([status, updatedAt])
   @@index([fiscalId, status, concluidaEm])
   @@index([poloId, tipoServico])
+  // Relatório executivo / "Por Contratada": período por data real de execução e
+  // filtros/agregações por contrato e unidade executante.
+  @@index([dataFimExecucao])
+  @@index([codigoContrato])
+  @@index([unidadeExecutante])
 }
 
 model Tabulacao {

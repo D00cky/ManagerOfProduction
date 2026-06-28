@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Conceito, TipoServico } from "@prisma/client";
+import type { Conceito, StatusOS, TipoServico } from "@prisma/client";
 import {
   buildRelatorioExportDataset,
   resolvePeriodo,
@@ -32,6 +32,7 @@ function ordem(overrides: Partial<OrdemRelatorioRow> = {}): OrdemRelatorioRow {
     codigoContrato: "C-1",
     descricaoContrato: "Contrato Um",
     unidadeExecutante: "Contratada Alfa",
+    status: "Concluida" as StatusOS,
     tabulacao: null,
     ...overrides
   };
