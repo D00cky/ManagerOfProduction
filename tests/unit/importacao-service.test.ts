@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { StatusOS } from "@prisma/client";
 import { confirmarImportacao, type ImportacaoRepository } from "@/server/importacao-service";
 import type { NormalizedImportRow } from "@/lib/importacao";
 
@@ -31,7 +32,14 @@ const rows: NormalizedImportRow[] = [
   }
 ];
 
-type ExistingOrdem = { numero: string; codigoTss?: string | null; codigoTse?: string | null };
+type ExistingOrdem = {
+  numero: string;
+  codigoTss?: string | null;
+  codigoTse?: string | null;
+  status?: StatusOS;
+  fiscalId?: string | null;
+  dataFimExecucao?: Date | null;
+};
 
 function repository(existingNumbers: Array<string | ExistingOrdem> = []): ImportacaoRepository {
   const existing = existingNumbers.map((entry) =>
@@ -59,7 +67,10 @@ function repository(existingNumbers: Array<string | ExistingOrdem> = []): Import
           id: `os-${ordem.numero}`,
           numero: ordem.numero,
           codigoTss: ordem.codigoTss ?? null,
-          codigoTse: ordem.codigoTse ?? null
+          codigoTse: ordem.codigoTse ?? null,
+          status: ordem.status ?? ("NaFila" as StatusOS),
+          fiscalId: ordem.fiscalId ?? null,
+          dataFimExecucao: ordem.dataFimExecucao ?? null
         }));
     }),
     openWorkByFiscal: vi.fn(async () => []),
@@ -154,6 +165,40 @@ describe("confirmarImportacao", () => {
 
     expect(result).toMatchObject({ criadas: 0, atualizadas: 1, ignoradas: 0, invalidas: 0 });
     expect(repo.updateOrdem).toHaveBeenCalledWith("os-1001", expect.objectContaining({ numero: "1001", fiscalId: "f1" }));
+  });
+
+  it("atualizar NÃO rebaixa OS concluída: preserva status, fiscal e dataFimExecucao", async () => {
+    const fim = new Date("2026-06-20T12:00:00.000Z");
+    const repo = repository([
+      { numero: "1001", status: "Concluida", fiscalId: "f1", dataFimExecucao: fim }
+    ]);
+    // Reimport de uma planilha diária: a OS reaparece sem fiscal e sem data de fim.
+    const reimport: NormalizedImportRow[] = [
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte" }
+    ];
+
+    await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, reimport, "atualizar");
+
+    expect(repo.updateOrdem).toHaveBeenCalledTimes(1);
+    const [, input] = vi.mocked(repo.updateOrdem).mock.calls[0];
+    expect(input.status).toBe("Concluida"); // não volta para NaFila
+    expect(input.fiscalId).toBe("f1"); // não desatribui o fiscal
+    expect(input.dataFimExecucao).toEqual(fim); // não apaga a data de execução
+  });
+
+  it("atualizar preenche dataFimExecucao quando a OS existente não tinha e a planilha traz", async () => {
+    const fim = new Date("2026-06-22T08:00:00.000Z");
+    const repo = repository([{ numero: "1001", status: "Pendente", fiscalId: "f1", dataFimExecucao: null }]);
+    const baixa: NormalizedImportRow[] = [
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", dataFimExecucao: fim }
+    ];
+
+    await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, baixa, "atualizar");
+
+    const [, input] = vi.mocked(repo.updateOrdem).mock.calls[0];
+    expect(input.dataFimExecucao).toEqual(fim);
+    expect(input.status).toBe("Pendente");
+    expect(input.fiscalId).toBe("f1");
   });
 
   it("keeps OS unassigned when fiscal is not found", async () => {
