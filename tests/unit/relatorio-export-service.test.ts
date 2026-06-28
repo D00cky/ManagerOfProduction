@@ -195,9 +195,21 @@ describe("buildRelatorioExportDataset - detalhes e quebras", () => {
     const det = dataset.detalhesNaoConformidades[0];
     expect(det.numeroOS).toBe(rows[0].numero);
     expect(det.observacao).toBe("sem sinalizacao");
+    expect(det.descricaoNaoConformidade).toBe(`${det.criterio}: sem sinalizacao`);
     expect(det.conceito).toBe("D");
     expect(det.contrato).toBe("Contrato Um");
+    expect(det.codigoContrato).toBe("C-1");
+    expect(det.descricaoContrato).toBe("Contrato Um");
+    expect(det.status).toBe("Concluida");
     expect(det.unidadeExecutante).toBe("Contratada Alfa");
+  });
+
+  it("usa só o critério como descrição quando não há observação", async () => {
+    const rows = [ordem({ tabulacao: tab("D", { desobstrucao_q1: "0" }, 0.5) })];
+    const dataset = await buildRelatorioExportDataset(repo(rows), supervisor, {});
+    const det = dataset.detalhesNaoConformidades[0];
+    expect(det.observacao).toBeNull();
+    expect(det.descricaoNaoConformidade).toBe(det.criterio);
   });
 
   it("produz quebras por região, polo, município, tipo, contrato e unidade", async () => {

@@ -1,11 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import type { RespostasFfr } from "@/lib/ffr";
 import { prisma } from "@/lib/prisma";
-import type {
-  OrdemRelatorioRow,
-  RelatorioContratadaFacetsRepository,
-  RelatorioExportRepository
-} from "@/server/relatorio-export-service";
+import type { OrdemRelatorioRow, RelatorioExportRepository } from "@/server/relatorio-export-service";
 
 export const prismaRelatorioExportRepository: RelatorioExportRepository = {
   async listOrdensParaRelatorio(where: Prisma.OrdemServicoWhereInput): Promise<OrdemRelatorioRow[]> {
@@ -52,28 +48,5 @@ export const prismaRelatorioExportRepository: RelatorioExportRepository = {
           }
         : null
     }));
-  }
-};
-
-export const prismaRelatorioContratadaFacetsRepository: RelatorioContratadaFacetsRepository = {
-  async listFacetsContratadas(scope: Prisma.OrdemServicoWhereInput) {
-    const [contratos, unidades] = await Promise.all([
-      prisma.ordemServico.findMany({
-        where: { ...scope, OR: [{ codigoContrato: { not: null } }, { descricaoContrato: { not: null } }] },
-        select: { codigoContrato: true, descricaoContrato: true },
-        distinct: ["codigoContrato", "descricaoContrato"],
-        orderBy: [{ descricaoContrato: "asc" }, { codigoContrato: "asc" }]
-      }),
-      prisma.ordemServico.findMany({
-        where: { ...scope, unidadeExecutante: { not: null } },
-        select: { unidadeExecutante: true },
-        distinct: ["unidadeExecutante"],
-        orderBy: { unidadeExecutante: "asc" }
-      })
-    ]);
-    return {
-      contratos: contratos.map((c) => ({ codigo: c.codigoContrato, descricao: c.descricaoContrato })),
-      unidades: unidades.map((u) => u.unidadeExecutante).filter((u): u is string => u != null)
-    };
   }
 };
