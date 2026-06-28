@@ -12,6 +12,10 @@ export type ImportacaoOrdemExistente = {
   numero: string;
   codigoTss: string | null;
   codigoTse: string | null;
+  /** Estado de trabalho atual — preservado ao atualizar (a importação não o rebaixa). */
+  status: StatusOS;
+  fiscalId: string | null;
+  dataFimExecucao: Date | null;
 };
 /** Open (NaFila/EmExecucao/Pendente) OS ids a fiscal currently holds. */
 export type OpenWorkFiscal = { fiscalId: string; ordemIds: string[] };
@@ -240,7 +244,10 @@ export async function confirmarImportacao(
   const updates: Array<{ id: string; input: ImportacaoOrdemInput }> = [];
 
   for (const prep of unicas) {
-    if (prep.fiscalId) {
+    // Não consumir uma vaga de atribuição para uma OS existente que já tem fiscal:
+    // o fiscal dela será preservado, não reatribuído.
+    const jaTemFiscal = prep.existente?.fiscalId != null;
+    if (prep.fiscalId && !jaTemFiscal) {
       const open = openWork.get(prep.fiscalId);
       const hasOtherOpen = open
         ? [...open].some((id) => id !== prep.existente?.id)
@@ -257,7 +264,20 @@ export async function confirmarImportacao(
       continue;
     }
     if (prep.existente && duplicateMode === "atualizar") {
-      updates.push({ id: prep.existente.id, input: prep.input });
+      // A importação atualiza metadados da fonte, mas NÃO rebaixa o estado de
+      // trabalho de uma OS que o fiscal já tocou: preserva o status atual, mantém
+      // o fiscal atribuído e nunca apaga uma data de fim de execução já registrada
+      // (só preenche quando a planilha trouxer uma). Isso evita que reimportações
+      // de planilhas diárias façam serviços concluídos "sumirem" da contabilização.
+      updates.push({
+        id: prep.existente.id,
+        input: {
+          ...prep.input,
+          status: prep.existente.status,
+          fiscalId: prep.existente.fiscalId ?? prep.input.fiscalId ?? null,
+          dataFimExecucao: prep.input.dataFimExecucao ?? prep.existente.dataFimExecucao
+        }
+      });
       resumo.atualizadas += 1;
       continue;
     }

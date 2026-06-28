@@ -76,7 +76,15 @@ export const prismaImportacaoRepository: ImportacaoRepository = {
     for (let i = 0; i < numeros.length; i += CHUNK) {
       const rows = await prisma.ordemServico.findMany({
         where: { numero: { in: numeros.slice(i, i + CHUNK) } },
-        select: { id: true, numero: true, codigoTss: true, codigoTse: true }
+        select: {
+          id: true,
+          numero: true,
+          codigoTss: true,
+          codigoTse: true,
+          status: true,
+          fiscalId: true,
+          dataFimExecucao: true
+        }
       });
       results.push(...rows);
     }
