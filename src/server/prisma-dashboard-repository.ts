@@ -8,6 +8,41 @@ import type {
 } from "@/server/dashboard-service";
 
 /**
+ * Filtro de "entradas" no período. Base `execucao` fatia pela data real do serviço
+ * (`dataFimExecucao`); base `fluxo` mantém a entrada no sistema (`createdAt`).
+ */
+function entradasFiltro(periodo: DashboardPeriodo): Prisma.OrdemServicoWhereInput {
+  const janela = { gte: periodo.from, lte: periodo.to };
+  return periodo.base === "execucao" ? { dataFimExecucao: janela } : { createdAt: janela };
+}
+
+/**
+ * Filtro de "concluídas" no período. Base `execucao` conta OS com status Concluída e
+ * `dataFimExecucao` na janela (executadas e concluídas no período); base `fluxo` conta
+ * pela data de conclusão no sistema (`concluidaEm`).
+ */
+function concluidasFiltro(periodo: DashboardPeriodo): Prisma.OrdemServicoWhereInput {
+  const janela = { gte: periodo.from, lte: periodo.to };
+  return periodo.base === "execucao"
+    ? { status: "Concluida", dataFimExecucao: janela }
+    : { concluidaEm: janela };
+}
+
+/**
+ * Filtro de "analisadas" (tabulações) no período. Base `execucao` fatia pela
+ * `dataFimExecucao` da OS associada; base `fluxo` pela data da tabulação (`createdAt`).
+ */
+function analisadasFiltro(
+  where: Prisma.OrdemServicoWhereInput,
+  periodo: DashboardPeriodo
+): Prisma.TabulacaoWhereInput {
+  const janela = { gte: periodo.from, lte: periodo.to };
+  return periodo.base === "execucao"
+    ? { ordemServico: { ...where, dataFimExecucao: janela } }
+    : { ordemServico: where, createdAt: janela };
+}
+
+/**
  * "Backlog parado": OS com execução concluída (dataFimExecucao preenchida) que
  * ainda não foi Concluída/Cancelada e está sem movimento (updatedAt) há 2+ dias.
  */
@@ -91,30 +126,24 @@ export const prismaDashboardRepository: DashboardRepository = {
     return prisma.polo.findMany({ where: { id: { in: ids } }, select: { id: true, nome: true } });
   },
   contarEntradas(where: Prisma.OrdemServicoWhereInput, periodo: DashboardPeriodo) {
-    return prisma.ordemServico.count({
-      where: { ...where, createdAt: { gte: periodo.from, lte: periodo.to } }
-    });
+    return prisma.ordemServico.count({ where: { ...where, ...entradasFiltro(periodo) } });
   },
   contarConcluidas(where: Prisma.OrdemServicoWhereInput, periodo: DashboardPeriodo) {
-    return prisma.ordemServico.count({
-      where: { ...where, concluidaEm: { gte: periodo.from, lte: periodo.to } }
-    });
+    return prisma.ordemServico.count({ where: { ...where, ...concluidasFiltro(periodo) } });
   },
   contarAnalisadas(where: Prisma.OrdemServicoWhereInput, periodo: DashboardPeriodo) {
-    return prisma.tabulacao.count({
-      where: { ordemServico: where, createdAt: { gte: periodo.from, lte: periodo.to } }
-    });
+    return prisma.tabulacao.count({ where: analisadasFiltro(where, periodo) });
   },
   async agruparPorRegiao(where: Prisma.OrdemServicoWhereInput, periodo: DashboardPeriodo) {
     const [entradas, concluidas] = await Promise.all([
       prisma.ordemServico.groupBy({
         by: ["regiaoAdministrativa"],
-        where: { ...where, createdAt: { gte: periodo.from, lte: periodo.to } },
+        where: { ...where, ...entradasFiltro(periodo) },
         _count: { _all: true }
       }),
       prisma.ordemServico.groupBy({
         by: ["regiaoAdministrativa"],
-        where: { ...where, concluidaEm: { gte: periodo.from, lte: periodo.to } },
+        where: { ...where, ...concluidasFiltro(periodo) },
         _count: { _all: true }
       })
     ]);
@@ -135,12 +164,12 @@ export const prismaDashboardRepository: DashboardRepository = {
     const [concluidas, analisadas] = await Promise.all([
       prisma.ordemServico.groupBy({
         by: ["fiscalId"],
-        where: { ...where, fiscalId: { not: null }, concluidaEm: { gte: periodo.from, lte: periodo.to } },
+        where: { ...where, fiscalId: { not: null }, ...concluidasFiltro(periodo) },
         _count: { _all: true }
       }),
       prisma.tabulacao.groupBy({
         by: ["fiscalId"],
-        where: { ordemServico: where, createdAt: { gte: periodo.from, lte: periodo.to } },
+        where: analisadasFiltro(where, periodo),
         _count: { _all: true }
       })
     ]);
@@ -161,12 +190,12 @@ export const prismaDashboardRepository: DashboardRepository = {
   async contarFiscaisAtivos(where: Prisma.OrdemServicoWhereInput, periodo: DashboardPeriodo) {
     const [concluiram, analisaram] = await Promise.all([
       prisma.ordemServico.findMany({
-        where: { ...where, fiscalId: { not: null }, concluidaEm: { gte: periodo.from, lte: periodo.to } },
+        where: { ...where, fiscalId: { not: null }, ...concluidasFiltro(periodo) },
         select: { fiscalId: true },
         distinct: ["fiscalId"]
       }),
       prisma.tabulacao.findMany({
-        where: { ordemServico: where, createdAt: { gte: periodo.from, lte: periodo.to } },
+        where: analisadasFiltro(where, periodo),
         select: { fiscalId: true },
         distinct: ["fiscalId"]
       })
@@ -190,8 +219,11 @@ export const prismaDashboardRepository: DashboardRepository = {
     }));
   },
   async mesesDisponiveis(where: Prisma.OrdemServicoWhereInput) {
-    const rows = await prisma.ordemServico.findMany({ where, select: { createdAt: true } });
-    return rows.map((row) => row.createdAt);
+    const rows = await prisma.ordemServico.findMany({
+      where: { ...where, dataFimExecucao: { not: null } },
+      select: { dataFimExecucao: true }
+    });
+    return rows.map((row) => row.dataFimExecucao).filter((data): data is Date => data != null);
   },
   async findFiscais(ids: string[]) {
     if (ids.length === 0) return [];
