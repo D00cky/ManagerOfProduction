@@ -169,7 +169,9 @@ describe("buildListWhere", () => {
         { enderecoCompleto: { contains: "1001", mode: "insensitive" } },
         { bairro: { contains: "1001", mode: "insensitive" } },
         { cidade: { contains: "1001", mode: "insensitive" } },
-        { unidadeExecutante: { contains: "1001", mode: "insensitive" } }
+        { unidadeExecutante: { contains: "1001", mode: "insensitive" } },
+        { codigoContrato: { contains: "1001", mode: "insensitive" } },
+        { descricaoContrato: { contains: "1001", mode: "insensitive" } }
       ]
     });
   });

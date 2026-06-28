@@ -235,7 +235,7 @@ export function FilaTable({
               name="busca"
               type="search"
               defaultValue={filtros.busca}
-              placeholder="Nº, endereço, bairro, cidade, unidade"
+              placeholder="Nº, endereço, bairro, cidade, unidade, contratada"
               aria-label="Buscar OS"
               className="h-9 w-72 pl-8 normal-case"
             />
@@ -514,7 +514,10 @@ export function FilaTable({
                           Iniciar
                         </Button>
                       ) : null}
-                      {ordem.status === "EmExecucao" || ordem.status === "Pendente" ? (
+                      {ordem.status === "EmExecucao" ||
+                      ordem.status === "Pendente" ||
+                      ordem.status === "Concluida" ||
+                      ordem.status === "Cancelada" ? (
                         <Button asChild variant="outline" size="sm">
                           <Link href={`/tabulacao/${ordem.id}`}>Abrir</Link>
                         </Button>
