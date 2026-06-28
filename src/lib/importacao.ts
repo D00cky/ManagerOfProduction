@@ -151,6 +151,8 @@ export function normalizeImportRow(row: RawImportRow, mapping: ImportMapping) {
   const errors: string[] = [];
   if (!normalized.numero) errors.push("numero_os obrigatorio");
   if (!normalized.enderecoCompleto) errors.push("endereco_completo obrigatorio");
+  // Sem contrato/empresa identificável a OS não é importada: ambos os campos vazios.
+  if (!normalized.codigoContrato && !normalized.descricaoContrato) errors.push("contrato obrigatorio");
   return { row: normalized, errors };
 }
 

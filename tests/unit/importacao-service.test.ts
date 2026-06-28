@@ -9,26 +9,30 @@ const rows: NormalizedImportRow[] = [
     enderecoCompleto: "Rua A, 10",
     tipoServico: "RedeAgua", foraDeEscopo: false,
     polo: "Norte",
-    fiscal: "2001"
+    fiscal: "2001",
+    codigoContrato: "9999999999"
   },
   {
     numero: "1002",
     enderecoCompleto: "Rua B, 20",
     tipoServico: "RedeAgua", foraDeEscopo: false,
     polo: "Norte",
-    fiscal: "Maria Fiscal"
+    fiscal: "Maria Fiscal",
+    codigoContrato: "9999999999"
   },
   {
     numero: "",
     enderecoCompleto: "Rua C, 30",
     tipoServico: "RedeAgua", foraDeEscopo: false,
-    polo: "Norte"
+    polo: "Norte",
+    codigoContrato: "9999999999"
   },
   {
     numero: "1003",
     enderecoCompleto: "",
     tipoServico: "RedeAgua", foraDeEscopo: false,
-    polo: "Norte"
+    polo: "Norte",
+    codigoContrato: "9999999999"
   }
 ];
 
@@ -118,6 +122,19 @@ describe("confirmarImportacao", () => {
     );
   });
 
+  it("rejeita linha sem contrato/empresa (invalida, não cria)", async () => {
+    const repo = repository();
+    const semContrato: NormalizedImportRow[] = [
+      { numero: "8001", enderecoCompleto: "Rua Sem Contrato, 1", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte" }
+    ];
+
+    const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, semContrato, "ignorar");
+
+    expect(result).toMatchObject({ criadas: 0, invalidas: 1 });
+    expect(result.erros).toEqual([{ linha: 1, erros: ["contrato obrigatorio"] }]);
+    expect(repo.createOrdens).not.toHaveBeenCalled();
+  });
+
   it("auto-creates a polo from the unidade executante when none matches", async () => {
     const repo = repository();
 
@@ -130,7 +147,8 @@ describe("confirmarImportacao", () => {
           enderecoCompleto: "Rua X, 1",
           tipoServico: "RedeAgua", foraDeEscopo: false,
           polo: "ORMR - DIV MANUT SERV OPE REGISTRO",
-          unidadeExecutante: "ORMR - DIV MANUT SERV OPE REGISTRO"
+          unidadeExecutante: "ORMR - DIV MANUT SERV OPE REGISTRO",
+          codigoContrato: "9999999999"
         }
       ],
       "ignorar"
@@ -174,7 +192,7 @@ describe("confirmarImportacao", () => {
     ]);
     // Reimport de uma planilha diária: a OS reaparece sem fiscal e sem data de fim.
     const reimport: NormalizedImportRow[] = [
-      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte" }
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", codigoContrato: "9999999999" }
     ];
 
     await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, reimport, "atualizar");
@@ -190,7 +208,7 @@ describe("confirmarImportacao", () => {
     const fim = new Date("2026-06-22T08:00:00.000Z");
     const repo = repository([{ numero: "1001", status: "Pendente", fiscalId: "f1", dataFimExecucao: null }]);
     const baixa: NormalizedImportRow[] = [
-      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", dataFimExecucao: fim }
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", dataFimExecucao: fim, codigoContrato: "9999999999" }
     ];
 
     await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, baixa, "atualizar");
@@ -205,7 +223,7 @@ describe("confirmarImportacao", () => {
     const repo = repository();
 
     await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, [
-      { numero: "1004", enderecoCompleto: "Rua D", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", fiscal: "9999" }
+      { numero: "1004", enderecoCompleto: "Rua D", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", fiscal: "9999", codigoContrato: "9999999999" }
     ], "ignorar");
 
     expect(repo.createOrdens).toHaveBeenCalledWith([expect.objectContaining({ fiscalId: null })]);
@@ -224,8 +242,8 @@ describe("confirmarImportacao", () => {
   it("assigns a fiscal to at most one OS within a single batch", async () => {
     const repo = repository();
     const mesmoFiscal: NormalizedImportRow[] = [
-      { numero: "7001", enderecoCompleto: "Rua A", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", fiscal: "2001" },
-      { numero: "7002", enderecoCompleto: "Rua B", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", fiscal: "2001" }
+      { numero: "7001", enderecoCompleto: "Rua A", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", fiscal: "2001", codigoContrato: "9999999999" },
+      { numero: "7002", enderecoCompleto: "Rua B", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", fiscal: "2001", codigoContrato: "9999999999" }
     ];
 
     const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, mesmoFiscal, "ignorar");
@@ -249,8 +267,8 @@ describe("confirmarImportacao", () => {
   it("collapses an in-file duplicate numero into a single create (atualizar, last wins)", async () => {
     const repo = repository();
     const duplicadas: NormalizedImportRow[] = [
-      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte" },
-      { numero: "1001", enderecoCompleto: "Rua A, 99 (baixa)", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte" }
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", codigoContrato: "9999999999" },
+      { numero: "1001", enderecoCompleto: "Rua A, 99 (baixa)", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", codigoContrato: "9999999999" }
     ];
 
     const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, duplicadas, "atualizar");
@@ -265,8 +283,8 @@ describe("confirmarImportacao", () => {
   it("collapses an in-file duplicate numero into a single create (ignorar, first wins)", async () => {
     const repo = repository();
     const duplicadas: NormalizedImportRow[] = [
-      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte" },
-      { numero: "1001", enderecoCompleto: "Rua A, 99 (baixa)", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte" }
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", codigoContrato: "9999999999" },
+      { numero: "1001", enderecoCompleto: "Rua A, 99 (baixa)", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", codigoContrato: "9999999999" }
     ];
 
     const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, duplicadas, "ignorar");
@@ -280,8 +298,8 @@ describe("confirmarImportacao", () => {
   it("updates an existing numero only once when the file repeats it (atualizar)", async () => {
     const repo = repository(["1001"]);
     const duplicadas: NormalizedImportRow[] = [
-      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte" },
-      { numero: "1001", enderecoCompleto: "Rua A, 99 (baixa)", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte" }
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", codigoContrato: "9999999999" },
+      { numero: "1001", enderecoCompleto: "Rua A, 99 (baixa)", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", codigoContrato: "9999999999" }
     ];
 
     const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, duplicadas, "atualizar");
@@ -295,8 +313,8 @@ describe("confirmarImportacao", () => {
   it("treats same numero with different TSS/TSE as distinct OS (creates both)", async () => {
     const repo = repository();
     const mesmaOs: NormalizedImportRow[] = [
-      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", codigoTss: "100", codigoTse: "A" },
-      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", codigoTss: "200", codigoTse: "B" }
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", codigoTss: "100", codigoTse: "A", codigoContrato: "9999999999" },
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", codigoTss: "200", codigoTse: "B", codigoContrato: "9999999999" }
     ];
 
     const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, mesmaOs, "ignorar");
@@ -308,7 +326,7 @@ describe("confirmarImportacao", () => {
   it("does not treat a same-numero row as duplicate of an existing OS with a different TSS/TSE", async () => {
     const repo = repository([{ numero: "1001", codigoTss: "100", codigoTse: "A" }]);
     const novaServico: NormalizedImportRow[] = [
-      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", codigoTss: "200", codigoTse: "B" }
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", codigoTss: "200", codigoTse: "B", codigoContrato: "9999999999" }
     ];
 
     const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, novaServico, "ignorar");
@@ -320,7 +338,7 @@ describe("confirmarImportacao", () => {
   it("treats a same numero + same TSS + same TSE row as a duplicate of an existing OS", async () => {
     const repo = repository([{ numero: "1001", codigoTss: "100", codigoTse: "A" }]);
     const mesmoServico: NormalizedImportRow[] = [
-      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", codigoTss: "100", codigoTse: "A" }
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", codigoTss: "100", codigoTse: "A", codigoContrato: "9999999999" }
     ];
 
     const result = await confirmarImportacao(repo, { id: "m1", perfil: "monitor", poloId: "p1" }, mesmoServico, "ignorar");
@@ -345,7 +363,7 @@ describe("confirmarImportacao", () => {
   it("descarta linhas fora de escopo sem criar OS e as contabiliza", async () => {
     const repo = repository();
     const comForaDeEscopo: NormalizedImportRow[] = [
-      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte" },
+      { numero: "1001", enderecoCompleto: "Rua A, 10", tipoServico: "RedeAgua", foraDeEscopo: false, polo: "Norte", codigoContrato: "9999999999" },
       { numero: "9001", enderecoCompleto: "Rua Fora, 1", tipoServico: null, foraDeEscopo: true, polo: "Norte" }
     ];
 

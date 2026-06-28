@@ -324,6 +324,8 @@ function validateRow(row: NormalizedImportRow) {
   const errors: string[] = [];
   if (!row.numero) errors.push("numero_os obrigatorio");
   if (!row.enderecoCompleto) errors.push("endereco_completo obrigatorio");
+  // Sem contrato/empresa identificável a OS não é importada: ambos os campos vazios.
+  if (!row.codigoContrato && !row.descricaoContrato) errors.push("contrato obrigatorio");
   return errors;
 }
 
