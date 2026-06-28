@@ -23,6 +23,10 @@ Status as of 2026-06-09.
 
 - Existing authentication, permission scopes, imports, OS queue, automatic assignment, status transitions, FFR tabulation, dashboard, reports, users, equipe, polos, and configuration flows remain implemented.
 - `supervisor` remains the technical enum and is displayed as `Coordenação`.
+- **Executive report export (PDF + Excel).** From `/relatorios`, an "Exportação de Relatório" card builds a consolidated report with KPI cards (Total OS, Inspecionadas, Pendentes, Não Avaliada, Atende, Não Atende, IQES), a "Situação das Inspeções" chart, a top-10 ranking of FFR non-conformities (criteria answered `"0"`, excluding `"1"`/`"X"`/null/text/weight-0 items), per-OS detailing, and analytical breakdowns by região, polo, município, tipo de serviço, contrato and unidade executante (contratada fiscalizada). Available as on-screen preview, PDF and Excel.
+  - Period filter: **mensal** (`YYYY-MM`), **semanal** (ISO 8601 week, Monday→Sunday, matching `<input type="week">`), or **personalizado** (from/to). The period always filters by `OrdemServico.dataFimExecucao` (real execution date).
+  - Access gate: requires `relatorios:read`, so only `monitor` and `supervisor` reach it. Row scope (`buildOsScope`) still applies — monitors are limited to their authorized polos and supervisors see everything; the fiscal-only scope is enforced by `buildOsScope` even though fiscais lack the capability to open the report.
+  - Architecture: pure dataset service `relatorio-export-service.ts` (`buildRelatorioExportDataset`) over `prisma-relatorio-export-repository.ts`; file generators `relatorio-excel.ts` (exceljs) and `relatorio-pdf.ts` (jspdf, charts drawn deterministically — no screenshots); routes `GET /api/relatorios/export/{preview,pdf,excel}`.
 
 ### Validation
 
