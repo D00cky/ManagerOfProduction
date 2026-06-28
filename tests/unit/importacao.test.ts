@@ -23,11 +23,20 @@ describe("detectMapping", () => {
 describe("normalizeImportRow", () => {
   it("validates required numero_os and endereco_completo fields", () => {
     const result = normalizeImportRow(
-      { OS: "", Endereco: "", Codigo: "2540" },
-      { numero: "OS", enderecoCompleto: "Endereco", codigoTss: "Codigo" }
+      { OS: "", Endereco: "", Codigo: "2540", Contrato: "9999999999" },
+      { numero: "OS", enderecoCompleto: "Endereco", codigoTss: "Codigo", codigoContrato: "Contrato" }
     );
 
     expect(result.errors).toEqual(["numero_os obrigatorio", "endereco_completo obrigatorio"]);
+  });
+
+  it("exige contrato/empresa: rejeita linha sem contrato", () => {
+    const result = normalizeImportRow(
+      { OS: "123", Endereco: "Rua A, 10", Codigo: "2010" },
+      { numero: "OS", enderecoCompleto: "Endereco", codigoTss: "Codigo" }
+    );
+
+    expect(result.errors).toEqual(["contrato obrigatorio"]);
   });
 
   it("categoriza a OS pelo código TSS (não pela descrição)", () => {
@@ -37,14 +46,16 @@ describe("normalizeImportRow", () => {
         Endereco: "Rua A, 10",
         Codigo: "2010",
         Fiscal: "1002",
-        Polo: "Norte"
+        Polo: "Norte",
+        Contrato: "9999999999"
       },
       {
         numero: "OS",
         enderecoCompleto: "Endereco",
         codigoTss: "Codigo",
         fiscal: "Fiscal",
-        polo: "Polo"
+        polo: "Polo",
+        codigoContrato: "Contrato"
       }
     );
 
@@ -71,8 +82,8 @@ describe("normalizeImportRow", () => {
 
   it("marca como fora de escopo quando o código não está na tabela", () => {
     const result = normalizeImportRow(
-      { OS: "123", Endereco: "Rua A, 10", Codigo: "9999" },
-      { numero: "OS", enderecoCompleto: "Endereco", codigoTss: "Codigo" }
+      { OS: "123", Endereco: "Rua A, 10", Codigo: "9999", Contrato: "9999999999" },
+      { numero: "OS", enderecoCompleto: "Endereco", codigoTss: "Codigo", codigoContrato: "Contrato" }
     );
 
     expect(result.errors).toEqual([]);
