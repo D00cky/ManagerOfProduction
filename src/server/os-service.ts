@@ -104,7 +104,9 @@ export function buildListWhere(
       { enderecoCompleto: { contains: filters.busca, mode: "insensitive" } },
       { bairro: { contains: filters.busca, mode: "insensitive" } },
       { cidade: { contains: filters.busca, mode: "insensitive" } },
-      { unidadeExecutante: { contains: filters.busca, mode: "insensitive" } }
+      { unidadeExecutante: { contains: filters.busca, mode: "insensitive" } },
+      { codigoContrato: { contains: filters.busca, mode: "insensitive" } },
+      { descricaoContrato: { contains: filters.busca, mode: "insensitive" } }
     ];
   }
   if (filters.fimDe || filters.fimAte) {
