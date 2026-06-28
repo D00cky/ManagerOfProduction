@@ -187,6 +187,42 @@ export function gerarRelatorioPdf(dataset: RelatorioExportDataset): Uint8Array {
   });
   y += 8;
 
+  // --- Não Conformidades por Empresa (quem tem mais NC + motivos + exemplos) ---
+  const contratadas = dataset.naoConformidadesPorContratada.slice(0, 8);
+  if (contratadas.length > 0) {
+    novaPaginaSeNecessario(20);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(40, 40, 40);
+    doc.text("Não Conformidades por Empresa", MARGEM, y);
+    y += 6;
+    const larguraTexto = LARGURA - 2 * MARGEM;
+    for (const c of contratadas) {
+      novaPaginaSeNecessario(14);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(...COR_PRIMARIA);
+      doc.text(`${c.contrato} — ${c.quantidadeNC} NC`, MARGEM, y);
+      y += 4.5;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(70, 70, 70);
+      const motivos = c.motivos.map((m) => `${m.criterio} (${m.quantidade})`).join("; ");
+      for (const linha of (doc.splitTextToSize(`Motivos: ${motivos}`, larguraTexto) as string[]).slice(0, 2)) {
+        novaPaginaSeNecessario(5);
+        doc.text(linha, MARGEM, y);
+        y += 4;
+      }
+      const exemplos = c.exemplos.map((e) => e.numeroOS).join(", ");
+      if (exemplos) {
+        novaPaginaSeNecessario(5);
+        doc.text(`Exemplos de OS: ${exemplos}`, MARGEM, y);
+        y += 5;
+      }
+    }
+    y += 4;
+  }
+
   // --- Tabela de detalhamento (limitada) ---
   novaPaginaSeNecessario(20);
   doc.setFont("helvetica", "bold");
@@ -209,11 +245,11 @@ export function gerarRelatorioPdf(dataset: RelatorioExportDataset): Uint8Array {
   y += 6;
 
   const colsDet = [
-    { titulo: "OS", largura: 22 },
-    { titulo: "Município", largura: 30 },
-    { titulo: "Tipo", largura: 28 },
-    { titulo: "Critério", largura: 76 },
-    { titulo: "Conc.", largura: 14 },
+    { titulo: "OS", largura: 20 },
+    { titulo: "Empresa", largura: 40 },
+    { titulo: "Município", largura: 26 },
+    { titulo: "Descrição da NC", largura: 72 },
+    { titulo: "Conc.", largura: 12 },
     { titulo: "% FFR", largura: 12 }
   ];
   desenharCabecalhoTabela(doc, colsDet, y);
@@ -224,9 +260,9 @@ export function gerarRelatorioPdf(dataset: RelatorioExportDataset): Uint8Array {
     novaPaginaSeNecessario(6);
     const valores = [
       d.numeroOS,
-      doc.splitTextToSize(d.municipio ?? "-", colsDet[1].largura - 2)[0] as string,
-      String(d.tipoServico),
-      doc.splitTextToSize(d.criterio, colsDet[3].largura - 2)[0] as string,
+      doc.splitTextToSize(d.contrato ?? "-", colsDet[1].largura - 2)[0] as string,
+      doc.splitTextToSize(d.municipio ?? "-", colsDet[2].largura - 2)[0] as string,
+      doc.splitTextToSize(d.descricaoNaoConformidade, colsDet[3].largura - 2)[0] as string,
       d.conceito,
       pct(d.percentual)
     ];

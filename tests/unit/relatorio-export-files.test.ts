@@ -22,6 +22,18 @@ function dataset(): RelatorioExportDataset {
       { itemId: "desobstrucao_q1", criterio: "TEM FOTO DA FACHADA?", grupo: "Desobstrucao", quantidade: 4, percentualSobreInspecionadas: 0.5 },
       { itemId: "gerais_q3", criterio: "AS COORDENADAS CONDIZEM?", grupo: "Itens Gerais", quantidade: 2, percentualSobreInspecionadas: 0.25 }
     ],
+    naoConformidadesPorContratada: [
+      {
+        contrato: "Contrato Um",
+        quantidadeNC: 6,
+        totalAvaliado: 8,
+        motivos: [
+          { criterio: "TEM FOTO DA FACHADA?", quantidade: 4 },
+          { criterio: "AS COORDENADAS CONDIZEM?", quantidade: 2 }
+        ],
+        exemplos: [{ numeroOS: "OS-1", descricao: "TEM FOTO DA FACHADA?: sem foto" }]
+      }
+    ],
     detalhesNaoConformidades: [
       {
         osId: "os-1",
@@ -71,7 +83,8 @@ describe("gerarRelatorioExcel", () => {
       "Por Municipio",
       "Por Tipo Servico",
       "Por Contrato",
-      "Por Unidade"
+      "Por Unidade",
+      "NC por Contratada"
     ]);
   });
 

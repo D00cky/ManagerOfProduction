@@ -24,6 +24,8 @@ const CORES_SITUACAO: Record<string, string> = {
   "Não Avaliada": "#969696"
 };
 
+const DETALHE_PREVIA = 50;
+
 export function RelatorioExportCard() {
   const searchParams = useSearchParams();
   const [periodoTipo, setPeriodoTipo] = useState<PeriodoTipo>("mensal");
@@ -238,6 +240,74 @@ function Previa({ dataset }: { dataset: RelatorioExportDataset }) {
               </div>
             ))}
           </div>
+        )}
+      </div>
+
+      {dataset.naoConformidadesPorContratada.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-semibold">Nao conformidades por empresa</p>
+          <div className="flex flex-col gap-3">
+            {dataset.naoConformidadesPorContratada.slice(0, 10).map((c) => (
+              <div key={c.contrato} className="rounded-md border border-[hsl(var(--border))] p-3 text-xs">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-medium">{c.contrato}</span>
+                  <span className="tabular-nums text-[hsl(var(--muted-foreground))]">
+                    {c.quantidadeNC} NC &middot; {c.totalAvaliado} OS
+                  </span>
+                </div>
+                <p className="mt-1 text-[hsl(var(--muted-foreground))]">
+                  Motivos: {c.motivos.map((m) => `${m.criterio} (${m.quantidade})`).join("; ")}
+                </p>
+                {c.exemplos.length > 0 && (
+                  <p className="text-[hsl(var(--muted-foreground))]">
+                    Exemplos de OS: {c.exemplos.map((e) => e.numeroOS).join(", ")}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2 overflow-x-auto">
+        <p className="text-sm font-semibold">Detalhamento</p>
+        {dataset.detalhesNaoConformidades.length === 0 ? (
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">Nenhuma nao conformidade no periodo.</p>
+        ) : (
+          <>
+            <table className="w-full min-w-[760px] text-left text-xs">
+              <thead className="border-y border-[hsl(var(--border))] uppercase text-[hsl(var(--muted-foreground))]">
+                <tr>
+                  {["OS", "Empresa", "Municipio", "Descricao da NC", "Conceito", "% FFR"].map((h) => (
+                    <th key={h} className="px-2 py-2">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {dataset.detalhesNaoConformidades.slice(0, DETALHE_PREVIA).map((d, i) => (
+                  <tr key={`${d.osId}-${i}`} className="border-b border-[hsl(var(--border))] last:border-0">
+                    <td className="px-2 py-2">{d.numeroOS}</td>
+                    <td className="px-2 py-2 max-w-[180px] truncate" title={d.contrato ?? ""}>
+                      {d.contrato ?? "-"}
+                    </td>
+                    <td className="px-2 py-2">{d.municipio ?? "-"}</td>
+                    <td className="px-2 py-2 max-w-[320px] truncate" title={d.descricaoNaoConformidade}>
+                      {d.descricaoNaoConformidade}
+                    </td>
+                    <td className="px-2 py-2">{d.conceito}</td>
+                    <td className="px-2 py-2">{pct(d.percentual)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {dataset.detalhesNaoConformidades.length > DETALHE_PREVIA && (
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                Exibindo {DETALHE_PREVIA} de {dataset.detalhesNaoConformidades.length} — detalhamento completo no Excel/PDF.
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>

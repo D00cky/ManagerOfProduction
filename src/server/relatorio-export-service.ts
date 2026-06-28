@@ -112,12 +112,26 @@ export type QuebraAnalitica = {
   iqes: number;
 };
 
+/** Análise das NC por contratada (contrato): quem tem mais NC, motivos e exemplos de OS. */
+export type NaoConformidadePorContratada = {
+  /** Nome da empresa/contratada = descricaoContrato || codigoContrato || "Sem contrato". */
+  contrato: string;
+  quantidadeNC: number;
+  totalAvaliado: number;
+  /** Principais motivos (critérios FFR não conformes) com a contagem. */
+  motivos: Array<{ criterio: string; quantidade: number }>;
+  /** Exemplos de OS da contratada (descrição = critério + observação quando houver). */
+  exemplos: Array<{ numeroOS: string; descricao: string }>;
+};
+
 export type RelatorioExportDataset = {
   periodo: { from: Date; to: Date; label: string };
   filtrosAplicados: Record<string, string | null>;
   kpis: RelatorioKpis;
   situacaoInspecoes: SituacaoInspecao[];
   principaisNaoConformidades: NaoConformidadeResumo[];
+  /** NC por contratada (mais NC primeiro), com motivos e exemplos de OS. */
+  naoConformidadesPorContratada: NaoConformidadePorContratada[];
   detalhesNaoConformidades: NaoConformidadeDetalhe[];
   quebras: {
     porRegiao: QuebraAnalitica[];
@@ -130,6 +144,8 @@ export type RelatorioExportDataset = {
 };
 
 const TOP_NC = 10;
+const MOTIVOS_POR_CONTRATADA = 5;
+const EXEMPLOS_POR_CONTRATADA = 3;
 const SEM_REGIAO = "Sem regiao";
 const SEM_POLO = "Sem polo";
 const SEM_MUNICIPIO = "Sem municipio";
@@ -257,6 +273,31 @@ function finalizarQuebras(mapa: Map<string, QuebraAcc>): QuebraAnalitica[] {
     .sort((a, b) => b.quantidadeNC - a.quantidadeNC || a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
+type ContratadaNcAcc = {
+  contrato: string;
+  quantidadeNC: number;
+  totalAvaliado: number;
+  motivos: Map<string, number>;
+  exemplos: Array<{ numeroOS: string; descricao: string }>;
+};
+
+/** Ordena por mais NC; motivos top N (desc); só contratadas com ao menos uma NC. */
+function finalizarContratadasNC(mapa: Map<string, ContratadaNcAcc>): NaoConformidadePorContratada[] {
+  return [...mapa.values()]
+    .filter((acc) => acc.quantidadeNC > 0)
+    .map((acc) => ({
+      contrato: acc.contrato,
+      quantidadeNC: acc.quantidadeNC,
+      totalAvaliado: acc.totalAvaliado,
+      motivos: [...acc.motivos.entries()]
+        .map(([criterio, quantidade]) => ({ criterio, quantidade }))
+        .sort((a, b) => b.quantidade - a.quantidade || a.criterio.localeCompare(b.criterio, "pt-BR"))
+        .slice(0, MOTIVOS_POR_CONTRATADA),
+      exemplos: acc.exemplos.slice(0, EXEMPLOS_POR_CONTRATADA)
+    }))
+    .sort((a, b) => b.quantidadeNC - a.quantidadeNC || a.contrato.localeCompare(b.contrato, "pt-BR"));
+}
+
 export async function buildRelatorioExportDataset(
   repository: RelatorioExportRepository,
   user: SessionUserScope,
@@ -298,6 +339,7 @@ export async function buildRelatorioExportDataset(
   const porTipoServico = new Map<string, QuebraAcc>();
   const porContrato = new Map<string, QuebraAcc>();
   const porUnidade = new Map<string, QuebraAcc>();
+  const porContratadaNC = new Map<string, ContratadaNcAcc>();
 
   const acumular = (mapa: Map<string, QuebraAcc>, chave: string, percentual: number, contagem: { conforme: number; naoConforme: number }, qtdNC: number) => {
     const acc = mapa.get(chave) ?? novaQuebra(chave);
@@ -325,6 +367,18 @@ export async function buildRelatorioExportDataset(
     const ncs = naoConformidadesDaOrdem(row.tipoServico, row.descricaoTss, tab.respostas);
     const contrato = row.descricaoContrato?.trim() || row.codigoContrato?.trim() || null;
 
+    // Acumulador de NC por contratada (sempre conta a OS inspecionada no total).
+    const chaveContratada = contrato ?? SEM_CONTRATO;
+    const accContratada = porContratadaNC.get(chaveContratada) ?? {
+      contrato: chaveContratada,
+      quantidadeNC: 0,
+      totalAvaliado: 0,
+      motivos: new Map<string, number>(),
+      exemplos: [] as Array<{ numeroOS: string; descricao: string }>
+    };
+    accContratada.totalAvaliado += 1;
+    porContratadaNC.set(chaveContratada, accContratada);
+
     for (const { item, grupo } of ncs) {
       const atual = rankingMap.get(item.id) ?? {
         itemId: item.id,
@@ -338,6 +392,18 @@ export async function buildRelatorioExportDataset(
 
       const obsRaw = tab.respostas[chaveObsNaoConforme(item.id)];
       const observacao = typeof obsRaw === "string" && obsRaw.trim() ? obsRaw.trim() : null;
+      const descricaoNC = observacao ? `${item.texto}: ${observacao}` : item.texto;
+
+      // Por contratada: conta o motivo (critério) e guarda exemplos de OS distintas.
+      accContratada.quantidadeNC += 1;
+      accContratada.motivos.set(item.texto, (accContratada.motivos.get(item.texto) ?? 0) + 1);
+      if (
+        accContratada.exemplos.length < EXEMPLOS_POR_CONTRATADA &&
+        !accContratada.exemplos.some((ex) => ex.numeroOS === row.numero)
+      ) {
+        accContratada.exemplos.push({ numeroOS: row.numero, descricao: descricaoNC });
+      }
+
       detalhes.push({
         osId: row.id,
         numeroOS: row.numero,
@@ -349,7 +415,7 @@ export async function buildRelatorioExportDataset(
         fiscalNome: row.fiscalNome,
         criterio: item.texto,
         observacao,
-        descricaoNaoConformidade: observacao ? `${item.texto}: ${observacao}` : item.texto,
+        descricaoNaoConformidade: descricaoNC,
         conceito: tab.conceito,
         percentual: tab.percentual,
         contrato,
@@ -408,6 +474,7 @@ export async function buildRelatorioExportDataset(
     kpis,
     situacaoInspecoes,
     principaisNaoConformidades,
+    naoConformidadesPorContratada: finalizarContratadasNC(porContratadaNC),
     detalhesNaoConformidades: detalhes,
     quebras: {
       porRegiao: finalizarQuebras(porRegiao),

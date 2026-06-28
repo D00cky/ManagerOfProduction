@@ -228,4 +228,37 @@ describe("buildRelatorioExportDataset - detalhes e quebras", () => {
     expect(regiao.totalAvaliado).toBe(2);
     expect(regiao.quantidadeNC).toBe(1);
   });
+
+  it("agrupa NC por contratada (mais NC primeiro) com motivos e exemplos de OS", async () => {
+    const rows = [
+      ordem({ numero: "A1", descricaoContrato: "Empresa Alfa", tabulacao: tab("D", { desobstrucao_q1: "0", desobstrucao_q2: "0" }) }),
+      ordem({ numero: "A2", descricaoContrato: "Empresa Alfa", tabulacao: tab("D", { desobstrucao_q1: "0" }) }),
+      ordem({ numero: "B1", descricaoContrato: "Empresa Beta", tabulacao: tab("C", { desobstrucao_q1: "0" }) })
+    ];
+    const { naoConformidadesPorContratada } = await buildRelatorioExportDataset(repo(rows), supervisor, {});
+
+    expect(naoConformidadesPorContratada).toHaveLength(2);
+    const [alfa, beta] = naoConformidadesPorContratada;
+    expect(alfa.contrato).toBe("Empresa Alfa"); // mais NC vem primeiro
+    expect(alfa.quantidadeNC).toBe(3); // q1 (A1,A2) + q2 (A1)
+    expect(alfa.totalAvaliado).toBe(2);
+    expect(alfa.motivos[0].quantidade).toBe(2); // o critério mais frequente
+    expect(alfa.motivos[0].criterio).toContain("FACHADA");
+    expect(alfa.exemplos.map((e) => e.numeroOS)).toEqual(["A1", "A2"]); // OS distintas
+    expect(alfa.exemplos[0].descricao).toContain("FACHADA");
+    expect(beta.contrato).toBe("Empresa Beta");
+    expect(beta.quantidadeNC).toBe(1);
+  });
+
+  it("inclui a observação na descrição do exemplo da contratada", async () => {
+    const rows = [
+      ordem({
+        numero: "OBS1",
+        descricaoContrato: "Empresa Alfa",
+        tabulacao: tab("D", { desobstrucao_q1: "0", [chaveObsNaoConforme("desobstrucao_q1")]: "faltou foto" })
+      })
+    ];
+    const { naoConformidadesPorContratada } = await buildRelatorioExportDataset(repo(rows), supervisor, {});
+    expect(naoConformidadesPorContratada[0].exemplos[0].descricao).toBe("TEM FOTO DA FACHADA?: faltou foto");
+  });
 });

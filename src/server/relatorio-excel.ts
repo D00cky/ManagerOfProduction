@@ -155,6 +155,26 @@ export async function gerarRelatorioExcel(dataset: RelatorioExportDataset): Prom
   abaQuebra(wb, "Por Contrato", "Contrato", dataset.quebras.porContrato);
   abaQuebra(wb, "Por Unidade", "Unidade executante", dataset.quebras.porUnidadeExecutante);
 
+  // --- Aba NC por Contratada: quem tem mais NC + motivos + exemplos de OS ---
+  const contratadas = wb.addWorksheet("NC por Contratada");
+  contratadas.columns = [
+    { header: "Empresa / contrato", key: "empresa", width: 34 },
+    { header: "Nao conformidades", key: "qtd", width: 18 },
+    { header: "Total avaliado", key: "total", width: 14 },
+    { header: "Principais motivos", key: "motivos", width: 80 },
+    { header: "Exemplos de OS", key: "exemplos", width: 60 }
+  ];
+  estilizarCabecalho(contratadas.getRow(1));
+  for (const c of dataset.naoConformidadesPorContratada) {
+    contratadas.addRow({
+      empresa: c.contrato,
+      qtd: c.quantidadeNC,
+      total: c.totalAvaliado,
+      motivos: c.motivos.map((m) => `${m.criterio} (${m.quantidade})`).join("; "),
+      exemplos: c.exemplos.map((e) => `${e.numeroOS}: ${e.descricao}`).join(" | ")
+    });
+  }
+
   const buffer = await wb.xlsx.writeBuffer();
   return Buffer.from(buffer);
 }
