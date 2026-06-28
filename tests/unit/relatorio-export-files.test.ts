@@ -18,6 +18,7 @@ function dataset(): RelatorioExportDataset {
       { nome: "Não Atende", quantidade: 2, percentual: 0.25 },
       { nome: "Não Avaliada", quantidade: 1, percentual: 0.125 }
     ],
+    distribuicaoConceito: { A: 3, B: 2, C: 1, D: 1, NaoAvaliado: 1 },
     principaisNaoConformidades: [
       { itemId: "desobstrucao_q1", criterio: "TEM FOTO DA FACHADA?", grupo: "Desobstrucao", quantidade: 4, percentualSobreInspecionadas: 0.5 },
       { itemId: "gerais_q3", criterio: "AS COORDENADAS CONDIZEM?", grupo: "Itens Gerais", quantidade: 2, percentualSobreInspecionadas: 0.25 }
@@ -34,9 +35,13 @@ function dataset(): RelatorioExportDataset {
         fiscalNome: "Fiscal Um",
         criterio: "TEM FOTO DA FACHADA?",
         observacao: "sem foto",
+        descricaoNaoConformidade: "TEM FOTO DA FACHADA?: sem foto",
         conceito: "D",
         percentual: 0.4,
         contrato: "Contrato Um",
+        codigoContrato: "C-1",
+        descricaoContrato: "Contrato Um",
+        status: "Concluida",
         unidadeExecutante: "Contratada Alfa"
       }
     ],
@@ -69,6 +74,33 @@ describe("gerarRelatorioExcel", () => {
       "Por Contrato",
       "Por Unidade"
     ]);
+  });
+
+  it("inclui as colunas obrigatórias na aba Detalhamento NC", async () => {
+    const buffer = await gerarRelatorioExcel(dataset());
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as unknown as Parameters<typeof wb.xlsx.load>[0]);
+    const ws = wb.getWorksheet("Detalhamento NC")!;
+    const headers = (ws.getRow(1).values as unknown[]).filter((v): v is string => typeof v === "string");
+    for (const obrigatoria of [
+      "No OS",
+      "Fim execucao",
+      "Municipio",
+      "Polo",
+      "Regiao",
+      "Tipo servico",
+      "Fiscal",
+      "Criterio nao conforme",
+      "Descricao nao conformidade",
+      "Observacao",
+      "Conceito",
+      "% FFR",
+      "Status",
+      "Contrato",
+      "Unidade executante"
+    ]) {
+      expect(headers).toContain(obrigatoria);
+    }
   });
 });
 

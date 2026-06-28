@@ -115,10 +115,14 @@ export async function gerarRelatorioExcel(dataset: RelatorioExportDataset): Prom
     { header: "Tipo servico", key: "tipo", width: 20 },
     { header: "Fiscal", key: "fiscal", width: 22 },
     { header: "Criterio nao conforme", key: "criterio", width: 60 },
+    { header: "Descricao nao conformidade", key: "descricao", width: 70 },
     { header: "Observacao", key: "obs", width: 40 },
     { header: "Conceito", key: "conceito", width: 10 },
     { header: "% FFR", key: "perc", width: 10 },
+    { header: "Status", key: "status", width: 14 },
     { header: "Contrato", key: "contrato", width: 24 },
+    { header: "Codigo contrato", key: "codigoContrato", width: 18 },
+    { header: "Descricao contrato", key: "descricaoContrato", width: 30 },
     { header: "Unidade executante", key: "unidade", width: 24 }
   ];
   estilizarCabecalho(detalhe.getRow(1));
@@ -132,10 +136,14 @@ export async function gerarRelatorioExcel(dataset: RelatorioExportDataset): Prom
       tipo: d.tipoServico,
       fiscal: d.fiscalNome ?? "",
       criterio: d.criterio,
+      descricao: d.descricaoNaoConformidade,
       obs: d.observacao ?? "",
       conceito: d.conceito,
       perc: pct(d.percentual),
+      status: d.status,
       contrato: d.contrato ?? "",
+      codigoContrato: d.codigoContrato ?? "",
+      descricaoContrato: d.descricaoContrato ?? "",
       unidade: d.unidadeExecutante ?? ""
     });
   }

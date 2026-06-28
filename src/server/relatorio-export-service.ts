@@ -1,4 +1,4 @@
-import type { Conceito, Prisma, TipoServico } from "@prisma/client";
+import type { Conceito, Prisma, StatusOS, TipoServico } from "@prisma/client";
 import { endOfISOWeek, endOfMonth, setISOWeek, startOfISOWeek, startOfMonth } from "date-fns";
 import {
   chaveObsNaoConforme,
@@ -28,6 +28,16 @@ export type RelatorioExportFiltros = {
   municipio?: string;
   tipoServico?: TipoServico;
   fiscalId?: string;
+  /** Texto contido em `descricaoContrato` (filtro livre de contratada/contrato). */
+  contrato?: string;
+  /** Código de contrato exato. */
+  codigoContrato?: string;
+  /** Unidade executante (contratada fiscalizada) exata. */
+  unidadeExecutante?: string;
+  /** Conceito FFR — filtra via a tabulação da OS (afeta todo o dataset). */
+  conceito?: Conceito;
+  /** Id do critério FFR — filtra apenas as linhas do detalhamento. */
+  criterio?: string;
 };
 
 /** Linha de OS (com tabulação opcional) usada para montar o relatório executivo. */
@@ -44,6 +54,7 @@ export type OrdemRelatorioRow = {
   codigoContrato: string | null;
   descricaoContrato: string | null;
   unidadeExecutante: string | null;
+  status: StatusOS;
   tabulacao: {
     respostas: RespostasFfr;
     conceito: Conceito;
@@ -54,6 +65,16 @@ export type OrdemRelatorioRow = {
 export type RelatorioExportRepository = {
   /** OS no escopo + período (com tabulação, fiscal e polo já resolvidos). */
   listOrdensParaRelatorio(where: Prisma.OrdemServicoWhereInput): Promise<OrdemRelatorioRow[]>;
+};
+
+/** Opções de contrato/unidade dentro do escopo, para os selects da tela "Por Contratada". */
+export type ContratadaFacets = {
+  contratos: Array<{ codigo: string | null; descricao: string | null }>;
+  unidades: string[];
+};
+
+export type RelatorioContratadaFacetsRepository = {
+  listFacetsContratadas(scope: Prisma.OrdemServicoWhereInput): Promise<ContratadaFacets>;
 };
 
 export type RelatorioKpis = {
@@ -91,9 +112,14 @@ export type NaoConformidadeDetalhe = {
   fiscalNome: string | null;
   criterio: string;
   observacao: string | null;
+  /** `criterio` + ": " + `observacao` quando há observação; senão só o `criterio`. */
+  descricaoNaoConformidade: string;
   conceito: Conceito;
   percentual: number;
   contrato: string | null;
+  codigoContrato: string | null;
+  descricaoContrato: string | null;
+  status: StatusOS;
   unidadeExecutante: string | null;
 };
 
@@ -111,6 +137,8 @@ export type RelatorioExportDataset = {
   filtrosAplicados: Record<string, string | null>;
   kpis: RelatorioKpis;
   situacaoInspecoes: SituacaoInspecao[];
+  /** Distribuição das inspeções por conceito FFR (A/B/C/D/NaoAvaliado). */
+  distribuicaoConceito: Record<Conceito, number>;
   principaisNaoConformidades: NaoConformidadeResumo[];
   detalhesNaoConformidades: NaoConformidadeDetalhe[];
   quebras: {
@@ -122,6 +150,35 @@ export type RelatorioExportDataset = {
     porUnidadeExecutante: QuebraAnalitica[];
   };
 };
+
+/** Página do detalhamento de NC, para a tela "Por Contratada". */
+export type DetalhamentoPaginado = {
+  rows: NaoConformidadeDetalhe[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 200;
+
+/** Pagina a lista completa de detalhes (página/tamanho normalizados). */
+export function paginarDetalhamento(
+  detalhes: NaoConformidadeDetalhe[],
+  page = 1,
+  pageSize = DEFAULT_PAGE_SIZE
+): DetalhamentoPaginado {
+  const tamanho = Math.min(Math.max(1, Math.floor(pageSize) || DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
+  const totalPaginas = Math.max(1, Math.ceil(detalhes.length / tamanho));
+  const pagina = Math.min(Math.max(1, Math.floor(page) || 1), totalPaginas);
+  const inicio = (pagina - 1) * tamanho;
+  return {
+    rows: detalhes.slice(inicio, inicio + tamanho),
+    total: detalhes.length,
+    page: pagina,
+    pageSize: tamanho
+  };
+}
 
 const TOP_NC = 10;
 const SEM_REGIAO = "Sem regiao";
@@ -274,10 +331,17 @@ export async function buildRelatorioExportDataset(
   if (filtros.tipoServico) where.tipoServico = filtros.tipoServico;
   // fiscalId apenas estreita para supervisor/monitor; nunca relaxa o escopo do fiscal.
   if (filtros.fiscalId && user.perfil !== "fiscal") where.fiscalId = filtros.fiscalId;
+  // Filtros de contratada: AND sobre o escopo (nunca o relaxam).
+  if (filtros.codigoContrato) where.codigoContrato = filtros.codigoContrato;
+  if (filtros.unidadeExecutante) where.unidadeExecutante = filtros.unidadeExecutante;
+  if (filtros.contrato) where.descricaoContrato = { contains: filtros.contrato, mode: "insensitive" };
+  // Conceito é da tabulação: filtra a OS pela relação (afeta todo o dataset).
+  if (filtros.conceito) where.tabulacao = { conceito: filtros.conceito };
 
   const rows = await repository.listOrdensParaRelatorio(where);
 
   const inspecionadas = rows.filter((row) => row.tabulacao !== null);
+  const distribuicaoConceito: Record<Conceito, number> = { A: 0, B: 0, C: 0, D: 0, NaoAvaliado: 0 };
   let atende = 0;
   let naoAtende = 0;
   let naoAvaliada = 0;
@@ -305,6 +369,7 @@ export async function buildRelatorioExportDataset(
 
   for (const row of inspecionadas) {
     const tab = row.tabulacao!;
+    distribuicaoConceito[tab.conceito] += 1;
     if (ATENDE.includes(tab.conceito)) atende += 1;
     else if (NAO_ATENDE.includes(tab.conceito)) naoAtende += 1;
     else naoAvaliada += 1;
@@ -330,7 +395,10 @@ export async function buildRelatorioExportDataset(
       atual.quantidade += 1;
       rankingMap.set(item.id, atual);
 
-      const obs = tab.respostas[chaveObsNaoConforme(item.id)];
+      // `criterio` filtra apenas o detalhamento; o ranking acima permanece completo.
+      if (filtros.criterio && item.id !== filtros.criterio) continue;
+      const obsRaw = tab.respostas[chaveObsNaoConforme(item.id)];
+      const observacao = typeof obsRaw === "string" && obsRaw.trim() ? obsRaw.trim() : null;
       detalhes.push({
         osId: row.id,
         numeroOS: row.numero,
@@ -341,10 +409,14 @@ export async function buildRelatorioExportDataset(
         tipoServico: row.tipoServico,
         fiscalNome: row.fiscalNome,
         criterio: item.texto,
-        observacao: typeof obs === "string" && obs.trim() ? obs.trim() : null,
+        observacao,
+        descricaoNaoConformidade: observacao ? `${item.texto}: ${observacao}` : item.texto,
         conceito: tab.conceito,
         percentual: tab.percentual,
         contrato,
+        codigoContrato: row.codigoContrato,
+        descricaoContrato: row.descricaoContrato,
+        status: row.status,
         unidadeExecutante: row.unidadeExecutante
       });
     }
@@ -392,10 +464,16 @@ export async function buildRelatorioExportDataset(
       polo: filtros.polo ?? null,
       municipio: filtros.municipio ?? null,
       tipoServico: filtros.tipoServico ?? null,
-      fiscalId: user.perfil !== "fiscal" ? filtros.fiscalId ?? null : null
+      fiscalId: user.perfil !== "fiscal" ? filtros.fiscalId ?? null : null,
+      contrato: filtros.contrato ?? null,
+      codigoContrato: filtros.codigoContrato ?? null,
+      unidadeExecutante: filtros.unidadeExecutante ?? null,
+      conceito: filtros.conceito ?? null,
+      criterio: filtros.criterio ?? null
     },
     kpis,
     situacaoInspecoes,
+    distribuicaoConceito,
     principaisNaoConformidades,
     detalhesNaoConformidades: detalhes,
     quebras: {
@@ -407,4 +485,15 @@ export async function buildRelatorioExportDataset(
       porUnidadeExecutante: finalizarQuebras(porUnidade)
     }
   };
+}
+
+/** Opções de contrato/unidade visíveis ao usuário (escopo de papel), para os selects. */
+export async function getContratadaFacets(
+  repository: RelatorioContratadaFacetsRepository,
+  user: SessionUserScope
+): Promise<ContratadaFacets> {
+  if (!hasPermission(user.perfil, "relatorios:read")) {
+    throw new Error("Sem permissao para gerar relatorio");
+  }
+  return repository.listFacetsContratadas(buildOsScope(user));
 }
