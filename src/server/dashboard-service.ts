@@ -11,14 +11,25 @@ export type DashboardFiltros = GeoFiltros & {
   to?: Date;
 };
 
-export type DashboardPeriodo = { from: Date; to: Date };
+/**
+ * Dimensão de data do período:
+ * - `execucao`: fatia por `dataFimExecucao` (data real do serviço em campo). Usada
+ *   pelo seletor de período do dashboard e pelo seletor de mês — consistente com os
+ *   relatórios, que também usam a data de fim de execução.
+ * - `fluxo`: fatia pelos carimbos de workflow no sistema (`createdAt` para entradas,
+ *   `concluidaEm` para concluídas, `createdAt` da tabulação para analisadas). Usada
+ *   pelos painéis fixos "Progresso de hoje/mês", que medem o trabalho ao vivo.
+ */
+export type DashboardPeriodoBase = "execucao" | "fluxo";
 
-/** Um mês importado, identificado por `YYYY-MM` e rotulado como `MM/YY`. */
+export type DashboardPeriodo = { from: Date; to: Date; base: DashboardPeriodoBase };
+
+/** Um mês com serviços executados, identificado por `YYYY-MM` e rotulado como `MM/YY`. */
 export type MesDisponivel = { value: string; label: string };
 
 /**
- * Lista os meses presentes nos dados importados (a partir do `createdAt` de cada
- * OS), do mais recente para o mais antigo, no formato `MM/YY` exibido no filtro.
+ * Lista os meses presentes nas datas informadas, do mais recente para o mais antigo,
+ * no formato `MM/YY` exibido no filtro. As datas vêm da fim de execução das OS.
  */
 export function mesesDisponiveisDe(datas: Date[]): MesDisponivel[] {
   const valores = new Set<string>();
@@ -134,7 +145,7 @@ export type DashboardRepository = {
     periodo: DashboardPeriodo
   ): Promise<number>;
   findGeoFacets(where: Prisma.OrdemServicoWhereInput): Promise<GeoFacet[]>;
-  /** `createdAt` de cada OS no escopo, para listar os meses importados. */
+  /** `dataFimExecucao` das OS executadas no escopo, para listar os meses disponíveis. */
   mesesDisponiveis(where: Prisma.OrdemServicoWhereInput): Promise<Date[]>;
   findFiscais(ids: string[]): Promise<DashboardFiscal[]>;
   /** All monitors (with the região each oversees) for the Monitor→Fiscal tree. */
@@ -243,8 +254,8 @@ export async function getOpcoesGeograficas(
 }
 
 /**
- * Lista os meses (MM/YY) presentes nos dados importados do usuário, do mais recente ao mais
- * antigo. Reutilizável por qualquer tela com filtro mensal (dashboard e relatórios).
+ * Lista os meses (MM/YY) com serviços executados no escopo do usuário, do mais recente ao
+ * mais antigo. Reutilizável por qualquer tela com filtro mensal (dashboard e relatórios).
  */
 export async function getMesesDisponiveis(
   repository: Pick<DashboardRepository, "mesesDisponiveis">,
@@ -267,8 +278,9 @@ export async function getDashboardResumo(
   const where = mergeScopeAndGeo(scope, filtros);
   const periodo = resolvePeriodo(filtros, now);
   // Janelas fixas independentes do filtro: progresso de hoje e do mês corrente.
-  const janelaHoje: DashboardPeriodo = { from: startOfDay(now), to: now };
-  const janelaMes: DashboardPeriodo = { from: startOfMonth(now), to: now };
+  // Medem trabalho ao vivo no sistema, então usam a base "fluxo".
+  const janelaHoje: DashboardPeriodo = { from: startOfDay(now), to: now, base: "fluxo" };
+  const janelaMes: DashboardPeriodo = { from: startOfMonth(now), to: now, base: "fluxo" };
   // "Parada" cutoff keeps the calendar-day semantics: stalled means the last
   // update was at least OS_PARADA_DIAS calendar days ago.
   const updatedBefore = startOfDay(subDaysCal(now, OS_PARADA_DIAS - 1));
@@ -380,7 +392,9 @@ export async function getDashboardResumo(
 }
 
 function resolvePeriodo(filtros: DashboardFiltros, now: Date): DashboardPeriodo {
-  return { from: filtros.from ?? startOfDay(now), to: filtros.to ?? now };
+  // O período selecionável (seletor Hoje/7 dias/Mês) é fatiado pela data real de
+  // execução do serviço (`dataFimExecucao`), consistente com os relatórios.
+  return { from: filtros.from ?? startOfDay(now), to: filtros.to ?? now, base: "execucao" };
 }
 
 /** Throughput totals (entradas/analisadas/concluídas) over one fixed window. */
