@@ -28,11 +28,11 @@ const opcoes: { value: ValorResposta; label: string }[] = [
 ];
 
 const conceitoStyles: Record<string, string> = {
-  A: "bg-green-100 text-green-700",
-  B: "bg-blue-100 text-blue-700",
-  C: "bg-amber-100 text-amber-700",
-  D: "bg-red-100 text-red-700",
-  NaoAvaliado: "bg-slate-100 text-slate-600"
+  A: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200",
+  B: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200",
+  C: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200",
+  D: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200",
+  NaoAvaliado: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
 };
 
 type AlteracaoInfo = { por: string | null; motivo: string; em: string | null };
@@ -204,7 +204,7 @@ export function TabulacaoForm({
       </Card>
 
       {bloqueada ? (
-        <p className="rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <p className="rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
           OS {status === "Concluida" ? "concluida" : "cancelada"} — tabulacao bloqueada para edicao.
         </p>
       ) : null}
@@ -328,8 +328,8 @@ export function TabulacaoForm({
             />
           </div>
 
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
-          {saved ? <p className="text-sm text-green-600">Tabulacao salva.</p> : null}
+          {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+          {saved ? <p className="text-sm text-green-600 dark:text-green-400">Tabulacao salva.</p> : null}
 
           <div className="flex flex-wrap gap-3">
             <Button type="button" onClick={handleSave} disabled={saving || concluindo || bloqueada}>

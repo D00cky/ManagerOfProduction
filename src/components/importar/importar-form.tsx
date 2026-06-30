@@ -121,7 +121,7 @@ export function ImportarForm() {
             </Select>
           </div>
           {parsing ? <p className="text-sm text-[hsl(var(--muted-foreground))]">Lendo planilha...</p> : null}
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
         </CardContent>
       </Card>
 
@@ -160,14 +160,14 @@ export function ImportarForm() {
                       <td className="px-3 py-2">{entry.row.regiaoAdministrativa ?? "-"}</td>
                       <td className="px-3 py-2">
                         {entry.row.foraDeEscopo ? (
-                          <span className="text-amber-600">Fora de escopo (descartar)</span>
+                          <span className="text-amber-600 dark:text-amber-400">Fora de escopo (descartar)</span>
                         ) : (
                           entry.row.tipoServico
                         )}
                       </td>
                       <td className="px-3 py-2">{entry.row.polo ?? "-"}</td>
                       <td className="px-3 py-2">{entry.row.fiscal ?? "-"}</td>
-                      <td className="px-3 py-2 text-red-600">{entry.errors.join(", ")}</td>
+                      <td className="px-3 py-2 text-red-600 dark:text-red-400">{entry.errors.join(", ")}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -198,7 +198,7 @@ export function ImportarForm() {
               &middot; {resumo.invalidas} invalidas &middot; {resumo.descartadas} fora de escopo (de {resumo.total})
             </p>
             {resumo.erros.length > 0 ? (
-              <ul className="list-inside list-disc text-red-600">
+              <ul className="list-inside list-disc text-red-600 dark:text-red-400">
                 {resumo.erros.slice(0, 20).map((erro) => (
                   <li key={erro.linha}>
                     Linha {erro.linha}: {erro.erros.join(", ")}
