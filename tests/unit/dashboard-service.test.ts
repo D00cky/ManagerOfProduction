@@ -361,7 +361,7 @@ describe("getDashboardResumo", () => {
     expect(resumo.metricas.total).toBe(1);
   });
 
-  it("builds the executed × analyzed × concluída funnel (by dataFimExecucao) for the window", async () => {
+  it("builds the executed × analyzed × concluída funnel (by dataFimExecucao) for a selected month", async () => {
     const dia = new Date("2026-06-08T12:00:00.000Z");
     const ordens = [
       // executed today, concluded, Registro
@@ -379,10 +379,12 @@ describe("getDashboardResumo", () => {
     ];
     const repo = repository(ordens, tabulacoes);
 
+    // O seletor de mês passa uma janela explícita com base "execucao".
     const resumo = await getDashboardResumo(
       repo,
       { id: "s1", perfil: "supervisor" },
-      new Date("2026-06-08T20:00:00.000Z")
+      new Date("2026-06-08T20:00:00.000Z"),
+      { from: new Date("2026-06-08T00:00:00.000Z"), to: new Date("2026-06-08T20:00:00.000Z"), base: "execucao" }
     );
 
     // Period funnel slices by dataFimExecucao: entradas = executed in window,
@@ -394,6 +396,32 @@ describe("getDashboardResumo", () => {
     ]);
     expect(resumo.periodo.to).toEqual(new Date("2026-06-08T20:00:00.000Z"));
     expect(resumo.periodo.base).toBe("execucao");
+  });
+
+  it("slices the relative period (default Hoje/7 dias) by system flux (createdAt/concluidaEm/tab)", async () => {
+    const now = new Date("2026-06-08T20:00:00.000Z");
+    const hoje = new Date("2026-06-08T12:00:00.000Z");
+    const ontem = new Date("2026-06-07T12:00:00.000Z");
+    const ordens = [
+      // entrou no sistema hoje e foi concluída hoje (fluxo)
+      os({ id: "1", regiaoAdministrativa: "Registro", createdAt: hoje, concluidaEm: hoje, status: "Concluida" }),
+      // entrou no sistema hoje, ainda não concluída
+      os({ id: "2", regiaoAdministrativa: "Registro", createdAt: hoje, status: "NaFila" }),
+      // executada em campo hoje, mas entrou/concluiu no sistema fora da janela → fora do fluxo
+      os({ id: "3", regiaoAdministrativa: "São Paulo", createdAt: ontem, concluidaEm: ontem, dataFimExecucao: hoje, status: "Concluida" })
+    ];
+    const tabulacoes = [
+      { createdAt: hoje, ordem: ordens[0] }, // analisada hoje
+      { createdAt: ontem, ordem: ordens[1] } // tabulada ontem → fora da janela de hoje
+    ];
+    const repo = repository(ordens, tabulacoes);
+
+    // Sem filtros: período relativo padrão (hoje), base "fluxo".
+    const resumo = await getDashboardResumo(repo, { id: "s1", perfil: "supervisor" }, now);
+
+    expect(resumo.periodo.base).toBe("fluxo");
+    expect(resumo.funnel).toEqual({ entradas: 2, analisadas: 1, concluidas: 1, percentualConclusao: 0.5 });
+    expect(resumo.porRegiao).toEqual([{ regiao: "Registro", entradas: 2, concluidas: 1 }]);
   });
 
   it("reports per-fiscal performance and the active-fiscais count for the window", async () => {
@@ -411,7 +439,8 @@ describe("getDashboardResumo", () => {
     const resumo = await getDashboardResumo(
       repo,
       { id: "s1", perfil: "supervisor" },
-      new Date("2026-06-08T20:00:00.000Z")
+      new Date("2026-06-08T20:00:00.000Z"),
+      { from: new Date("2026-06-08T00:00:00.000Z"), to: new Date("2026-06-08T20:00:00.000Z"), base: "execucao" }
     );
 
     expect(resumo.fiscaisAtivos).toBe(2); // f1 and f2 (f3 concluded outside window)
@@ -443,7 +472,8 @@ describe("getDashboardResumo", () => {
     const resumo = await getDashboardResumo(
       repo,
       { id: "s1", perfil: "supervisor" },
-      new Date("2026-06-08T20:00:00.000Z")
+      new Date("2026-06-08T20:00:00.000Z"),
+      { from: new Date("2026-06-08T00:00:00.000Z"), to: new Date("2026-06-08T20:00:00.000Z"), base: "execucao" }
     );
 
     expect(resumo.arvoreDesempenho).toEqual([
@@ -482,17 +512,31 @@ describe("getDashboardResumo", () => {
     expect(resumo.progressoMes).toEqual({ entradas: 2, analisadas: 0, concluidas: 2 });
   });
 
-  it("fatia o período selecionável por execução e mantém hoje/mês no fluxo do sistema", async () => {
-    const repo = repository([]);
+  it("usa o fluxo no período relativo padrão e só usa execução quando um mês é selecionado", async () => {
+    const now = new Date("2026-06-12T20:00:00.000Z");
+    const basesDe = (repo: DashboardRepository) =>
+      (repo.contarEntradas as ReturnType<typeof vi.fn>).mock.calls.map(
+        (call) => (call[1] as Periodo).base
+      );
 
-    await getDashboardResumo(repo, { id: "s1", perfil: "supervisor" }, new Date("2026-06-12T20:00:00.000Z"));
+    // Período relativo padrão (sem filtro): funil + hoje + mês são todos "fluxo".
+    const relativo = repository([]);
+    await getDashboardResumo(relativo, { id: "s1", perfil: "supervisor" }, now);
+    const basesRelativo = basesDe(relativo);
+    expect(basesRelativo).toHaveLength(3);
+    expect(basesRelativo.every((base) => base === "fluxo")).toBe(true);
 
-    // contarEntradas é chamado 3x: funil (selecionável) + progresso de hoje + do mês.
-    const bases = (repo.contarEntradas as ReturnType<typeof vi.fn>).mock.calls.map(
-      (call) => (call[1] as Periodo).base
-    );
-    expect(bases).toContain("execucao");
-    expect(bases.filter((base) => base === "fluxo")).toHaveLength(2);
+    // Mês selecionado (janela explícita + base "execucao"): o funil usa execução,
+    // mas os cards fixos de hoje/mês continuam no fluxo.
+    const mensal = repository([]);
+    await getDashboardResumo(mensal, { id: "s1", perfil: "supervisor" }, now, {
+      from: new Date("2026-06-01T00:00:00.000Z"),
+      to: new Date("2026-06-30T23:59:59.000Z"),
+      base: "execucao"
+    });
+    const basesMensal = basesDe(mensal);
+    expect(basesMensal.filter((base) => base === "execucao")).toHaveLength(1);
+    expect(basesMensal.filter((base) => base === "fluxo")).toHaveLength(2);
   });
 
   it("summarises the backlog per polo (count + oldest dias) without a polo filter", async () => {
