@@ -61,6 +61,7 @@ export type RelatorioKpis = {
   totalOS: number;
   inspecionadas: number;
   pendentes: number;
+  canceladas: number;
   naoAvaliada: number;
   atende: number;
   naoAtende: number;
@@ -324,7 +325,11 @@ export async function buildRelatorioExportDataset(
 
   const rows = await repository.listOrdensParaRelatorio(where);
 
-  const inspecionadas = rows.filter((row) => row.tabulacao !== null);
+  // Canceladas são uma situação à parte: não contam como pendentes nem entram na
+  // análise de inspeção. O Total OS segue sendo o total geral (inclui canceladas).
+  const naoCanceladas = rows.filter((row) => row.status !== "Cancelada");
+  const canceladas = rows.length - naoCanceladas.length;
+  const inspecionadas = naoCanceladas.filter((row) => row.tabulacao !== null);
   let atende = 0;
   let naoAtende = 0;
   let naoAvaliada = 0;
@@ -447,7 +452,8 @@ export async function buildRelatorioExportDataset(
   const kpis: RelatorioKpis = {
     totalOS: rows.length,
     inspecionadas: totalInspecionadas,
-    pendentes: rows.length - totalInspecionadas,
+    pendentes: naoCanceladas.length - totalInspecionadas,
+    canceladas,
     naoAvaliada,
     atende,
     naoAtende,

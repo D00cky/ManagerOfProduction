@@ -12,7 +12,7 @@ function dataset(): RelatorioExportDataset {
       label: "01/05/2026 a 31/05/2026"
     },
     filtrosAplicados: { periodo: "01/05/2026 a 31/05/2026", regiao: "METROPOLITANA", polo: null, municipio: null, tipoServico: null, fiscalId: null, tipoPeriodo: "mensal" },
-    kpis: { totalOS: 10, inspecionadas: 8, pendentes: 2, naoAvaliada: 1, atende: 5, naoAtende: 2, iqes: 0.82 },
+    kpis: { totalOS: 10, inspecionadas: 8, pendentes: 1, canceladas: 1, naoAvaliada: 1, atende: 5, naoAtende: 2, iqes: 0.82 },
     situacaoInspecoes: [
       { nome: "Atende", quantidade: 5, percentual: 0.625 },
       { nome: "Não Atende", quantidade: 2, percentual: 0.25 },

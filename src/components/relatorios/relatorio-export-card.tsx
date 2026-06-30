@@ -168,6 +168,7 @@ function Previa({ dataset }: { dataset: RelatorioExportDataset }) {
     ["Total OS", String(k.totalOS)],
     ["Inspecionadas", String(k.inspecionadas)],
     ["Pendentes", String(k.pendentes)],
+    ["Canceladas", String(k.canceladas)],
     ["Nao Avaliada", String(k.naoAvaliada)],
     ["Atende", String(k.atende)],
     ["Nao Atende", String(k.naoAtende)],
@@ -180,7 +181,7 @@ function Previa({ dataset }: { dataset: RelatorioExportDataset }) {
     <div className="flex flex-col gap-6 border-t border-[hsl(var(--border))] pt-5">
       <p className="text-sm text-[hsl(var(--muted-foreground))]">Periodo: {dataset.periodo.label}</p>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-7">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-8">
         {cards.map(([rotulo, valor]) => (
           <div key={rotulo} className="rounded-md border border-[hsl(var(--border))] p-3">
             <p className="text-xs text-[hsl(var(--muted-foreground))]">{rotulo}</p>
