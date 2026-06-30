@@ -215,7 +215,7 @@ export function FilaTable({
 
   return (
     <div className="flex flex-col gap-3">
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
       <Card className="flex flex-wrap items-end gap-3 p-4">
         <form

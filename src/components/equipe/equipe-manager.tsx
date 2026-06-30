@@ -45,7 +45,7 @@ export function EquipeManager({
 
   return (
     <div className="flex flex-col gap-3">
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
       <Card className="overflow-hidden">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-[hsl(var(--border))] text-xs uppercase text-[hsl(var(--muted-foreground))]">
@@ -97,8 +97,8 @@ export function EquipeManager({
                     <Badge
                       className={cn(
                         membro.status === "ativo"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-slate-100 text-slate-600"
+                          ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200"
+                          : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
                       )}
                     >
                       {membro.status}

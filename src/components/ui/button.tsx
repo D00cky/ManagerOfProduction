@@ -9,8 +9,8 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:opacity-90",
-        outline: "border border-[hsl(var(--border))] bg-transparent hover:bg-[hsl(var(--muted))]",
-        ghost: "hover:bg-[hsl(var(--muted))]"
+        outline: "border border-[hsl(var(--border))] bg-transparent text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]",
+        ghost: "text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
       },
       size: {
         default: "h-10 px-4 py-2",

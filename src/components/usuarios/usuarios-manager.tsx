@@ -279,7 +279,7 @@ export function UsuariosManager({
               </div>
             ) : null}
 
-            {error ? <p className="text-sm text-red-600 md:col-span-2">{error}</p> : null}
+            {error ? <p className="text-sm text-red-600 dark:text-red-400 md:col-span-2">{error}</p> : null}
 
             <div className="md:col-span-2">
               <Button type="submit" disabled={saving}>
@@ -407,7 +407,7 @@ export function UsuariosManager({
                 </div>
               ) : null}
 
-              {error ? <p className="text-sm text-red-600 md:col-span-2">{error}</p> : null}
+              {error ? <p className="text-sm text-red-600 dark:text-red-400 md:col-span-2">{error}</p> : null}
 
               <div className="flex gap-2 md:col-span-2">
                 <Button type="submit" disabled={busyId === editId}>
@@ -422,7 +422,7 @@ export function UsuariosManager({
         </Card>
       ) : null}
 
-      {error && !editId ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error && !editId ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
       <Card className="overflow-hidden">
         <table className="w-full text-left text-sm">
@@ -476,8 +476,8 @@ export function UsuariosManager({
                     <Badge
                       className={cn(
                         usuario.status === "ativo"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-slate-100 text-slate-600"
+                          ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200"
+                          : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
                       )}
                     >
                       {usuario.status}
@@ -504,7 +504,7 @@ export function UsuariosManager({
                       <Button
                         variant="outline"
                         size="sm"
-                        className="text-red-600 hover:bg-red-50"
+                        className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                         disabled={busyId === usuario.id}
                         onClick={() => excluir(usuario)}
                       >

@@ -115,8 +115,8 @@ export default function LoginPage() {
                   required
                 />
               </div>
-              {success ? <p className="text-sm text-green-600">{success}</p> : null}
-              {error ? <p className="text-sm text-red-600">{error}</p> : null}
+              {success ? <p className="text-sm text-green-600 dark:text-green-400">{success}</p> : null}
+              {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
               <Button type="submit" disabled={loading}>
                 {loading ? "Entrando..." : "Entrar"}
               </Button>
@@ -175,7 +175,7 @@ export default function LoginPage() {
                   required
                 />
               </div>
-              {error ? <p className="text-sm text-red-600">{error}</p> : null}
+              {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
               <Button type="submit" disabled={loading}>
                 {loading ? "Alterando..." : "Alterar senha"}
               </Button>
