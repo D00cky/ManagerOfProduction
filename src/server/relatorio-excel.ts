@@ -70,6 +70,7 @@ export async function gerarRelatorioExcel(dataset: RelatorioExportDataset): Prom
     ["Total OS", kpis.totalOS],
     ["Inspecionadas", kpis.inspecionadas],
     ["Pendentes", kpis.pendentes],
+    ["Canceladas", kpis.canceladas],
     ["Nao Avaliada", kpis.naoAvaliada],
     ["Atende", kpis.atende],
     ["Nao Atende", kpis.naoAtende],

@@ -128,22 +128,36 @@ describe("buildRelatorioExportDataset - permissão e escopo", () => {
 });
 
 describe("buildRelatorioExportDataset - KPIs", () => {
-  it("totalOS = inspecionadas + pendentes e classifica conceitos", async () => {
+  it("totalOS = inspecionadas + pendentes + canceladas e classifica conceitos", async () => {
     const rows = [
       ordem({ tabulacao: tab("A", { gerais_q1: "1" }) }),
       ordem({ tabulacao: tab("B", { gerais_q1: "1" }) }),
       ordem({ tabulacao: tab("C", { gerais_q1: "0" }) }),
       ordem({ tabulacao: tab("NaoAvaliado", {}) }),
-      ordem({ tabulacao: null }) // pendente
+      ordem({ status: "Pendente", tabulacao: null }), // pendente
+      ordem({ status: "Cancelada", tabulacao: null }) // cancelada — não é pendente
     ];
     const { kpis } = await buildRelatorioExportDataset(repo(rows), supervisor, {});
-    expect(kpis.totalOS).toBe(5);
+    expect(kpis.totalOS).toBe(6);
     expect(kpis.inspecionadas).toBe(4);
-    expect(kpis.pendentes).toBe(1);
-    expect(kpis.totalOS).toBe(kpis.inspecionadas + kpis.pendentes);
+    expect(kpis.pendentes).toBe(1); // só a Pendente; a Cancelada não entra aqui
+    expect(kpis.canceladas).toBe(1);
+    expect(kpis.totalOS).toBe(kpis.inspecionadas + kpis.pendentes + kpis.canceladas);
     expect(kpis.atende).toBe(2); // A + B
     expect(kpis.naoAtende).toBe(1); // C
     expect(kpis.naoAvaliada).toBe(1);
+  });
+
+  it("OS cancelada não infla pendentes nem métricas de inspeção", async () => {
+    const rows = [
+      ordem({ tabulacao: tab("A", { gerais_q1: "1" }) }),
+      ordem({ status: "Cancelada", tabulacao: null })
+    ];
+    const { kpis } = await buildRelatorioExportDataset(repo(rows), supervisor, {});
+    expect(kpis.pendentes).toBe(0);
+    expect(kpis.canceladas).toBe(1);
+    expect(kpis.inspecionadas).toBe(1);
+    expect(kpis.naoAvaliada).toBe(0);
   });
 });
 

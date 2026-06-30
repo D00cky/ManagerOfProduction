@@ -57,6 +57,7 @@ export function gerarRelatorioPdf(dataset: RelatorioExportDataset): Uint8Array {
     ["Total OS", String(kpis.totalOS)],
     ["Inspecionadas", String(kpis.inspecionadas)],
     ["Pendentes", String(kpis.pendentes)],
+    ["Canceladas", String(kpis.canceladas)],
     ["Não Avaliada", String(kpis.naoAvaliada)],
     ["Atende", String(kpis.atende)],
     ["Não Atende", String(kpis.naoAtende)],
