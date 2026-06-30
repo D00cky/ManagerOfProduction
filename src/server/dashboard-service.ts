@@ -9,16 +9,23 @@ export type DashboardFiltros = GeoFiltros & {
   /** Time window for the throughput funnel/series. Defaults to "today". */
   from?: Date;
   to?: Date;
+  /**
+   * Base do período selecionável. Default `"fluxo"` (atalhos Hoje/7 dias medem
+   * trabalho no sistema). O seletor de mês passa `"execucao"` para fatiar pela
+   * data real de execução, consistente com os relatórios e a lista de meses.
+   */
+  base?: DashboardPeriodoBase;
 };
 
 /**
  * Dimensão de data do período:
  * - `execucao`: fatia por `dataFimExecucao` (data real do serviço em campo). Usada
- *   pelo seletor de período do dashboard e pelo seletor de mês — consistente com os
- *   relatórios, que também usam a data de fim de execução.
+ *   pelo seletor de mês do dashboard — consistente com os relatórios e com a lista
+ *   de meses, ambos derivados da data de fim de execução.
  * - `fluxo`: fatia pelos carimbos de workflow no sistema (`createdAt` para entradas,
  *   `concluidaEm` para concluídas, `createdAt` da tabulação para analisadas). Usada
- *   pelos painéis fixos "Progresso de hoje/mês", que medem o trabalho ao vivo.
+ *   pelos painéis fixos "Progresso de hoje/mês" e pelo período relativo selecionável
+ *   (atalhos Hoje/7 dias), que medem o trabalho ao vivo no sistema.
  */
 export type DashboardPeriodoBase = "execucao" | "fluxo";
 
@@ -392,9 +399,10 @@ export async function getDashboardResumo(
 }
 
 function resolvePeriodo(filtros: DashboardFiltros, now: Date): DashboardPeriodo {
-  // O período selecionável (seletor Hoje/7 dias/Mês) é fatiado pela data real de
-  // execução do serviço (`dataFimExecucao`), consistente com os relatórios.
-  return { from: filtros.from ?? startOfDay(now), to: filtros.to ?? now, base: "execucao" };
+  // Atalhos relativos (Hoje/7 dias e o default de hoje) medem o trabalho ao vivo no
+  // sistema → base "fluxo". O seletor de mês passa explicitamente base "execucao"
+  // para fatiar pela data real de execução, consistente com os relatórios.
+  return { from: filtros.from ?? startOfDay(now), to: filtros.to ?? now, base: filtros.base ?? "fluxo" };
 }
 
 /** Throughput totals (entradas/analisadas/concluídas) over one fixed window. */

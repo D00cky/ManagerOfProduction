@@ -59,7 +59,10 @@ export default async function DashboardPage({
   const mesData = mes ? new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)) - 1, 1) : undefined;
   const from = mesData ? startOfMonth(mesData) : parseDate(firstParam(params.from));
   const to = mesData ? endOfMonth(mesData) : parseDate(firstParam(params.to));
-  const filtros = { regiao, polo, municipio, page, from, to };
+  // Mês selecionado fatia pela execução real (`dataFimExecucao`); os atalhos
+  // relativos Hoje/7 dias medem o trabalho no sistema (base "fluxo", o default).
+  const base = mesData ? ("execucao" as const) : ("fluxo" as const);
+  const filtros = { regiao, polo, municipio, page, from, to, base };
 
   const now = new Date();
   const presets = [
